@@ -727,6 +727,8 @@ code {
 .gallery-heading-actions {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.45rem;
 }
 
@@ -764,6 +766,12 @@ code {
   min-height: 360px;
   border: 0;
   padding: 1rem;
+}
+
+.gallery-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .gallery-filters {

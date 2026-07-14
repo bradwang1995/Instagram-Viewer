@@ -1,7 +1,9 @@
 import {
+  ArchiveRestore,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
+  Download,
   Image,
   Pause,
   Play,
@@ -17,6 +19,8 @@ import { Button } from "../components/common/Button";
 import { InstagramBlockquoteEmbed } from "../components/posts/InstagramBlockquoteEmbed";
 import { clearLocalDatabase } from "../db/postRepository";
 import type { ImportJob, SavedPost, SavedPostType } from "../db/schema";
+import { downloadAppBackup } from "../features/backup/exportBackup";
+import { importAppBackupFile } from "../features/backup/importBackup";
 import { importSavedPostsJsonFile } from "../features/import/importJson";
 import { EMPTY_FILTERS, filterPosts } from "../features/library/postFilters";
 import { sortPosts } from "../features/library/postSort";
@@ -35,11 +39,15 @@ const TYPE_OPTIONS: Array<{ value: SavedPostType | "all"; label: string }> = [
 
 export function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLElement>(null);
   const loadMoreRef = useRef<HTMLDivElement>(null);
   const { posts, isLoading, error, refresh } = usePosts();
   const [latestJob, setLatestJob] = useState<ImportJob>();
   const [isImporting, setIsImporting] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+  const [actionMessage, setActionMessage] = useState("");
+  const [actionError, setActionError] = useState("");
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<SavedPostType | "all">("all");
   const [dateFrom, setDateFrom] = useState("");
@@ -156,6 +164,8 @@ export function HomePage() {
   async function importJson(file: File | undefined) {
     if (!file) return;
     setIsImporting(true);
+    setActionMessage("");
+    setActionError("");
 
     try {
       const job = await importSavedPostsJsonFile(file);
@@ -163,9 +173,46 @@ export function HomePage() {
       await refresh();
       setSelectedPostId(undefined);
       setVisibleCount(PAGE_SIZE);
+    } catch (caughtError) {
+      setActionError(getErrorMessage(caughtError, "Could not import that JSON file."));
     } finally {
       setIsImporting(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function exportBackup() {
+    setActionMessage("");
+    setActionError("");
+
+    try {
+      await downloadAppBackup();
+      setActionMessage("Backup downloaded.");
+    } catch (caughtError) {
+      setActionError(getErrorMessage(caughtError, "Could not create the backup."));
+    }
+  }
+
+  async function restoreBackup(file: File | undefined) {
+    if (!file) return;
+    setIsRestoring(true);
+    setActionMessage("");
+    setActionError("");
+
+    try {
+      const backup = await importAppBackupFile(file);
+      await refresh();
+      setLatestJob(undefined);
+      setSelectedPostId(undefined);
+      setVisibleCount(PAGE_SIZE);
+      setActionMessage(
+        `Restored ${backup.posts.length.toLocaleString()} saved posts.`,
+      );
+    } catch (caughtError) {
+      setActionError(getErrorMessage(caughtError, "Could not restore that backup."));
+    } finally {
+      setIsRestoring(false);
+      if (backupInputRef.current) backupInputRef.current.value = "";
     }
   }
 
@@ -176,6 +223,8 @@ export function HomePage() {
 
     await clearLocalDatabase();
     setLatestJob(undefined);
+    setActionMessage("");
+    setActionError("");
     setSelectedPostId(undefined);
     setIsPlaying(false);
     await refresh();
@@ -214,10 +263,39 @@ export function HomePage() {
             hidden
             onChange={(event) => void importJson(event.target.files?.[0])}
           />
+          <input
+            ref={backupInputRef}
+            type="file"
+            accept="application/json,.json"
+            aria-label="Restore backup file"
+            hidden
+            onChange={(event) => void restoreBackup(event.target.files?.[0])}
+          />
           <Button variant="primary" disabled={isImporting} onClick={() => fileInputRef.current?.click()}>
             <Upload size={17} aria-hidden="true" />
             {isImporting ? "Importing..." : posts.length ? "Import again" : "Import JSON"}
           </Button>
+          <Button
+            className="icon-button"
+            variant="ghost"
+            disabled={isRestoring}
+            onClick={() => backupInputRef.current?.click()}
+            aria-label="Restore backup"
+            title="Restore backup"
+          >
+            <ArchiveRestore size={17} aria-hidden="true" />
+          </Button>
+          {posts.length > 0 ? (
+            <Button
+              className="icon-button"
+              variant="ghost"
+              onClick={() => void exportBackup()}
+              aria-label="Download backup"
+              title="Download backup"
+            >
+              <Download size={17} aria-hidden="true" />
+            </Button>
+          ) : null}
           {posts.length > 0 ? (
             <Button className="icon-button" variant="ghost" onClick={clearLibrary} aria-label="Clear library" title="Clear library">
               <Trash2 size={17} aria-hidden="true" />
@@ -227,7 +305,8 @@ export function HomePage() {
       </section>
 
       {latestJob ? <ImportNote job={latestJob} /> : null}
-      {error ? <p className="error-text">{error}</p> : null}
+      {actionMessage ? <p className="success-text">{actionMessage}</p> : null}
+      {error || actionError ? <p className="error-text">{actionError || error}</p> : null}
       {isLoading ? <div className="loading-state">Loading your gallery...</div> : null}
 
       {!isLoading && posts.length === 0 ? (
@@ -235,10 +314,16 @@ export function HomePage() {
           <Image size={34} aria-hidden="true" />
           <h2>Bring in your saved posts</h2>
           <p>Select Instagram's <code>saved_posts.json</code>. The file stays on this device.</p>
-          <Button variant="primary" onClick={() => fileInputRef.current?.click()}>
-            <Upload size={17} aria-hidden="true" />
-            Choose JSON file
-          </Button>
+          <div className="gallery-empty-actions">
+            <Button variant="primary" onClick={() => fileInputRef.current?.click()}>
+              <Upload size={17} aria-hidden="true" />
+              Choose JSON file
+            </Button>
+            <Button variant="secondary" disabled={isRestoring} onClick={() => backupInputRef.current?.click()}>
+              <ArchiveRestore size={17} aria-hidden="true" />
+              {isRestoring ? "Restoring..." : "Restore backup"}
+            </Button>
+          </div>
         </section>
       ) : null}
 
@@ -398,4 +483,8 @@ function ImportNote({ job }: { job: ImportJob }) {
       {job.warnings.length > 0 ? <span>{job.warnings.map((warning) => warning.message).join(" ")}</span> : null}
     </section>
   );
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback;
 }

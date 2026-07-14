@@ -16,6 +16,8 @@ Store local library in IndexedDB
 Browse + search + date/type filters
         ↓
 Embedded media viewer + slideshow
+        ↓
+Optional local backup / restore
 ```
 
 The product should remain one page unless a future requirement truly needs more.
@@ -28,6 +30,9 @@ The product should remain one page unless a future requirement truly needs more.
 - [x] Do not automate crawling of Instagram Saved pages.
 - [x] Do not bulk download Instagram media.
 - [x] Treat the app as a local reference viewer, not a downloader.
+- [x] Keep imported data out of GitHub Pages and any application backend.
+- [x] Document that shared browser profiles share the same local IndexedDB.
+- [x] Document Instagram iframe requests separately from local JSON processing.
 
 ## Revision 1: Initial Repository
 
@@ -72,6 +77,20 @@ The product should remain one page unless a future requirement truly needs more.
 - [x] Add a development-only 45-item fixture for large-list browser QA.
 - [x] Ignore likes, comments, and other Instagram social interactions.
 
+## Revision 4: GitHub Pages And Local Data Recovery
+
+- [x] Add a GitHub Actions workflow for GitHub Pages.
+- [x] Build with a repository-specific Vite base path.
+- [x] Configure the browser router to use Vite's deployment base URL.
+- [x] Keep the production deployment completely static and backend-free.
+- [x] Expose app-backup download from the active one-page UI.
+- [x] Expose app-backup restore from both populated and empty states.
+- [x] Add UI coverage for backup download and restore.
+- [x] Explain browser-local privacy boundaries and shared-profile risk.
+- [x] Explain same-browser persistence and cross-device recovery.
+- [x] Add setup instructions for maintainers and forks.
+- [ ] Confirm the first live GitHub Pages deployment.
+
 ## Current Active UI
 
 - [x] Import JSON button.
@@ -86,6 +105,8 @@ The product should remain one page unless a future requirement truly needs more.
 - [x] Slideshow speed selector.
 - [x] Open original Instagram post.
 - [x] Clear local library from the same page.
+- [x] Download portable local backup.
+- [x] Restore portable local backup.
 
 ## Tests
 
@@ -98,11 +119,13 @@ The product should remain one page unless a future requirement truly needs more.
 - [x] One-page UI selection/navigation/loading smoke test
 - [x] Date range filtering test
 - [x] Embed URL and wrapping navigation tests
+- [x] One-page backup download/restore test
 
 ## Latest Verification
 
-- [x] `npm test` passes with 12 tests across 7 files, including deterministic shuffle navigation.
+- [x] `npm test` passes with 13 tests across 7 files, including backup recovery and deterministic shuffle navigation.
 - [x] `npm run build` passes.
+- [x] The Pages-specific build emits `/Instagram-saved-photo-viewer/` asset paths and router basename.
 - [x] Local dev server responds at `http://127.0.0.1:5173/`.
 - [x] `git status --ignored` shows `saved_posts.json` as ignored.
 - [x] Active router only serves the one-page `HomePage`.
@@ -122,9 +145,10 @@ The product should remain one page unless a future requirement truly needs more.
 - [ ] Consider list virtualization only if many infinite-scroll batches become slow.
 - [ ] Add a timed unavailable-preview message if Instagram changes embed behavior.
 - [ ] Add optional manual URL paste only if needed.
-- [ ] Add backup/export only if local notes or extra metadata return later.
+- [ ] Consider opt-in authenticated sync only as a separate, security-reviewed product phase.
 
 ## Notes
 
-- Do not commit yet. The first commit should happen only after the next review pass.
+- MVP v1 was committed as `9c31a75` and pushed to `origin/main`.
+- Keep imported data browser-local unless a future phase explicitly designs authentication, authorization, encryption, retention, and deletion controls.
 - Keep README and PROGRESS updated after each meaningful change.
