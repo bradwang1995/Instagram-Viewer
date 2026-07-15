@@ -90,7 +90,7 @@ describe("HomePage viewer", () => {
 
     await waitFor(() => expect(testState.restoreBackup).toHaveBeenCalledWith(file));
     expect(testState.refresh).toHaveBeenCalled();
-    expect(screen.getByText("Restored 25 saved posts.")).toBeInTheDocument();
+    expect(screen.getByText("Restored 25 saved photos.")).toBeInTheDocument();
   });
 });
 
@@ -104,7 +104,6 @@ function createPost(index: number): SavedPost {
     url: canonicalUrl,
     canonicalUrl,
     shortcode,
-    type: "post",
     savedAt,
     importedAt: savedAt,
     updatedAt: savedAt,

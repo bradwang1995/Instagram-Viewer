@@ -779,7 +779,7 @@ code {
   top: 65px;
   z-index: 12;
   display: grid;
-  grid-template-columns: minmax(210px, 1fr) auto auto auto;
+  grid-template-columns: minmax(210px, 1fr) auto auto;
   min-width: 0;
   gap: 0.6rem;
   align-items: center;
@@ -819,39 +819,6 @@ code {
 .date-filters input:focus {
   border-color: var(--green);
   box-shadow: 0 0 0 3px rgb(18 107 93 / 14%);
-}
-
-.type-segments {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface-muted);
-  padding: 3px;
-}
-
-.type-segments button {
-  display: inline-flex;
-  min-height: 32px;
-  align-items: center;
-  justify-content: center;
-  gap: 0.35rem;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 0.84rem;
-  font-weight: 700;
-  padding: 0 0.65rem;
-  white-space: nowrap;
-}
-
-.type-segments button.active {
-  background: var(--surface);
-  color: #202124;
-  box-shadow: 0 1px 4px rgb(32 33 36 / 12%);
 }
 
 .date-filters {
@@ -962,11 +929,6 @@ code {
   font-weight: 800;
   padding: 0 0.5rem;
   text-transform: uppercase;
-}
-
-.media-badge-reel {
-  background: #fff0ed;
-  color: var(--accent-strong);
 }
 
 .viewer-counter {
@@ -1120,11 +1082,6 @@ code {
   color: #39434f;
 }
 
-.list-media-reel {
-  background: #fff0ed;
-  color: var(--accent-strong);
-}
-
 .list-copy {
   display: grid;
   min-width: 0;
@@ -1276,10 +1233,6 @@ code {
   .date-filters input {
     width: 100%;
     min-width: 0;
-  }
-
-  .type-segments button {
-    padding: 0 0.4rem;
   }
 
   .viewer-panel {

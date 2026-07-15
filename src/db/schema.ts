@@ -1,5 +1,3 @@
-export type SavedPostType = "post" | "reel" | "tv" | "unknown";
-
 export type SavedPostStatus =
   | "unknown"
   | "embeddable"
@@ -19,7 +17,6 @@ export type SavedPost = {
   url: string;
   canonicalUrl: string;
   shortcode?: string;
-  type: SavedPostType;
   savedAt?: string;
   importedAt: string;
   updatedAt: string;

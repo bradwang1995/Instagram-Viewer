@@ -28,7 +28,6 @@ function createPost(shortcode: string, savedAt: string): SavedPost {
     url: canonicalUrl,
     canonicalUrl,
     shortcode,
-    type: "post",
     savedAt,
     importedAt: savedAt,
     updatedAt: savedAt,

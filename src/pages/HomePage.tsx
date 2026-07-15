@@ -11,14 +11,13 @@ import {
   Shuffle,
   Trash2,
   Upload,
-  Video,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "../components/common/Button";
 import { InstagramBlockquoteEmbed } from "../components/posts/InstagramBlockquoteEmbed";
 import { clearLocalDatabase } from "../db/postRepository";
-import type { ImportJob, SavedPost, SavedPostType } from "../db/schema";
+import type { ImportJob, SavedPost } from "../db/schema";
 import { downloadAppBackup } from "../features/backup/exportBackup";
 import { importAppBackupFile } from "../features/backup/importBackup";
 import { importSavedPostsJsonFile } from "../features/import/importJson";
@@ -31,11 +30,6 @@ import { usePosts } from "../hooks/usePosts";
 import { formatDateTime } from "../utils/date";
 
 const PAGE_SIZE = 20;
-const TYPE_OPTIONS: Array<{ value: SavedPostType | "all"; label: string }> = [
-  { value: "all", label: "All" },
-  { value: "post", label: "Photos" },
-  { value: "reel", label: "Reels" },
-];
 
 export function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -49,7 +43,6 @@ export function HomePage() {
   const [actionMessage, setActionMessage] = useState("");
   const [actionError, setActionError] = useState("");
   const [query, setQuery] = useState("");
-  const [typeFilter, setTypeFilter] = useState<SavedPostType | "all">("all");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [selectedPostId, setSelectedPostId] = useState<string>();
@@ -63,14 +56,13 @@ export function HomePage() {
     const filtered = filterPosts(posts, {
       ...EMPTY_FILTERS,
       searchQuery: query,
-      types: typeFilter === "all" ? [] : [typeFilter],
       dateFrom,
       dateTo,
       includeHidden: true,
     });
 
     return sortPosts(filtered, "newest_saved");
-  }, [dateFrom, dateTo, posts, query, typeFilter]);
+  }, [dateFrom, dateTo, posts, query]);
 
   const playbackPosts = useMemo(
     () => (isShuffle ? shuffleArray(filteredPosts) : filteredPosts),
@@ -87,7 +79,7 @@ export function HomePage() {
     : -1;
   const loadedPosts = filteredPosts.slice(0, visibleCount);
   const hasMore = loadedPosts.length < filteredPosts.length;
-  const hasFilters = Boolean(query || typeFilter !== "all" || dateFrom || dateTo);
+  const hasFilters = Boolean(query || dateFrom || dateTo);
 
   const goNext = useCallback(() => {
     setSelectedPostId((currentId) =>
@@ -110,7 +102,7 @@ export function HomePage() {
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
     setIsPlaying(false);
-  }, [dateFrom, dateTo, query, typeFilter]);
+  }, [dateFrom, dateTo, query]);
 
   useEffect(() => {
     if (!selectedPost) {
@@ -206,7 +198,7 @@ export function HomePage() {
       setSelectedPostId(undefined);
       setVisibleCount(PAGE_SIZE);
       setActionMessage(
-        `Restored ${backup.posts.length.toLocaleString()} saved posts.`,
+        `Restored ${backup.posts.length.toLocaleString()} saved photos.`,
       );
     } catch (caughtError) {
       setActionError(getErrorMessage(caughtError, "Could not restore that backup."));
@@ -237,7 +229,6 @@ export function HomePage() {
 
   function clearFilters() {
     setQuery("");
-    setTypeFilter("all");
     setDateFrom("");
     setDateTo("");
   }
@@ -252,8 +243,8 @@ export function HomePage() {
       <section className="gallery-heading">
         <div>
           <span className="eyebrow">Private, local collection</span>
-          <h1>Saved gallery</h1>
-          <p>{posts.length.toLocaleString()} Instagram saves stored in this browser.</p>
+          <h1>Saved photo gallery</h1>
+          <p>{posts.length.toLocaleString()} saved photos stored in this browser.</p>
         </div>
         <div className="gallery-heading-actions">
           <input
@@ -312,7 +303,7 @@ export function HomePage() {
       {!isLoading && posts.length === 0 ? (
         <section className="gallery-empty">
           <Image size={34} aria-hidden="true" />
-          <h2>Bring in your saved posts</h2>
+          <h2>Bring in your saved photos</h2>
           <p>Select Instagram's <code>saved_posts.json</code>. The file stays on this device.</p>
           <div className="gallery-empty-actions">
             <Button variant="primary" onClick={() => fileInputRef.current?.click()}>
@@ -332,24 +323,9 @@ export function HomePage() {
           <section className="gallery-filters" aria-label="Gallery filters">
             <label className="gallery-search">
               <Search size={17} aria-hidden="true" />
-              <span className="sr-only">Search saved posts</span>
+              <span className="sr-only">Search saved photos</span>
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search shortcode or collection" />
             </label>
-
-            <div className="type-segments" aria-label="Filter by media type">
-              {TYPE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  className={typeFilter === option.value ? "active" : undefined}
-                  onClick={() => setTypeFilter(option.value)}
-                  aria-pressed={typeFilter === option.value}
-                >
-                  {option.value === "post" ? <Image size={15} aria-hidden="true" /> : null}
-                  {option.value === "reel" ? <Video size={15} aria-hidden="true" /> : null}
-                  {option.label}
-                </button>
-              ))}
-            </div>
 
             <div className="date-filters">
               <CalendarDays size={17} aria-hidden="true" />
@@ -376,9 +352,7 @@ export function HomePage() {
                 <>
                   <div className="viewer-toolbar">
                     <div className="viewer-identity">
-                      <span className={`media-badge media-badge-${selectedPost.type}`}>
-                        {selectedPost.type === "reel" ? "Reel" : "Photo"}
-                      </span>
+                      <span className="media-badge">Photo</span>
                       <div>
                         <strong>{selectedPost.shortcode}</strong>
                         <small>{formatDateTime(selectedPost.savedAt ?? selectedPost.importedAt)}</small>
@@ -424,7 +398,7 @@ export function HomePage() {
               )}
             </section>
 
-            <aside className="library-panel" aria-label="Imported saved posts">
+            <aside className="library-panel" aria-label="Imported saved photos">
               <div className="library-heading">
                 <div>
                   <h2>Library</h2>
@@ -442,8 +416,8 @@ export function HomePage() {
                     aria-current={selectedPost?.id === post.id ? "true" : undefined}
                   >
                     <span className="list-index">{String(index + 1).padStart(2, "0")}</span>
-                    <span className={`list-media list-media-${post.type}`}>
-                      {post.type === "reel" ? <Video size={16} aria-hidden="true" /> : <Image size={16} aria-hidden="true" />}
+                    <span className="list-media">
+                      <Image size={16} aria-hidden="true" />
                     </span>
                     <span className="list-copy">
                       <strong>{post.shortcode}</strong>
@@ -478,7 +452,7 @@ function ImportNote({ job }: { job: ImportJob }) {
       {job.status === "failed" ? (
         <strong>{job.error ?? "Import failed."}</strong>
       ) : (
-        <strong>{job.totalUniquePostsFound.toLocaleString()} unique saves are ready.</strong>
+        <strong>{job.totalUniquePostsFound.toLocaleString()} unique photos are ready.</strong>
       )}
       {job.warnings.length > 0 ? <span>{job.warnings.map((warning) => warning.message).join(" ")}</span> : null}
     </section>

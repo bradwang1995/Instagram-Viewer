@@ -1,14 +1,14 @@
 # Ins 图片展
 
-A local-first viewer for Instagram Saved posts. Import `saved_posts.json`, browse a large saved-post library, and run a working photo/reel slideshow from one responsive page.
+A local-first viewer for Instagram Saved photos. Import `saved_posts.json`, browse a large saved-photo library, and run a photo slideshow from one responsive page.
 
-This project is intentionally minimal. It is a personal saved-post reference viewer, not an Instagram downloader, scraper, or full data-export explorer.
+This project is intentionally minimal. It is a personal saved-photo reference viewer, not an Instagram downloader, scraper, or full data-export explorer.
 
 Live app: [bradwang1995.github.io/Instagram-saved-photo-viewer](https://bradwang1995.github.io/Instagram-saved-photo-viewer/)
 
 ## Current Workflow
 
-1. Export only your Instagram Saved posts JSON.
+1. Export your Instagram Saved posts JSON.
 2. Open the hosted app or run it locally.
 3. Import `saved_posts.json`.
 4. Browse the library or play the slideshow.
@@ -18,12 +18,12 @@ The app does not ask for Instagram credentials and does not upload your JSON fil
 
 ## What It Does
 
-- Imports Instagram Saved post JSON directly.
+- Imports Instagram Saved post JSON directly and keeps photo-post references only.
 - Supports the `saved_posts.json` array shape with `timestamp`, `label_values`, `value`, and `href` fields.
-- Extracts Instagram `/p/`, `/reel/`, and `/tv/` URLs.
-- Canonicalizes and deduplicates post references.
+- Extracts Instagram `/p/` photo-post URLs.
+- Canonicalizes and deduplicates photo references.
 - Stores the local library in IndexedDB.
-- Shows a searchable library with media-type and saved-date filters.
+- Shows a searchable library with saved-date filters.
 - Loads the library in groups of 20 with automatic infinite scrolling.
 - Uses Instagram's dedicated embed page for reliable post-to-post switching.
 - Shows a slideshow with previous, next, play, pause, shuffle, and speed controls.
@@ -56,7 +56,7 @@ This means:
 - Clearing site data, using a private window, browser storage eviction, or changing to a different site origin can remove or separate access to the library.
 - The app's own JavaScript can access its IndexedDB data. Use a deployment whose source and owner you trust.
 
-The local database contains canonical Instagram URLs, shortcodes, post types, timestamps, collection names, and import summaries. Personal export filenames such as `saved_posts.json` and `savepost.json` are ignored by git.
+The local database contains canonical Instagram photo-post URLs, shortcodes, timestamps, collection names, and import summaries. Personal export filenames such as `saved_posts.json` and `savepost.json` are ignored by git.
 
 Instagram previews are loaded in iframes from `instagram.com`. Opening a preview sends that post URL and normal browser request information to Instagram, just as opening an Instagram embed normally would. The export JSON itself is not sent with that request.
 
@@ -70,7 +70,7 @@ For another browser or device:
 2. Move the downloaded backup file privately to the other device.
 3. Open the app there and click **Restore backup**.
 
-The backup is a readable JSON file and contains your saved-post links. It is not encrypted, so treat it like the original Instagram export and do not commit or share it. This manual backup flow is also the recovery path before clearing browser data or moving the app to a custom domain.
+The backup is a readable JSON file and contains your saved-photo links. It is not encrypted, so treat it like the original Instagram export and do not commit or share it. This manual backup flow is also the recovery path before clearing browser data or moving the app to a custom domain.
 
 Automatic cross-device sync would require user authentication, access controls, secure server storage, deletion controls, and a documented privacy policy. That is intentionally outside the current local-first MVP.
 
@@ -79,7 +79,6 @@ Automatic cross-device sync would require user authentication, access controls, 
 The JSON export contains Instagram links and timestamps, not the original photo files. The app therefore displays media through Instagram's public embed page.
 
 - Public and available photo posts can render directly in the viewer.
-- Reels can show the Instagram reel embed and its available playback/cover state.
 - Private, removed, age-restricted, or login-gated posts may not render.
 - The reload and Instagram buttons remain available when a particular embed is unavailable.
 
@@ -168,4 +167,4 @@ The ZIP importer and some richer components still exist in the codebase as reusa
 
 ## Current Status
 
-The current MVP is a responsive one-page viewer with reliable selection, embedded media, filters, infinite scrolling, slideshow controls, portable backups, and automated GitHub Pages deployment. See [PROGRESS.md](./PROGRESS.md) for the internal tracker.
+The current MVP is a responsive one-page photo viewer with reliable selection, embedded photos, filters, infinite scrolling, slideshow controls, portable backups, and automated GitHub Pages deployment. See [PROGRESS.md](./PROGRESS.md) for the internal tracker.

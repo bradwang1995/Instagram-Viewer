@@ -25,11 +25,11 @@ export function ImportPage() {
       <section className="page-header">
         <div>
           <div className="eyebrow">local-first import</div>
-          <h1>Build your saved library</h1>
+          <h1>Build your saved photo library</h1>
         </div>
         <p>
           No Instagram login, password, cookies, or scraping. The app stores saved
-          post references, local notes, tags, and import metadata in this browser.
+          photo references, local notes, tags, and import metadata in this browser.
         </p>
       </section>
 

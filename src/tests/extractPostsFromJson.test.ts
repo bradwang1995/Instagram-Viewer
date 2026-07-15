@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { extractPostsFromJson } from "../features/import/extractPostsFromJson";
 
 describe("extractPostsFromJson", () => {
-  it("recursively extracts saved Instagram URLs", () => {
+  it("recursively extracts only saved photo-post URLs", () => {
     const posts = extractPostsFromJson(
       {
         saved_saved_media: [
@@ -29,16 +29,11 @@ describe("extractPostsFromJson", () => {
       },
     );
 
-    expect(posts).toHaveLength(2);
+    expect(posts).toHaveLength(1);
     expect(posts[0]).toMatchObject({
       id: "post:ABC123",
       canonicalUrl: "https://www.instagram.com/p/ABC123/",
-      type: "post",
       savedAt: "2024-03-09T16:00:00.000Z",
-    });
-    expect(posts[1]).toMatchObject({
-      id: "reel:DEF456",
-      type: "reel",
     });
   });
 

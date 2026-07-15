@@ -41,7 +41,7 @@ export function ManualUrlImport() {
       <div className="section-heading">
         <div>
           <div className="eyebrow">manual</div>
-          <h2>Paste Instagram URLs</h2>
+          <h2>Paste Instagram photo URLs</h2>
         </div>
         <LinkIcon size={20} aria-hidden="true" />
       </div>
@@ -50,7 +50,7 @@ export function ManualUrlImport() {
         value={text}
         rows={7}
         onChange={(event) => setText(event.target.value)}
-        placeholder="https://www.instagram.com/p/ABC123/&#10;https://www.instagram.com/reel/DEF456/"
+        placeholder="https://www.instagram.com/p/ABC123/"
       />
       <div className="button-row">
         <span className="muted">{candidateCount} candidate URLs</span>

@@ -61,7 +61,7 @@ export function PostDetailDrawer({ post, onClose }: PostDetailDrawerProps) {
       >
         <header className="drawer-header">
           <div>
-            <div className="eyebrow">{post.type}</div>
+            <div className="eyebrow">photo</div>
             <h2>{post.shortcode}</h2>
           </div>
           <Button

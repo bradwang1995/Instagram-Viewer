@@ -131,7 +131,7 @@ export function SlideshowPage() {
             Stop autoplay
           </Button>
           <Link className="button button-secondary" to="/import">
-            Import posts
+            Import photos
           </Link>
         </div>
       ) : null}

@@ -7,18 +7,15 @@ describe("parseInstagramUrl", () => {
       isValid: true,
       canonicalUrl: "https://www.instagram.com/p/ABC123/",
       shortcode: "ABC123",
-      type: "post",
     });
   });
 
-  it("supports reels and tv URLs", () => {
-    expect(parseInstagramUrl("https://www.instagram.com/reel/DEF456/")).toMatchObject({
-      type: "reel",
-      shortcode: "DEF456",
+  it("rejects non-photo Instagram URLs", () => {
+    expect(parseInstagramUrl("https://www.instagram.com/reel/DEF456/")).toEqual({
+      isValid: false,
     });
-    expect(parseInstagramUrl("https://www.instagram.com/tv/GHI789/")).toMatchObject({
-      type: "tv",
-      shortcode: "GHI789",
+    expect(parseInstagramUrl("https://www.instagram.com/tv/GHI789/")).toEqual({
+      isValid: false,
     });
   });
 
@@ -32,6 +29,6 @@ describe("parseInstagramUrl", () => {
   });
 
   it("creates deterministic post ids", () => {
-    expect(createPostId("reel", "DEF456")).toBe("reel:DEF456");
+    expect(createPostId("ABC123")).toBe("post:ABC123");
   });
 });

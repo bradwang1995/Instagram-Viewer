@@ -30,7 +30,7 @@ export async function importSavedPostsJsonFile(file: File): Promise<ImportJob> {
         code: "JSON_PARSE_FAILED",
         message: "The selected file is not a JSON file.",
       });
-      throw new Error("Please choose your Instagram saved posts JSON file.");
+      throw new Error("Please choose your Instagram saved photos JSON file.");
     }
 
     const text = await file.text();
@@ -38,7 +38,7 @@ export async function importSavedPostsJsonFile(file: File): Promise<ImportJob> {
     const extractedPosts = extractPostsFromJson(json, {
       sourceFilePath: file.name,
       sourceFormat: "json",
-      candidateCollectionName: "saved posts",
+      candidateCollectionName: "saved photos",
     });
     const postsById = dedupePosts(extractedPosts);
     const uniquePosts = Array.from(postsById.values());
@@ -49,8 +49,7 @@ export async function importSavedPostsJsonFile(file: File): Promise<ImportJob> {
     if (uniquePosts.length === 0) {
       job.warnings.push({
         code: "NO_SAVED_POSTS_FOUND",
-        message:
-          "No Instagram post, Reel, or TV URLs were found in this JSON file.",
+        message: "No Instagram photo-post URLs were found in this JSON file.",
       });
     }
 

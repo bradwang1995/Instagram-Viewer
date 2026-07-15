@@ -1,5 +1,6 @@
 import { db } from "../../db/db";
 import type { AppBackup } from "../../db/schema";
+import { sanitizePhotoOnlyBackup } from "./sanitizeBackup";
 
 export async function createAppBackup(): Promise<AppBackup> {
   const [posts, collections, settings, importJobs] = await Promise.all([
@@ -9,14 +10,14 @@ export async function createAppBackup(): Promise<AppBackup> {
     db.importJobs.toArray(),
   ]);
 
-  return {
+  return sanitizePhotoOnlyBackup({
     version: 1,
     exportedAt: new Date().toISOString(),
     posts,
     collections,
     settings,
     importJobs,
-  };
+  });
 }
 
 export async function downloadAppBackup(): Promise<void> {

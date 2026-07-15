@@ -23,9 +23,9 @@ export function ImportSummary({ job }: { job: ImportJob | undefined }) {
         <Stat label="JSON files" value={job.totalJsonFilesScanned} />
         <Stat label="HTML files" value={job.totalHtmlFilesScanned} />
         <Stat label="URLs found" value={job.totalUrlsFound} />
-        <Stat label="Unique posts" value={job.totalUniquePostsFound} />
-        <Stat label="New posts" value={job.totalNewPostsAdded} />
-        <Stat label="Updated posts" value={job.totalExistingPostsUpdated} />
+        <Stat label="Unique photos" value={job.totalUniquePostsFound} />
+        <Stat label="New photos" value={job.totalNewPostsAdded} />
+        <Stat label="Updated photos" value={job.totalExistingPostsUpdated} />
         <Stat label="Warnings" value={job.warnings.length} />
       </div>
 

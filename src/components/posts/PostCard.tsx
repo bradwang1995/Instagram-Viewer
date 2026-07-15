@@ -21,7 +21,7 @@ export function PostCard({ post, onOpenDetails }: PostCardProps) {
   return (
     <article className={post.hidden ? "post-card post-card-hidden" : "post-card"}>
       <div className="post-card-preview">
-        <span className="post-type">{post.type}</span>
+        <span className="post-type">photo</span>
         <span className="shortcode">{post.shortcode}</span>
       </div>
       <div className="post-card-body">

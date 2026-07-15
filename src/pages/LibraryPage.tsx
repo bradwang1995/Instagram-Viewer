@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "react-router-dom";
 import { Play, Search } from "lucide-react";
 import { useMemo, useState } from "react";
-import type { SavedPost, SavedPostStatus, SavedPostType } from "../db/schema";
+import type { SavedPost, SavedPostStatus } from "../db/schema";
 import { EmptyState } from "../components/common/EmptyState";
 import { Input } from "../components/common/Input";
 import { Button } from "../components/common/Button";
@@ -11,14 +11,6 @@ import { EMPTY_FILTERS, filterPosts } from "../features/library/postFilters";
 import type { PostSort } from "../features/library/postSort";
 import { sortPosts } from "../features/library/postSort";
 import { usePosts } from "../hooks/usePosts";
-
-const TYPE_OPTIONS: Array<SavedPostType | "all"> = [
-  "all",
-  "post",
-  "reel",
-  "tv",
-  "unknown",
-];
 
 const STATUS_OPTIONS: Array<SavedPostStatus | "all"> = [
   "all",
@@ -42,7 +34,6 @@ export function LibraryPage() {
   const navigate = useNavigate();
   const { posts, isLoading, error } = usePosts();
   const [query, setQuery] = useState("");
-  const [type, setType] = useState<SavedPostType | "all">("all");
   const [status, setStatus] = useState<SavedPostStatus | "all">("all");
   const [collection, setCollection] = useState("all");
   const [tag, setTag] = useState("all");
@@ -65,7 +56,6 @@ export function LibraryPage() {
     const filters = {
       ...EMPTY_FILTERS,
       searchQuery: query,
-      types: type === "all" ? [] : [type],
       statuses: status === "all" ? [] : [status],
       collections: collection === "all" ? [] : [collection],
       tags: tag === "all" ? [] : [tag],
@@ -83,7 +73,6 @@ export function LibraryPage() {
     sort,
     status,
     tag,
-    type,
   ]);
 
   function startSlideshow() {
@@ -105,7 +94,7 @@ export function LibraryPage() {
   if (posts.length === 0) {
     return (
       <EmptyState
-        title="No saved posts imported yet."
+        title="No saved photos imported yet."
         action={
           <Link className="button button-primary" to="/import">
             Import
@@ -144,13 +133,6 @@ export function LibraryPage() {
             placeholder="Search URL, shortcode, note, tag, collection"
           />
         </label>
-        <select value={type} onChange={(event) => setType(event.target.value as SavedPostType | "all")}>
-          {TYPE_OPTIONS.map((option) => (
-            <option value={option} key={option}>
-              {option}
-            </option>
-          ))}
-        </select>
         <select
           value={status}
           onChange={(event) =>
@@ -212,7 +194,7 @@ export function LibraryPage() {
       {visiblePosts.length === 0 ? (
         <EmptyState title="No posts match the current filters." />
       ) : (
-        <section className="post-grid" aria-label="Saved posts">
+        <section className="post-grid" aria-label="Saved photos">
           {visiblePosts.map((post) => (
             <PostCard
               key={post.id}

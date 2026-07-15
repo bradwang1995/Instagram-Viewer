@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { db, notifyDbChanged } from "../../db/db";
 import type { AppBackup } from "../../db/schema";
+import { sanitizePhotoOnlyBackup } from "./sanitizeBackup";
 
 const backupSchema = z.object({
   version: z.literal(1),
@@ -14,7 +15,7 @@ const backupSchema = z.object({
 export async function importAppBackupFile(file: File): Promise<AppBackup> {
   const text = await file.text();
   const parsed = backupSchema.parse(JSON.parse(text));
-  const backup = parsed as AppBackup;
+  const backup = sanitizePhotoOnlyBackup(parsed as AppBackup);
 
   await db.transaction(
     "rw",

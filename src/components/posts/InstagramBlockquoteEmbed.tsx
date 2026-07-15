@@ -26,7 +26,7 @@ export function InstagramBlockquoteEmbed({ post }: { post: SavedPost }) {
         key={`${post.id}:${reloadKey}`}
         className="instagram-embed-iframe"
         src={embedUrl}
-        title={`${post.type === "reel" ? "Reel" : "Photo"} ${post.shortcode ?? post.id}`}
+        title={`Photo ${post.shortcode ?? post.id}`}
         allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
         allowFullScreen
         loading="eager"

@@ -64,7 +64,7 @@ export async function importInstagramZip(file: File): Promise<ImportJob> {
       job.warnings.push({
         code: "NO_SAVED_POSTS_FOUND",
         message:
-          "No Instagram post, Reel, or TV URLs were found. Try exporting more account data or use manual URL import.",
+          "No Instagram photo-post URLs were found. Try exporting more account data or use manual URL import.",
       });
     }
 

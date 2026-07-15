@@ -1,8 +1,7 @@
-import type { SavedPost, SavedPostStatus, SavedPostType } from "../../db/schema";
+import type { SavedPost, SavedPostStatus } from "../../db/schema";
 
 export type PostFilters = {
   searchQuery: string;
-  types: SavedPostType[];
   dateFrom: string;
   dateTo: string;
   statuses: SavedPostStatus[];
@@ -14,7 +13,6 @@ export type PostFilters = {
 
 export const EMPTY_FILTERS: PostFilters = {
   searchQuery: "",
-  types: [],
   dateFrom: "",
   dateTo: "",
   statuses: [],
@@ -54,10 +52,6 @@ export function filterPosts(posts: SavedPost[], filters: PostFilters): SavedPost
       if (!haystack.includes(query)) {
         return false;
       }
-    }
-
-    if (filters.types.length > 0 && !filters.types.includes(post.type)) {
-      return false;
     }
 
     if (dateFrom !== undefined || dateTo !== undefined) {

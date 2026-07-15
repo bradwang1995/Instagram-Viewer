@@ -23,8 +23,7 @@ export function createSavedPostFromUrl(
   if (
     !parsed.isValid ||
     !parsed.canonicalUrl ||
-    !parsed.shortcode ||
-    !parsed.type
+    !parsed.shortcode
   ) {
     return undefined;
   }
@@ -36,11 +35,10 @@ export function createSavedPostFromUrl(
   ]);
 
   return {
-    id: createPostId(parsed.type, parsed.shortcode),
+    id: createPostId(parsed.shortcode),
     url: rawUrl,
     canonicalUrl: parsed.canonicalUrl,
     shortcode: parsed.shortcode,
-    type: parsed.type,
     savedAt: options.savedAt,
     importedAt: now,
     updatedAt: now,

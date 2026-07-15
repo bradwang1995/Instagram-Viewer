@@ -11,7 +11,6 @@ export function mergeSavedPost(
     url: incoming.url || existing.url,
     canonicalUrl: incoming.canonicalUrl || existing.canonicalUrl,
     shortcode: incoming.shortcode ?? existing.shortcode,
-    type: incoming.type !== "unknown" ? incoming.type : existing.type,
     savedAt: existing.savedAt ?? incoming.savedAt,
     importedAt: existing.importedAt,
     updatedAt: now,

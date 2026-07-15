@@ -7,8 +7,8 @@ export function SlideshowViewer({ post }: { post: SavedPost | undefined }) {
   if (!post) {
     return (
       <section className="slideshow-empty">
-        <h2>No posts available</h2>
-        <p>Import posts or loosen the current library filters.</p>
+        <h2>No photos available</h2>
+        <p>Import photos or loosen the current library filters.</p>
       </section>
     );
   }
@@ -20,7 +20,7 @@ export function SlideshowViewer({ post }: { post: SavedPost | undefined }) {
         <PostFallbackCard post={post} />
       </div>
       <aside className="slideshow-meta">
-        <div className="eyebrow">{post.type}</div>
+        <div className="eyebrow">photo</div>
         <h2>{post.shortcode}</h2>
         <dl className="detail-list">
           <div>

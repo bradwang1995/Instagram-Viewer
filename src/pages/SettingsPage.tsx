@@ -67,7 +67,7 @@ export function SettingsPage() {
         </div>
         <p>
           Manage browser storage, app backups, and default viewer behavior. Backup
-          files include post references, local notes, tags, favorites, and import
+          files include photo references, local notes, tags, favorites, and import
           history.
         </p>
       </section>

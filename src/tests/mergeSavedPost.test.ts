@@ -7,7 +7,6 @@ const basePost: SavedPost = {
   url: "https://instagram.com/p/ABC123/",
   canonicalUrl: "https://www.instagram.com/p/ABC123/",
   shortcode: "ABC123",
-  type: "post",
   importedAt: "2024-01-01T00:00:00.000Z",
   updatedAt: "2024-01-01T00:00:00.000Z",
   collectionNames: ["Recipes"],

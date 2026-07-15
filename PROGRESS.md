@@ -4,18 +4,18 @@ Internal implementation tracker for `Ins 图片展`.
 
 ## Current Product Direction
 
-Build a very small local-first Instagram Saved post exhibition:
+Build a very small local-first Instagram Saved photo exhibition:
 
 ```text
 Import saved_posts.json
         ↓
-Extract Instagram post / reel / tv URLs
+Extract Instagram `/p/` photo-post URLs
         ↓
 Store local library in IndexedDB
         ↓
-Browse + search + date/type filters
+Browse + search + date filters
         ↓
-Embedded media viewer + slideshow
+Embedded photo viewer + slideshow
         ↓
 Optional local backup / restore
 ```
@@ -41,7 +41,7 @@ The product should remain one page unless a future requirement truly needs more.
 - [x] Add README.
 - [x] Add PROGRESS tracker.
 - [x] Add Dexie/IndexedDB data model.
-- [x] Add URL parser for `/p/`, `/reel/`, and `/tv/`.
+- [x] Add URL parser for Instagram `/p/` photo-post URLs.
 - [x] Add recursive JSON extractor.
 - [x] Add ZIP importer.
 - [x] Add first multi-page MVP.
@@ -67,7 +67,7 @@ The product should remain one page unless a future requirement truly needs more.
 - [x] Keep filtered, shuffled, clicked, and playing navigation on one playback order.
 - [x] Repair previous, next, play, pause, and shuffle behavior.
 - [x] Add selectable slideshow timing (6, 10, or 15 seconds).
-- [x] Add photo/reel segmented filtering and remove TV from the active filter UI.
+- [x] Keep the active gallery focused on photo posts.
 - [x] Add inclusive From/To saved-date filtering.
 - [x] Load 20 library records initially.
 - [x] Add infinite scrolling in groups of 20 with a manual fallback button.
@@ -89,13 +89,21 @@ The product should remain one page unless a future requirement truly needs more.
 - [x] Explain browser-local privacy boundaries and shared-profile risk.
 - [x] Explain same-browser persistence and cross-device recovery.
 - [x] Add setup instructions for maintainers and forks.
-- [ ] Confirm the first live GitHub Pages deployment.
+- [x] Confirm the first live GitHub Pages deployment.
+
+## Revision 5: Photo-Only Product Scope
+
+- [x] Restrict URL parsing and imports to Instagram `/p/` photo-post URLs.
+- [x] Remove obsolete category state, filters, icons, labels, and styles.
+- [x] Add an IndexedDB upgrade that removes previously stored unsupported records.
+- [x] Remove the legacy category field from retained photo records.
+- [x] Sanitize restored and exported backups to contain photo posts only.
+- [x] Update fixtures, tests, README, and this tracker for the photo-only product.
 
 ## Current Active UI
 
 - [x] Import JSON button.
 - [x] Search field.
-- [x] Photo/reel type filter.
 - [x] Saved-date range filter.
 - [x] Infinite library list (20 items per batch).
 - [x] Keyed Instagram iframe preview.
@@ -123,7 +131,7 @@ The product should remain one page unless a future requirement truly needs more.
 
 ## Latest Verification
 
-- [x] `npm test` passes with 13 tests across 7 files, including backup recovery and deterministic shuffle navigation.
+- [x] `npm test` passes with 14 tests across 8 files, including photo-only backup cleanup and deterministic shuffle navigation.
 - [x] `npm run build` passes.
 - [x] The Pages-specific build emits `/Instagram-saved-photo-viewer/` asset paths and router basename.
 - [x] Local dev server responds at `http://127.0.0.1:5173/`.
@@ -134,10 +142,9 @@ The product should remain one page unless a future requirement truly needs more.
 - [x] Scrolling automatically expands the rendered list from 20 to 40.
 - [x] Browser QA confirms click selection and Next change the iframe target.
 - [x] Browser QA confirms Play advances after 6 seconds and Pause stops playback.
-- [x] Browser QA confirms the photo and date filters reduce the library.
+- [x] Browser QA confirms search and date filters reduce the library.
 - [x] Browser QA confirms no horizontal overflow at desktop or 390px mobile width.
-- [x] A real local-export photo embed returns visible main media without a login wall.
-- [x] A real local-export Reel embed returns its Instagram media/cover state.
+- [x] A real local-export photo embed returns a visible photo without a login wall.
 
 ## Next Candidate Improvements
 

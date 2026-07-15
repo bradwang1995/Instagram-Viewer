@@ -33,7 +33,7 @@ export function ZipImportDropzone({
       <div className="dropzone">
         <FileArchive size={32} aria-hidden="true" />
         <div>
-          <h2>Import Instagram Saved Posts</h2>
+          <h2>Import Instagram Saved Photos</h2>
           <p>
             Upload your official Instagram data export ZIP. The file is parsed
             locally in this browser.
