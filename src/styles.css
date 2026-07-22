@@ -1,22 +1,38 @@
 :root {
   color-scheme: dark;
   font-size: 150%;
-  font-family: "Helvetica Neue", Arial, ui-sans-serif, system-ui, sans-serif;
+  font-family:
+    "Segoe UI Variable Display", "Aptos Display", "Avenir Next",
+    "Trebuchet MS", ui-sans-serif, system-ui, sans-serif;
   background: #050606;
   color: #ebe9e2;
+  --display-font: "Bodoni MT", "Bodoni 72", Didot, Georgia, serif;
   --black: #050606;
   --ink: #090a0a;
-  --olive-black: #11130d;
+  --olive-black: #120d13;
   --paper: #ebe9e2;
-  --muted: #8c9088;
-  --dim: #555a53;
-  --line: #262a25;
-  --acid: #c8ff55;
+  --muted: #a49ca8;
+  --dim: #6d6470;
+  --line: #2b202d;
+  --acid: #ff4d9a;
+  --violet: #8a3ffc;
+  --sunset: #ff8a3d;
+  --instagram-gradient: linear-gradient(
+    118deg,
+    var(--sunset) 0%,
+    var(--acid) 42%,
+    var(--violet) 100%
+  );
   --danger: #ff766d;
 }
 
 * {
   box-sizing: border-box;
+  cursor:
+    url("/cursors/instagram-viewer-cursor.png") 3 3,
+    auto !important;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 html,
@@ -27,6 +43,9 @@ body,
   min-height: 100%;
   margin: 0;
   background: var(--black);
+  cursor:
+    url("/cursors/instagram-viewer-cursor.png") 3 3,
+    auto;
 }
 
 body {
@@ -42,6 +61,9 @@ select {
 button,
 a {
   -webkit-tap-highlight-color: transparent;
+  cursor:
+    url("/cursors/instagram-viewer-cursor.png") 3 3,
+    pointer;
 }
 
 button:focus-visible,
@@ -91,9 +113,11 @@ p {
 }
 
 .archive-logo strong {
+  font-family: var(--display-font);
   font-size: 0.8rem;
-  font-weight: 900;
-  letter-spacing: -0.03em;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .archive-logo span {
@@ -146,9 +170,11 @@ p {
   gap: 0.02em;
   overflow: hidden;
   color: #d6d4cc;
+  font-family: var(--display-font);
   font-size: clamp(5rem, 11.8vw, 18rem);
-  font-weight: 900;
-  letter-spacing: -0.095em;
+  font-style: italic;
+  font-weight: 700;
+  letter-spacing: -0.075em;
   line-height: 0.75;
   pointer-events: none;
   white-space: nowrap;
@@ -349,8 +375,9 @@ p {
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior: contain;
+  scroll-behavior: auto;
   scrollbar-width: none;
-  scroll-snap-type: x proximity;
+  scroll-snap-type: none;
 }
 
 .archive-scroller::-webkit-scrollbar {
@@ -365,7 +392,6 @@ p {
 .archive-card {
   position: relative;
   color: var(--paper);
-  scroll-snap-align: center;
   transition: box-shadow 350ms ease;
   will-change: transform;
 }
@@ -379,7 +405,9 @@ p {
 .archive-card-hit {
   width: 100%;
   height: 100%;
-  cursor: pointer;
+  cursor:
+    url("/cursors/instagram-viewer-cursor.png") 3 3,
+    pointer;
 }
 
 .archive-media-surface {
@@ -387,25 +415,22 @@ p {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  border: 1px solid #242823;
+  border: 0;
   background: #0b0c0b;
   box-shadow: 0 28px 85px rgb(0 0 0 / 42%);
   transition:
-    border-color 320ms ease,
     box-shadow 420ms ease;
 }
 
 .archive-card:hover .archive-media-surface,
 .archive-card:focus-within .archive-media-surface {
-  border-color: #555d53;
   box-shadow: 0 36px 105px rgb(0 0 0 / 58%);
 }
 
 .archive-card.is-selected .archive-media-surface {
-  border-color: rgb(200 255 85 / 72%);
   box-shadow:
     0 38px 120px rgb(0 0 0 / 62%),
-    0 0 0 1px rgb(200 255 85 / 16%);
+    0 0 54px rgb(255 77 154 / 10%);
 }
 
 .archive-media-surface > img {
@@ -424,24 +449,26 @@ p {
 
 .archive-embed-crop,
 .archive-embed-loading,
-.archive-image-loading,
-.archive-media-unavailable {
+.archive-image-loading {
   position: absolute;
   inset: 0;
 }
 
 .archive-embed-crop {
+  inset: 50% 0 auto;
+  aspect-ratio: 1;
   overflow: hidden;
   background: #0a0b0a;
+  transform: translateY(-50%);
 }
 
 .archive-embed-crop iframe {
   position: absolute;
-  top: -61px;
-  left: -42px;
+  top: -60px;
+  left: 0;
   display: block;
-  width: calc(100% + 84px);
-  height: calc(100% + 190px);
+  width: 100%;
+  height: calc(100% + 200px);
   border: 0;
   background: #0a0b0a;
   filter: none;
@@ -449,8 +476,7 @@ p {
 }
 
 .archive-embed-loading,
-.archive-image-loading,
-.archive-media-unavailable {
+.archive-image-loading {
   z-index: 2;
   display: grid;
   place-content: center;
@@ -461,10 +487,6 @@ p {
 .archive-image-loading {
   background: transparent;
   pointer-events: none;
-}
-
-.archive-media-unavailable {
-  color: #737970;
 }
 
 .archive-dock {
@@ -506,9 +528,9 @@ p {
   background: transparent;
   color: var(--muted);
   padding: 0 14px;
-  cursor: pointer;
   font-size: 0.62rem;
   font-weight: 760;
+  letter-spacing: 0.01em;
 }
 
 .dock-modes button:hover,
@@ -519,20 +541,20 @@ p {
 }
 
 .dock-modes button.is-active {
-  background: #151815;
+  background: #181119;
 }
 
 .dock-actions .dock-play {
   min-width: 144px;
-  background: var(--acid);
-  color: #0a0b09;
+  background: var(--instagram-gradient);
+  color: #fff;
   font-weight: 900;
   text-transform: uppercase;
 }
 
 .dock-actions .dock-play:hover {
-  background: #dcff8a;
-  color: #050604;
+  color: #fff;
+  filter: saturate(1.15) brightness(1.08);
 }
 
 /* Grid mode */
@@ -641,7 +663,9 @@ p {
 
 .archive-sheet-lede h2 {
   max-width: 430px;
+  font-family: var(--display-font);
   font-size: clamp(1.7rem, 3.2vw, 3.5rem);
+  font-style: italic;
   font-weight: 780;
   letter-spacing: -0.065em;
   line-height: 0.94;
@@ -819,42 +843,29 @@ p {
   position: fixed;
   inset: 0;
   z-index: 60;
-  display: grid;
-  height: 100svh;
-  min-height: 560px;
-  grid-template-rows: 66px minmax(0, 1fr) 86px;
+  height: 100dvh;
   overflow: hidden;
-  background: #020303;
+  background:
+    radial-gradient(circle at 18% 10%, rgb(255 77 154 / 13%), transparent 34%),
+    radial-gradient(circle at 86% 88%, rgb(138 63 252 / 12%), transparent 38%),
+    #020203;
   color: var(--paper);
+  isolation: isolate;
 }
 
 .slideshow-header {
+  position: absolute;
+  z-index: 4;
+  inset: 0 0 auto;
   display: flex;
+  height: 102px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: 0 clamp(18px, 2.2vw, 38px);
+  background: linear-gradient(to bottom, rgb(2 2 3 / 94%), transparent);
 }
 
-.slideshow-header > div:first-child {
-  display: grid;
-  gap: 3px;
-}
-
-.slideshow-header span {
-  color: var(--acid);
-  font-size: 0.63rem;
-  font-weight: 850;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.slideshow-header strong {
-  color: var(--muted);
-  font-size: 0.59rem;
-  font-weight: 620;
-}
-
-.slideshow-header > div:last-child {
+.slideshow-header-actions {
   display: flex;
   gap: 5px;
 }
@@ -865,10 +876,11 @@ p {
   width: 40px;
   height: 40px;
   place-items: center;
-  border: 0;
-  background: #0f1110;
-  color: var(--muted);
+  border: 1px solid rgb(255 255 255 / 8%);
+  background: rgb(16 12 18 / 72%);
+  color: #c6bec8;
   cursor: pointer;
+  backdrop-filter: blur(16px);
 }
 
 .slideshow-header button:hover,
@@ -877,40 +889,51 @@ p {
 }
 
 .slideshow-stage {
-  position: relative;
+  position: absolute;
+  inset: 0;
   display: grid;
-  min-height: 0;
   overflow: hidden;
   place-items: center;
 }
 
 .slideshow-frame {
+  position: relative;
   display: grid;
-  width: min(78vw, 1180px);
-  height: min(68svh, 760px);
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
   place-items: center;
 }
 
 .slideshow-frame > img {
+  position: absolute;
+  inset: 0;
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 100vw;
+  height: 100dvh;
+  max-width: 100vw;
+  max-height: 100dvh;
   object-fit: contain;
 }
 
 .slideshow-embed {
-  width: min(430px, 72vw);
-  height: min(64svh, 700px);
+  position: relative;
+  width: min(100vw, 100dvh);
+  aspect-ratio: 1;
+  height: auto;
   overflow: hidden;
-  background: #090a09;
+  background: #050405;
 }
 
 .slideshow-embed iframe {
+  position: absolute;
+  top: -60px;
+  left: 0;
   width: 100%;
-  height: calc(100% + 190px);
+  height: calc(100% + 200px);
   border: 0;
-  background: #090a09;
-  transform: translateY(-61px);
+  background: #050405;
+  pointer-events: none;
 }
 
 .slideshow-film-flash {
@@ -922,12 +945,17 @@ p {
 }
 
 .slideshow-controls {
+  position: absolute;
+  z-index: 4;
+  inset: auto 0 0;
   display: grid;
+  min-height: 118px;
   grid-template-columns: minmax(200px, 1fr) auto minmax(200px, 1fr);
   align-items: center;
   gap: 24px;
-  border-top: 1px solid #171917;
-  padding: 0 clamp(18px, 2.2vw, 38px);
+  border: 0;
+  background: linear-gradient(to top, rgb(2 2 3 / 96%), transparent);
+  padding: 28px clamp(18px, 2.2vw, 38px) 12px;
 }
 
 .slideshow-progress {
@@ -945,16 +973,19 @@ p {
   height: 2px;
   border: 0;
   appearance: none;
-  background: #232623;
+  background: #2a202c;
 }
 
 .slideshow-progress progress::-webkit-progress-bar {
-  background: #232623;
+  background: #2a202c;
 }
 
-.slideshow-progress progress::-webkit-progress-value,
+.slideshow-progress progress::-webkit-progress-value {
+  background: var(--instagram-gradient);
+}
+
 .slideshow-progress progress::-moz-progress-bar {
-  background: var(--acid);
+  background: var(--instagram-gradient);
 }
 
 .slideshow-transport {
@@ -966,8 +997,10 @@ p {
 .slideshow-transport .slideshow-play {
   width: 52px;
   height: 52px;
-  background: var(--acid);
-  color: #0a0b09;
+  border: 0;
+  background: var(--instagram-gradient);
+  color: #fff;
+  box-shadow: 0 12px 48px rgb(255 77 154 / 24%);
 }
 
 .slideshow-settings {
@@ -1217,7 +1250,7 @@ p {
   }
 
   .archive-slideshow {
-    grid-template-rows: 58px minmax(0, 1fr) 106px;
+    height: 100dvh;
   }
 
   .slideshow-header {
@@ -1225,8 +1258,8 @@ p {
   }
 
   .slideshow-frame {
-    width: 100%;
-    height: min(58svh, 560px);
+    width: 100vw;
+    height: 100dvh;
   }
 
   .slideshow-controls {

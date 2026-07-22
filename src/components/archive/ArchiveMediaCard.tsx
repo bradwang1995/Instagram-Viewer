@@ -1,4 +1,4 @@
-import { ImageOff, LoaderCircle } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { motion } from "motion/react";
 import {
   useCallback,
@@ -10,6 +10,7 @@ import {
   type KeyboardEvent,
 } from "react";
 import { getInstagramEmbedUrl } from "../../features/embed/instagramEmbedUrl";
+import { getInstagramEmbedAvailability } from "../../features/embed/instagramOEmbed";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
 
 const resolvedCandidateByRevision = new Map<string, string>();
@@ -33,6 +34,7 @@ type ArchiveMediaCardProps = {
   allowCompatibilityPreview: boolean;
   layoutStyle: CSSProperties;
   onSelect: () => void;
+  onUnavailable: () => void;
 };
 
 export function ArchiveMediaCard({
@@ -42,6 +44,7 @@ export function ArchiveMediaCard({
   allowCompatibilityPreview,
   layoutStyle,
   onSelect,
+  onUnavailable,
 }: ArchiveMediaCardProps) {
   const { media, post } = item;
   const mediaRevision = `${media.id}\u0000${media.assetUrl ?? ""}\u0000${media.previewUrl ?? ""}`;
@@ -68,6 +71,7 @@ export function ArchiveMediaCard({
   const [hasFailed, setHasFailed] = useState(() =>
     failedDirectMediaRevisions.has(mediaRevision),
   );
+  const unavailableReportedRef = useRef(false);
   const resolvedUrl = candidateUrls[candidateIndex];
 
   useEffect(() => {
@@ -77,7 +81,18 @@ export function ArchiveMediaCard({
     setCandidateIndex(Math.max(0, nextIndex));
     setIsLoading(candidateUrls.length > 0 && !cached && !failed);
     setHasFailed(failed);
+    unavailableReportedRef.current = false;
   }, [candidateUrls, mediaRevision]);
+
+  const reportUnavailable = useCallback(() => {
+    if (unavailableReportedRef.current) return;
+    unavailableReportedRef.current = true;
+    onUnavailable();
+  }, [onUnavailable]);
+
+  useEffect(() => {
+    if (hasFailed) reportUnavailable();
+  }, [hasFailed, reportUnavailable]);
 
   function handleImageError() {
     if (candidateIndex + 1 < candidateUrls.length) {
@@ -88,6 +103,7 @@ export function ArchiveMediaCard({
     setIsLoading(false);
     setHasFailed(true);
     failedDirectMediaRevisions.add(mediaRevision);
+    reportUnavailable();
   }
 
   function selectFromKeyboard(event: KeyboardEvent<HTMLDivElement>) {
@@ -96,6 +112,8 @@ export function ArchiveMediaCard({
       onSelect();
     }
   }
+
+  if (hasFailed) return null;
 
   return (
     <motion.article
@@ -143,16 +161,11 @@ export function ArchiveMediaCard({
                 <MediaLoadingState className="archive-image-loading" />
               ) : null}
             </>
-          ) : hasFailed ? (
-            <div
-              className="archive-media-unavailable"
-              role="img"
-              aria-label="Photo unavailable"
-            >
-              <ImageOff size={26} aria-hidden="true" />
-            </div>
           ) : allowCompatibilityPreview ? (
-            <CroppedInstagramPreview item={item} />
+            <CroppedInstagramPreview
+              item={item}
+              onUnavailable={reportUnavailable}
+            />
           ) : null}
         </div>
       </div>
@@ -160,48 +173,77 @@ export function ArchiveMediaCard({
   );
 }
 
-function CroppedInstagramPreview({ item }: { item: MediaQueueItem }) {
+function CroppedInstagramPreview({
+  item,
+  onUnavailable,
+}: {
+  item: MediaQueueItem;
+  onUnavailable: () => void;
+}) {
   const embedUrl = getInstagramEmbedUrl(item.post);
   const embedRevision = `${item.media.id}\u0000${embedUrl}`;
   const [isLoading, setIsLoading] = useState(true);
   const [hasFailed, setHasFailed] = useState(() =>
     failedEmbedMediaRevisions.has(embedRevision),
   );
-  const { granted, release } = useEmbedRequestPermit(
-    embedUrl,
-    !hasFailed,
-  );
+  const [isValidated, setIsValidated] = useState(false);
+  const onUnavailableRef = useRef(onUnavailable);
+  const { granted, release } = useEmbedRequestPermit(embedUrl, !hasFailed);
+
+  useEffect(() => {
+    onUnavailableRef.current = onUnavailable;
+  }, [onUnavailable]);
 
   useEffect(() => {
     const failed = failedEmbedMediaRevisions.has(embedRevision);
     setHasFailed(failed);
     setIsLoading(!failed);
+    setIsValidated(false);
+    if (failed) onUnavailableRef.current();
   }, [embedRevision]);
+
+  const markUnavailable = useCallback(() => {
+    failedEmbedMediaRevisions.add(embedRevision);
+    setHasFailed(true);
+    setIsLoading(false);
+    setIsValidated(false);
+    release();
+    onUnavailableRef.current();
+  }, [embedRevision, release]);
+
+  useEffect(() => {
+    if (!granted || hasFailed) return undefined;
+    let active = true;
+    void getInstagramEmbedAvailability(item.post.canonicalUrl).then(
+      (availability) => {
+        if (!active) return;
+        if (availability === "unavailable") {
+          markUnavailable();
+          return;
+        }
+        setIsValidated(true);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [granted, hasFailed, item.post.canonicalUrl, markUnavailable]);
   useEffect(() => {
     if (!granted || !isLoading || hasFailed) return undefined;
     const timeout = window.setTimeout(() => {
-      failedEmbedMediaRevisions.add(embedRevision);
-      setHasFailed(true);
-      setIsLoading(false);
-      release();
+      markUnavailable();
     }, EMBED_REQUEST_TIMEOUT_MS);
     return () => window.clearTimeout(timeout);
-  }, [embedRevision, granted, hasFailed, isLoading, release]);
+  }, [granted, hasFailed, isLoading, markUnavailable]);
+
+  if (hasFailed) return null;
 
   return (
     <div className="archive-embed-crop">
-      {hasFailed ? (
-        <div
-          className="archive-media-unavailable"
-          role="img"
-          aria-label="Photo unavailable"
-        >
-          <ImageOff size={26} aria-hidden="true" />
-        </div>
-      ) : isLoading ? (
+      {isLoading ? (
         <MediaLoadingState className="archive-embed-loading" />
       ) : null}
-      {granted && !hasFailed ? (
+      {granted && isValidated ? (
         <iframe
           src={embedUrl}
           title={`Instagram photo preview ${item.post.shortcode ?? item.post.id}`}
@@ -215,10 +257,7 @@ function CroppedInstagramPreview({ item }: { item: MediaQueueItem }) {
             release();
           }}
           onError={() => {
-            failedEmbedMediaRevisions.add(embedRevision);
-            setHasFailed(true);
-            setIsLoading(false);
-            release();
+            markUnavailable();
           }}
         />
       ) : null}

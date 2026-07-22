@@ -1,14 +1,36 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ArchiveMediaCard } from "../components/archive/ArchiveMediaCard";
 import type { MediaItem, SavedPost } from "../db/schema";
+import { getInstagramEmbedAvailability } from "../features/embed/instagramOEmbed";
 import type { MediaQueueItem } from "../features/media/mediaQueue";
 
+vi.mock("../features/embed/instagramOEmbed", () => ({
+  getInstagramEmbedAvailability: vi.fn(),
+}));
+
+const mockGetInstagramEmbedAvailability = vi.mocked(
+  getInstagramEmbedAvailability,
+);
+
 describe("ArchiveMediaCard", () => {
-  afterEach(() => vi.useRealTimers());
+  beforeEach(() => {
+    mockGetInstagramEmbedAvailability.mockResolvedValue("available");
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.clearAllMocks();
+  });
 
   it("falls back from the asset to the preview and remembers a terminal failure", () => {
     const item = createItem("fallback-test");
+    const onUnavailable = vi.fn();
     const first = render(
       <ArchiveMediaCard
         item={item}
@@ -17,6 +39,7 @@ describe("ArchiveMediaCard", () => {
         allowCompatibilityPreview
         layoutStyle={{ width: 400, height: 500 }}
         onSelect={vi.fn()}
+        onUnavailable={onUnavailable}
       />,
     );
 
@@ -28,12 +51,9 @@ describe("ArchiveMediaCard", () => {
       "https://example.com/preview.jpg",
     );
     fireEvent.error(first.container.querySelector("img") as HTMLImageElement);
-    expect(
-      screen.getByRole("img", { name: "Photo unavailable" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "View photo from @tester" }),
-    ).toBeInTheDocument();
+    expect(onUnavailable).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
+    expect(first.container).toBeEmptyDOMElement();
 
     first.unmount();
     const remounted = render(
@@ -44,16 +64,16 @@ describe("ArchiveMediaCard", () => {
         allowCompatibilityPreview
         layoutStyle={{ width: 400, height: 500 }}
         onSelect={vi.fn()}
+        onUnavailable={onUnavailable}
       />,
     );
     expect(remounted.container.querySelector("img")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("img", { name: "Photo unavailable" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
   });
 
   it("retries a stable media ID when its resource URLs change", () => {
     const item = createItem("revised-url");
+    const onUnavailable = vi.fn();
     const first = render(
       <ArchiveMediaCard
         item={item}
@@ -62,11 +82,12 @@ describe("ArchiveMediaCard", () => {
         allowCompatibilityPreview
         layoutStyle={{ width: 400, height: 500 }}
         onSelect={vi.fn()}
+        onUnavailable={onUnavailable}
       />,
     );
     fireEvent.error(first.container.querySelector("img") as HTMLImageElement);
     fireEvent.error(first.container.querySelector("img") as HTMLImageElement);
-    expect(screen.getByRole("img", { name: "Photo unavailable" })).toBeInTheDocument();
+    expect(onUnavailable).toHaveBeenCalledTimes(1);
     first.unmount();
 
     const revised = createItem("revised-url");
@@ -80,6 +101,7 @@ describe("ArchiveMediaCard", () => {
         allowCompatibilityPreview
         layoutStyle={{ width: 400, height: 500 }}
         onSelect={vi.fn()}
+        onUnavailable={vi.fn()}
       />,
     );
     expect(second.container.querySelector("img")).toHaveAttribute(
@@ -88,7 +110,7 @@ describe("ArchiveMediaCard", () => {
     );
   });
 
-  it("starts no more than two compatibility iframe requests at once", () => {
+  it("starts no more than two compatibility iframe requests at once", async () => {
     const items = Array.from({ length: 5 }, (_, index) => {
       const item = createItem(`embed-${index}`);
       item.media.sourceKind = "embed";
@@ -107,16 +129,20 @@ describe("ArchiveMediaCard", () => {
             allowCompatibilityPreview
             layoutStyle={{ width: 400, height: 500 }}
             onSelect={vi.fn()}
+            onUnavailable={vi.fn()}
           />
         ))}
       </div>,
     );
 
-    expect(view.container.querySelectorAll("iframe")).toHaveLength(2);
+    await waitFor(() =>
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(2),
+    );
   });
 
-  it("unmounts timed-out embeds, keeps the request window bounded, and remembers failures", () => {
+  it("silently omits timed-out embeds, keeps the request window bounded, and remembers failures", async () => {
     vi.useFakeTimers();
+    const onUnavailable = vi.fn();
     const items = Array.from({ length: 5 }, (_, index) => {
       const item = createItem(`timeout-${index}`);
       item.media.sourceKind = "embed";
@@ -135,29 +161,26 @@ describe("ArchiveMediaCard", () => {
             allowCompatibilityPreview
             layoutStyle={{ width: 400, height: 500 }}
             onSelect={vi.fn()}
+            onUnavailable={onUnavailable}
           />
         ))}
       </div>,
     );
 
+    await act(async () => undefined);
     expect(view.container.querySelectorAll("iframe")).toHaveLength(2);
-    act(() => vi.advanceTimersByTime(12_000));
+    await act(async () => vi.advanceTimersByTime(12_000));
     expect(view.container.querySelectorAll("iframe")).toHaveLength(2);
-    expect(
-      screen.getAllByRole("img", { name: "Photo unavailable" }),
-    ).toHaveLength(2);
+    expect(onUnavailable).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
 
-    act(() => vi.advanceTimersByTime(12_000));
+    await act(async () => vi.advanceTimersByTime(12_000));
     expect(view.container.querySelectorAll("iframe")).toHaveLength(1);
-    expect(
-      screen.getAllByRole("img", { name: "Photo unavailable" }),
-    ).toHaveLength(4);
+    expect(onUnavailable).toHaveBeenCalledTimes(4);
 
-    act(() => vi.advanceTimersByTime(12_000));
+    await act(async () => vi.advanceTimersByTime(12_000));
     expect(view.container.querySelectorAll("iframe")).toHaveLength(0);
-    expect(
-      screen.getAllByRole("img", { name: "Photo unavailable" }),
-    ).toHaveLength(5);
+    expect(onUnavailable).toHaveBeenCalledTimes(5);
 
     view.unmount();
     const remounted = render(
@@ -168,15 +191,14 @@ describe("ArchiveMediaCard", () => {
         allowCompatibilityPreview
         layoutStyle={{ width: 400, height: 500 }}
         onSelect={vi.fn()}
+        onUnavailable={onUnavailable}
       />,
     );
     expect(remounted.container.querySelector("iframe")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("img", { name: "Photo unavailable" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
   });
 
-  it("does not request a deferred compatibility preview until it is enabled", () => {
+  it("does not request a deferred compatibility preview until it is enabled", async () => {
     const item = createItem("deferred-embed");
     item.media.sourceKind = "embed";
     item.media.assetUrl = undefined;
@@ -189,6 +211,7 @@ describe("ArchiveMediaCard", () => {
         allowCompatibilityPreview={false}
         layoutStyle={{ width: 400, height: 500 }}
         onSelect={vi.fn()}
+        onUnavailable={vi.fn()}
       />,
     );
     expect(view.container.querySelector("iframe")).not.toBeInTheDocument();
@@ -201,9 +224,12 @@ describe("ArchiveMediaCard", () => {
         allowCompatibilityPreview
         layoutStyle={{ width: 400, height: 500 }}
         onSelect={vi.fn()}
+        onUnavailable={vi.fn()}
       />,
     );
-    expect(view.container.querySelector("iframe")).toBeInTheDocument();
+    await waitFor(() =>
+      expect(view.container.querySelector("iframe")).toBeInTheDocument(),
+    );
 
     view.rerender(
       <ArchiveMediaCard
@@ -213,9 +239,34 @@ describe("ArchiveMediaCard", () => {
         allowCompatibilityPreview={false}
         layoutStyle={{ width: 400, height: 500 }}
         onSelect={vi.fn()}
+        onUnavailable={vi.fn()}
       />,
     );
     expect(view.container.querySelector("iframe")).not.toBeInTheDocument();
+  });
+
+  it("silently rejects a post that the official oEmbed endpoint marks unavailable", async () => {
+    mockGetInstagramEmbedAvailability.mockResolvedValueOnce("unavailable");
+    const item = createItem("private-post");
+    item.media.sourceKind = "embed";
+    item.media.assetUrl = undefined;
+    item.media.previewUrl = undefined;
+    const onUnavailable = vi.fn();
+    const view = render(
+      <ArchiveMediaCard
+        item={item}
+        index={0}
+        selected
+        allowCompatibilityPreview
+        layoutStyle={{ width: 400, height: 500 }}
+        onSelect={vi.fn()}
+        onUnavailable={onUnavailable}
+      />,
+    );
+
+    await waitFor(() => expect(onUnavailable).toHaveBeenCalledTimes(1));
+    expect(view.container.querySelector("iframe")).not.toBeInTheDocument();
+    expect(screen.queryByText(/unavailable|error/i)).not.toBeInTheDocument();
   });
 });
 

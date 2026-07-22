@@ -4,6 +4,7 @@ import {
   render,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, type MediaItem, type SavedPost } from "../db/schema";
@@ -15,6 +16,7 @@ const testState = vi.hoisted(() => ({
   queue: [] as MediaQueueItem[],
   refresh: vi.fn(),
   setMediaVisibility: vi.fn(),
+  getInstagramEmbedAvailability: vi.fn(),
 }));
 
 vi.mock("../hooks/useMediaLibrary", () => ({
@@ -42,10 +44,14 @@ vi.mock("../features/import/importJson", () => ({
 vi.mock("../features/slideshow/shuffle", () => ({
   shuffleArray: <T,>(items: T[]) => [...items].reverse(),
 }));
+vi.mock("../features/embed/instagramOEmbed", () => ({
+  getInstagramEmbedAvailability: testState.getInstagramEmbedAvailability,
+}));
 
 describe("Photo archive preview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.history.replaceState({}, "", "/");
     Object.defineProperty(window, "innerWidth", {
       configurable: true,
       value: 1920,
@@ -64,6 +70,7 @@ describe("Photo archive preview", () => {
     ];
     testState.refresh.mockResolvedValue(undefined);
     testState.setMediaVisibility.mockResolvedValue(undefined);
+    testState.getInstagramEmbedAvailability.mockResolvedValue("available");
   });
 
   it("shows each media item as a separate, control-free photo card", async () => {
@@ -120,7 +127,7 @@ describe("Photo archive preview", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps a large desktop grid to twelve mounted cards and reaches the end", async () => {
+  it("keeps a large desktop grid to the current and next four-card groups", async () => {
     const source = createPost("LONG", "@long.library", "Reference");
     testState.posts = [source];
     testState.queue = Array.from({ length: 100 }, (_, index) =>
@@ -131,7 +138,7 @@ describe("Photo archive preview", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
     await waitFor(() =>
-      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(12),
+      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(8),
     );
 
     const scroller = screen.getByTestId("archive-scroller");
@@ -144,10 +151,10 @@ describe("Photo archive preview", () => {
     );
     expect(
       screen.getAllByTestId("archive-media-card").length,
-    ).toBeLessThanOrEqual(12);
+    ).toBeLessThanOrEqual(8);
   });
 
-  it("does not request compatibility embeds for the Grid preload rows", async () => {
+  it("preloads the next Grid group while keeping embed requests bounded", async () => {
     const source = createPost("NETWORKBOUND", "@network.bound", "Saved");
     testState.posts = [source];
     testState.queue = Array.from({ length: 100 }, (_, index) =>
@@ -156,10 +163,12 @@ describe("Photo archive preview", () => {
     const view = render(<HomePage />);
     await act(async () => undefined);
 
-    expect(view.container.querySelectorAll("iframe")).toHaveLength(2);
+    await waitFor(() =>
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(2),
+    );
     fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
     await waitFor(() =>
-      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(12),
+      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(8),
     );
     expect(view.container.querySelectorAll("iframe")).toHaveLength(2);
 
@@ -169,6 +178,78 @@ describe("Photo archive preview", () => {
     await waitFor(() =>
       expect(view.container.querySelectorAll("iframe")).toHaveLength(4),
     );
+    view.container
+      .querySelectorAll("iframe")
+      .forEach((frame) => fireEvent.load(frame));
+    await waitFor(() =>
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(6),
+    );
+    view.container
+      .querySelectorAll("iframe")
+      .forEach((frame) => fireEvent.load(frame));
+    await waitFor(() =>
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(8),
+    );
+  });
+
+  it("adds slideshow history and advances each known frame before the next post", async () => {
+    render(<HomePage />);
+    await act(async () => undefined);
+
+    fireEvent.click(screen.getByRole("button", { name: "Slideshow" }));
+    expect(window.location.search).toContain("slideshow=1");
+    const slideshow = screen.getByRole("region", {
+      name: "Slideshow viewer",
+    });
+    expect(slideshow).toBeInTheDocument();
+    expect(
+      within(slideshow).getByRole("img", {
+        name: "@north.archive frame 1 of 2",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next media" }));
+    await waitFor(() =>
+      expect(
+        within(slideshow).getByRole("img", {
+          name: "@north.archive frame 2 of 2",
+        }),
+      ).toBeInTheDocument(),
+    );
+
+    window.history.replaceState({}, "", "/");
+    fireEvent.popState(window);
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("region", { name: "Slideshow viewer" }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it("silently removes posts rejected by the official embed check", async () => {
+    const blocked = createPost("BLOCKED", "@blocked", "Saved");
+    const available = createPost("AVAILABLE", "@available", "Saved");
+    testState.posts = [blocked, available];
+    testState.queue = [
+      createUnresolvedQueueItem(blocked, 0),
+      createUnresolvedQueueItem(available, 0),
+    ];
+    testState.getInstagramEmbedAvailability.mockImplementation((url: string) =>
+      Promise.resolve(url.includes("BLOCKED") ? "unavailable" : "available"),
+    );
+
+    render(<HomePage />);
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-media-id="post:BLOCKED:unresolved:0"]'),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      document.querySelector('[data-media-id="post:AVAILABLE:unresolved:0"]'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/unavailable|could not display/i),
+    ).not.toBeInTheDocument();
   });
 });
 

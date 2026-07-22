@@ -2,7 +2,7 @@
 
 A local-first, image-first viewer for Instagram Saved posts. Import `saved_posts.json`, browse accessible posts in a horizontal or grid view, and run a configurable slideshow from one responsive page.
 
-The current interface is a PhotoYoshi-inspired private archive: oversized editorial typography, a deep olive-black canvas, horizontal image navigation, sparse metadata, and an always-available playback dock. It remains a personal reference viewer, not an Instagram downloader, scraper, or full data-export explorer.
+The current interface is a PhotoYoshi-inspired private archive: oversized editorial typography, a deep black/plum canvas, smooth horizontal image navigation, sparse chrome, and an always-available playback dock. It remains a personal reference viewer, not an Instagram downloader, scraper, or full data-export explorer.
 
 Repository: [github.com/bradwang1995/Instagram-Viewer](https://github.com/bradwang1995/Instagram-Viewer)
 
@@ -21,26 +21,28 @@ The app does not ask for Instagram credentials and does not upload your JSON fil
 
 The export supplies Instagram post URLs and descriptive metadata, not direct image URLs or carousel-child records. Each imported post therefore becomes one card, and Instagram Viewer loads that post's default first preview directly from Instagram through its official embed page. The JSON itself remains in browser-local storage, while the embed necessarily makes a normal request to Instagram.
 
-Compatibility requests are now scoped to the real viewport rather than the larger DOM preload window. Horizontal View requests only cards that are actually on screen (plus an explicitly selected card); Grid View requests only the visible row. Two requests may be in flight at once. The next two Grid rows can remain mounted for smooth scrolling without contacting Instagram until they become visible.
+Compatibility requests use the same bounded preload window as the direct-photo experience. Horizontal View keeps the visible cards plus two neighbors on each side; Grid View keeps the visible four-card row plus the next four. Two compatibility requests may be in flight at once, so nearby photos warm progressively without creating an unbounded iframe burst.
 
-An Instagram embed is a cross-origin document controlled by Instagram. The viewer cannot inspect its internal carousel, extract its child image URLs, remove its internal controls, or turn those children into separate parent-page cards. Meta's current API requires access tokens and is designed around media owned by authenticated professional accounts; it does not expose a saved-posts endpoint that resolves arbitrary saved URLs. The app does not use undocumented scraping endpoints or ask for Instagram credentials.
+An Instagram embed is a cross-origin document controlled by Instagram. The viewer clips its header and social footer outside the visible square, but cannot inspect or restyle the internal carousel, extract its child image URLs, or turn those children into separate parent-page cards. Meta's current API requires access tokens and is designed around media owned by authenticated professional accounts; it does not expose a saved-posts endpoint that resolves arbitrary saved URLs. The app does not use undocumented scraping endpoints or ask for Instagram credentials.
 
 ## Current Viewer Refinement
 
 The active UI is branded `Instagram Viewer`. Functional text is rendered at 150% of the previous scale, and the two browsing modes are named `Horizontal View` and `Grid View`.
 
 - Horizontal View uses a virtual media track: only the visible photos and two neighboring items on each side are mounted. At `1920 × 1080`, the media surface occupies about 76.7% of the viewport height.
-- Grid View is four columns on desktop, shows one row per viewport, and preloads two additional rows. A large library therefore keeps no more than 12 desktop cards in the active DOM window without exposing the next row before scrolling.
-- Direct images inside the active window load immediately. Compatibility iframe navigation is restricted to the real viewport and uses a two-request queue; DOM overscan cards do not contact Instagram. Timeouts and terminal errors unmount the failed iframe and are remembered for the browser session instead of retrying on every virtual remount.
-- Resolved media is shown at normal brightness with `object-fit: contain`. Hover and selection use lift, scale, border, and shadow instead of dimming the other photos.
-- Photo cards contain only the media surface. Per-card source labels, creator/collection captions, ordinal counters, Hide/Open Source buttons, and parent-page carousel controls were removed. Cross-origin Instagram iframe internals cannot be guaranteed or restyled by the viewer.
+- Grid View is four columns on desktop, shows one row per viewport, and preloads exactly the next row. A large desktop library therefore keeps no more than eight cards in the active DOM window without exposing the next row before scrolling.
+- Direct images inside the active window load immediately and enter a retained decode window plus a cache-first image service worker where supported. Compatibility iframe navigation uses the same current/next window with a two-request queue. Meta's tokenless oEmbed check silently removes posts reported as private, deleted, or non-embeddable. Timeouts and terminal errors are also omitted without an error card or failure count.
+- Resolved media is shown at normal brightness with `object-fit: contain`. Hover and selection use lift, scale, and shadow instead of dimming the other photos; selected photos have no colored border.
+- Photo cards contain only the media surface. Per-card source labels, creator/collection captions, ordinal counters, Hide/Open Source buttons, and the Instagram social footer are outside the visible crop. Instagram may still paint a carousel arrow over the photo because the iframe's internal DOM is cross-origin.
 - The full media list remains reachable through the virtual track, and both scrollbars stay visually hidden.
+- The page prevents text/image selection and uses a generated dark magenta/violet cursor asset throughout the viewer.
+- Slideshow fills the viewport behind overlaid controls, uses the pink/orange/violet theme, and pushes `?slideshow=1` so browser Back returns to the photo field.
 
-Ordinary `saved_posts.json` imports use one bounded compatibility preview per post. Native carousel-child extraction is deliberately outside the accepted MVP scope; the app does not scrape Instagram or fabricate children from a cross-origin iframe.
+Ordinary `saved_posts.json` imports use one bounded compatibility preview per post because the export contains no child URLs. When independent child-media records exist, the slideshow advances each child before moving to the next post. The app does not scrape Instagram or fabricate children from a cross-origin iframe.
 
 ## PhotoYoshi-Inspired Archive Field
 
-> Implementation status: the full viewport archive-field redesign and viewport-scoped Instagram compatibility loading were implemented and browser-tested in July 2026. The standard export remains the only user input; iframe previews use honest loading and unavailable states.
+> Implementation status: the full viewport archive-field redesign and viewport-scoped Instagram compatibility loading were implemented and browser-tested in July 2026. The standard export remains the only user input; failed previews disappear silently.
 
 The selected direction treats the app as an animated editorial image field instead of a list beside an Instagram viewer. The empty state is deliberately simple: one full-screen composition whose primary action is importing the JSON export. After import, each saved post becomes one card in the virtual horizontal field, while Grid View provides a larger four-column contact sheet.
 
@@ -48,7 +50,7 @@ The bottom dock owns the session: Horizontal/Grid mode, filtering, playback sett
 
 ### Implemented Checkpoint
 
-- Replaced the old white Instagram stage and shortcode/date library split with a full-viewport olive-black media canvas.
+- Replaced the old white Instagram stage and shortcode/date library split with a full-viewport black/plum media canvas.
 - Added a JSON-only upload landing screen modeled on the PhotoYoshi composition without copying or hotlinking its media assets.
 - Added a horizontal, wheel-driven media view and a four-column Grid View.
 - Keeps the photo surface free of per-card labels, counters, source links, and curation controls.
@@ -115,7 +117,7 @@ Post provenance remains in the data model, while the browsing surfaces intention
 
 The selected mock establishes the dark Lightbox shell, but the right-side text list is only a visual placeholder for the future queue.
 
-- **Stage:** the dominant full-height media surface, with honest unavailable/loading states and controls that never compete with the image.
+- **Stage:** the dominant full-height media surface, with quiet loading and controls that never compete with the image; failed media is omitted.
 - **Visual queue:** a virtual horizontal field or four-column Grid View, not a shortcode list. Every resolved media item is independently reachable.
 - **Session builder:** clicking a creator, collection, or filter creates a slideshow session from the matching visible media.
 - **Inspector:** provenance and advanced metadata stay available on demand instead of occupying every queue row.
@@ -261,6 +263,10 @@ Instagram previews are loaded in iframes from `instagram.com`. Opening a preview
 
 On the same browser profile and the same site origin, the gallery loads automatically from IndexedDB on future visits. There is no login because no server owns a copy of the library.
 
+Direct photo assets are preloaded ahead of the current viewport and retained in a small decoded-image window. Supported browsers also register a local cache-first service worker for image requests, so revisiting a previously loaded direct photo does not require the viewer to start from zero. Grid View mounts the current four-photo row plus the next four-photo row; Horizontal View retains the visible photos plus two-photo overscan on each side.
+
+Instagram compatibility previews are cross-origin iframe documents. The viewer can keep nearby previews mounted, but it cannot place Instagram's iframe document itself into the app's image cache or control Instagram's own cache headers.
+
 If you use another browser or device, clear site data, or move the app to another origin, select the original Instagram `saved_posts.json` again. The app intentionally has no cross-device transfer or recovery workflow.
 
 Cross-device sync would require user authentication, access controls, secure server storage, deletion controls, and a documented privacy policy. That is intentionally outside the current local-first viewer.
@@ -270,10 +276,16 @@ Cross-device sync would require user authentication, access controls, secure ser
 The JSON export contains Instagram links and descriptive metadata, not the original photo files. Those imports therefore use Instagram's public embed page as a bounded compatibility preview; no additional user-supplied image package is part of the workflow.
 
 - Public and available photo posts can render directly in the viewer.
-- Private, removed, age-restricted, or login-gated posts may not render.
-- Unavailable direct images fall back from the asset URL to the preview URL, then show a quiet unavailable state without breaking the queue.
+- Private, removed, age-restricted, login-gated, or non-embeddable posts are silently omitted.
+- Direct images fall back from the asset URL to the preview URL; if both fail, the item is silently omitted.
+
+The viewer shows neither an error card nor a failed-post total. If Meta's availability check itself is temporarily rate-limited or unreachable, the viewer falls back to the normal Instagram iframe rather than incorrectly discarding the post.
 
 The app does not read likes or comments and does not recreate Instagram's social interface.
+
+The compatibility iframe is clipped to its media square. Its profile header, follower information, View more on Instagram link, Like / Comment / Share / Save controls, like count, comment field, and Instagram footer remain outside the visible card and slideshow area. Instagram may still draw a carousel arrow over the photo itself.
+
+When imported data contains independent child-media records, slideshow navigation advances each child in source order before moving to the next post. Ordinary Instagram `saved_posts.json` does not contain carousel-child URLs, and the parent app cannot inspect or automatically click a cross-origin embed carousel; those ordinary records therefore retain one default compatibility frame per saved post.
 
 ## Getting Started
 
@@ -358,4 +370,4 @@ The ZIP importer and some richer components still exist in the codebase as reusa
 
 ## Current Status
 
-The accepted MVP is a responsive one-page Saved-post viewer with one default preview per post, bounded virtual scrolling, a four-column desktop grid, a full-height horizontal view, filters, slideshow controls, browser-local storage, and automated GitHub Pages deployment. See [PROGRESS.md](./PROGRESS.md) for the internal tracker.
+The accepted MVP is a responsive one-page Saved-post viewer with one default compatibility preview per ordinary saved post, bounded ahead-of-viewport loading, a four-column desktop grid, smooth wheel-driven Horizontal View, a full-viewport slideshow with browser history, persistent browser-local storage and image caching, and automated GitHub Pages deployment. See [PROGRESS.md](./PROGRESS.md) for the internal tracker.

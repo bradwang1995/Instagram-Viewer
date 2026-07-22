@@ -19,6 +19,7 @@ import {
   filterMediaQueue,
   type MediaQueueItem,
 } from "../features/media/mediaQueue";
+import { preloadMediaItems } from "../features/media/mediaPreload";
 import { useMediaLibrary } from "../hooks/useMediaLibrary";
 
 export function HomePage() {
@@ -35,7 +36,9 @@ export function HomePage() {
   const [collection, setCollection] = useState("");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isSlideshowOpen, setIsSlideshowOpen] = useState(false);
+  const [isSlideshowOpen, setIsSlideshowOpen] = useState(() =>
+    new URLSearchParams(window.location.search).has("slideshow"),
+  );
   const [isPlaying, setIsPlaying] = useState(false);
   const [elapsedMs, setElapsedMs] = useState(0);
   const [dwellMs, setDwellMs] = useState(DEFAULT_SETTINGS.slideshowIntervalMs);
@@ -50,11 +53,50 @@ export function HomePage() {
   const [actionError, setActionError] = useState("");
   const [undoItem, setUndoItem] = useState<MediaQueueItem>();
   const [landingDismissed, setLandingDismissed] = useState(false);
+  const [unavailableMediaIds, setUnavailableMediaIds] = useState<Set<string>>(
+    () => new Set(),
+  );
 
   const forceLanding = useMemo(
     () => new URLSearchParams(window.location.search).has("landing"),
     [],
   );
+
+  const setSlideshowRoute = useCallback(
+    (open: boolean, replace = false) => {
+      const url = new URL(window.location.href);
+      if (open) url.searchParams.set("slideshow", "1");
+      else url.searchParams.delete("slideshow");
+      window.history[replace ? "replaceState" : "pushState"](
+        {},
+        "",
+        `${url.pathname}${url.search}${url.hash}`,
+      );
+      setIsSlideshowOpen(open);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const handleHistoryChange = () => {
+      const open = new URLSearchParams(window.location.search).has(
+        "slideshow",
+      );
+      setIsSlideshowOpen(open);
+      setIsPlaying(open);
+      setElapsedMs(0);
+    };
+    window.addEventListener("popstate", handleHistoryChange);
+    return () => window.removeEventListener("popstate", handleHistoryChange);
+  }, []);
+
+  useEffect(() => {
+    if (isSlideshowOpen) return;
+    setIsPlaying(false);
+    if (document.fullscreenElement && document.exitFullscreen) {
+      void document.exitFullscreen().catch(() => undefined);
+    }
+  }, [isSlideshowOpen]);
 
   useEffect(() => {
     void getSettings().then((settings) => {
@@ -70,13 +112,14 @@ export function HomePage() {
       Array.from(
         new Set(
           queue
+            .filter((item) => !unavailableMediaIds.has(item.media.id))
             .map(
               (item) => item.media.creatorHandle ?? item.post.embedAuthorName,
             )
             .filter((value): value is string => Boolean(value)),
         ),
       ).sort(),
-    [queue],
+    [queue, unavailableMediaIds],
   );
   const collections = useMemo(
     () =>
@@ -96,8 +139,8 @@ export function HomePage() {
         dateFrom: "",
         dateTo: "",
         includeHidden: false,
-      }),
-    [collection, creator, query, queue],
+      }).filter((item) => !unavailableMediaIds.has(item.media.id)),
+    [collection, creator, query, queue, unavailableMediaIds],
   );
   const selectedIndex = Math.max(
     0,
@@ -109,6 +152,22 @@ export function HomePage() {
   const hasFilters = Boolean(query || creator || collection);
   const showLanding =
     !isLoading && (posts.length === 0 || (forceLanding && !landingDismissed));
+
+  useEffect(() => {
+    if (!visibleItems.length) return;
+    const preloadOffsets = [-2, -1, 1, 2, 3, 4];
+    preloadMediaItems(
+      preloadOffsets
+        .map(
+          (offset) =>
+            visibleItems[
+              (selectedIndex + offset + visibleItems.length) %
+                visibleItems.length
+            ],
+        )
+        .filter((item): item is MediaQueueItem => Boolean(item)),
+    );
+  }, [selectedIndex, visibleItems]);
 
   useEffect(() => {
     if (!selectedItem) {
@@ -205,8 +264,7 @@ export function HomePage() {
         if (isSettingsOpen) setIsSettingsOpen(false);
         else if (isFilterOpen) setIsFilterOpen(false);
         else if (isSlideshowOpen) {
-          setIsSlideshowOpen(false);
-          setIsPlaying(false);
+          closeSlideshow();
         }
       }
       if (event.key === "ArrowRight") move(1);
@@ -231,10 +289,12 @@ export function HomePage() {
     setIsImporting(false);
     if (job.status === "completed") {
       await refresh();
+      setUnavailableMediaIds(new Set());
       setSelectedMediaId(undefined);
       setLandingDismissed(true);
       if (forceLanding) {
         window.history.replaceState({}, "", import.meta.env.BASE_URL);
+        setIsSlideshowOpen(false);
       }
     } else {
       setActionError(job.error ?? "Could not import this JSON file.");
@@ -263,10 +323,48 @@ export function HomePage() {
     await restoreAllMedia();
   }
 
+  function omitUnavailableMedia(mediaId: string) {
+    const currentIndex = visibleItems.findIndex(
+      (item) => item.media.id === mediaId,
+    );
+    const next =
+      visibleItems.length > 1 && currentIndex >= 0
+        ? visibleItems[(currentIndex + 1) % visibleItems.length]
+        : undefined;
+
+    if (selectedMediaId === mediaId) {
+      setSelectedMediaId(next?.media.id);
+      setElapsedMs(0);
+      if (!next) {
+        closeSlideshow();
+      }
+    }
+    setUnavailableMediaIds((current) => {
+      if (current.has(mediaId)) return current;
+      const nextIds = new Set(current);
+      nextIds.add(mediaId);
+      return nextIds;
+    });
+  }
+
   function persistPlayback(patch: Parameters<typeof updateSettings>[0]) {
     void updateSettings(patch).catch(() => {
       setActionError("Playback preferences could not be saved locally.");
     });
+  }
+
+  function openSlideshow() {
+    setSlideshowRoute(true);
+    setIsPlaying(true);
+    setElapsedMs(0);
+    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+      void document.documentElement.requestFullscreen().catch(() => undefined);
+    }
+  }
+
+  function closeSlideshow() {
+    setSlideshowRoute(false, true);
+    setIsPlaying(false);
   }
 
   return (
@@ -313,15 +411,12 @@ export function HomePage() {
             setSelectedMediaId(mediaId);
             setElapsedMs(0);
           }}
+          onMediaUnavailable={omitUnavailableMedia}
           onImport={() => fileInputRef.current?.click()}
           onOpenFilters={() => setIsFilterOpen(true)}
           onOpenSettings={() => setIsSettingsOpen(true)}
           onViewModeChange={setViewMode}
-          onStartSlideshow={() => {
-            setIsSlideshowOpen(true);
-            setIsPlaying(true);
-            setElapsedMs(0);
-          }}
+          onStartSlideshow={openSlideshow}
         />
       ) : null}
 
@@ -388,10 +483,10 @@ export function HomePage() {
             onTogglePlaying={() => setIsPlaying((value) => !value)}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onHide={() => selectedItem && void hideMedia(selectedItem)}
-            onClose={() => {
-              setIsSlideshowOpen(false);
-              setIsPlaying(false);
-            }}
+            onUnavailable={() =>
+              selectedItem && omitUnavailableMedia(selectedItem.media.id)
+            }
+            onClose={closeSlideshow}
           />
         ) : null}
       </AnimatePresence>

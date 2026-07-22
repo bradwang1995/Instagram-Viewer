@@ -18,11 +18,11 @@ Enter Horizontal View or Grid View
 Filter + hide + configure + slideshow
 ```
 
-The product remains one page with bottom sheets and a full-screen slideshow overlay.
+The product remains one page with bottom sheets and a full-viewport slideshow overlay whose `?slideshow=1` history state supports browser Back.
 
 ## Selected Direction: PhotoYoshi Archive Field
 
-Status: **accepted MVP complete and browser-tested: one saved post maps to one default Instagram preview, with viewport-scoped compatibility loading**.
+Status: **accepted MVP complete and browser-tested: one ordinary saved post maps to one default Instagram preview, with bounded ahead-of-viewport loading, persistent direct-image caching, smooth Horizontal View, and routed full-viewport slideshow**.
 
 The accepted saved-JSON workflow intentionally produces one compatibility item per post. Instagram's default first preview is sufficient for this MVP; native carousel-child extraction is not a release requirement.
 
@@ -37,7 +37,7 @@ flowchart TD
 
 Approved product principles:
 
-- Use `photoyoshi.com` as the visual reference: clipped display typography, deep olive-black canvas, centered imagery, sparse editorial metadata, and scroll-driven spatial motion.
+- Use `photoyoshi.com` as the visual reference: clipped display typography, deep black/plum canvas, centered imagery, sparse editorial metadata, and scroll-driven spatial motion.
 - Make the empty state an upload-only composition rather than an application dashboard.
 - After import, make the media field the product center and keep per-card metadata out of the visual surface.
 - Replace the shortcode/date library list with a virtual Horizontal View and four-column desktop Grid View.
@@ -49,6 +49,29 @@ Approved product principles:
 - Use Motion for component/interaction motion and GSAP for authored timelines; keep GPU/WebGL optional.
 - Keep local-first privacy as the default and make every network/cache boundary explicit.
 - Do not implement carousel extraction, thumbnails, or GPU media transitions by scraping Instagram or reading a cross-origin iframe.
+
+## Revision 18: Pure Media, Smooth Navigation, Cache, And Routed Slideshow
+
+- [x] Crop public Instagram embeds to the photo square so profile, follower, View more on Instagram, Like/Comment/Share/Save, counts, comments, and footer chrome are not visible.
+- [x] Remove the selected-photo green border and replace the acid-green theme with an Instagram-inspired pink/orange/violet gradient.
+- [x] Disable selection globally and add a generated transparent dark magenta/violet cursor asset.
+- [x] Replace Horizontal View snap/direct wheel jumps with bounded requestAnimationFrame easing for vertical wheels and horizontal trackpads.
+- [x] Keep Grid to the current four cards plus the next four and Horizontal to visible cards plus two neighbors on each side.
+- [x] Retain up to 96 decoded direct photos, preload nearby direct assets, and register a cache-first image service worker where supported.
+- [x] Make slideshow media occupy the complete viewport behind overlaid controls and remove source metadata from the image stage.
+- [x] Push `?slideshow=1` on open, remove it on close, and react to `popstate` so browser Back returns to the photo field.
+- [x] Verify known independent child-media records advance in source order before the next post.
+- [x] Verify real public embeds, real mouse-wheel movement, Grid 4+4 loading, no-selection styling, no selected border, slideshow dimensions, and browser Back in the in-app browser.
+
+## Revision 17: Silent Source Filtering And Bundle Split
+
+- [x] Check visible saved posts through Meta's official tokenless Instagram oEmbed endpoint before mounting their iframe.
+- [x] Silently remove posts reported as private, deleted, or non-embeddable; show no error card, error copy, or failed-post total.
+- [x] Fall back to the iframe when the availability service itself is transiently unavailable or rate-limited, avoiding false exclusions.
+- [x] Apply the same silent omission to terminal iframe timeouts/errors and exhausted direct-image fallbacks.
+- [x] Split React, animation, data, and icon dependencies into production chunks; the largest JavaScript chunk is now `234.63 kB`.
+- [x] Delete the unreferenced `artifacts/iteration-horizontal-check.png` screenshot.
+- [x] Browser-import three synthetic saved posts with one official-check rejection and confirm exactly two cards/two iframes remain with no failure copy.
 
 ## Revision 15: Saved-JSON-Only Instagram Loading
 
@@ -96,7 +119,7 @@ Remaining external-data gate:
 
 - [x] Make Grid View show exactly one four-card row per desktop viewport while retaining two prefetched rows and the 12-card DOM ceiling.
 - [x] Keep one visible card per mobile Grid viewport with three cards mounted for the current plus two prefetched rows.
-- [x] Unmount compatibility iframes that time out or fail, show an honest unavailable state, and remember terminal failures so virtual remounts do not retry them.
+- [x] Unmount compatibility iframes that time out or fail, silently omit their cards, and remember terminal failures so virtual remounts do not retry them.
 - [x] Prove timeout queue draining with fake timers: the active iframe navigation window remains bounded at two until all five test items reach a terminal state.
 - [x] Add mixed-aspect and `390/1280/1920/3440` Horizontal layout coverage, including maximum-scroll reachability of the last media item.
 - [x] Set the verified `1920 × 1080` Horizontal media height to `828px` (approximately 76.7% of the viewport).
@@ -123,7 +146,7 @@ Known external-data gate:
 - [x] Replace the full-library React/Motion map with a variable-width horizontal virtual window and an O(log n) centered-item lookup.
 - [x] Make desktop Grid View exactly four columns and virtualize it to three mounted rows (12 cards maximum); use two columns on tablet and one on mobile.
 - [x] Mount media only inside the active virtual window; eagerly request bounded direct images and limit compatibility iframe navigation starts to two at a time.
-- [x] Fall back from a failed asset URL to its preview URL, then show a non-blocking unavailable state.
+- [x] Fall back from a failed asset URL to its preview URL, then silently omit the item if both fail.
 - [x] Crop compatibility iframes beyond both horizontal edges to reduce visible scrollbar/carousel-edge chrome; retain the documented cross-origin limitation because the parent cannot guarantee control of iframe internals.
 - [x] Batch-create missing fallback media records during import instead of issuing two sequential IndexedDB operations per post.
 - [x] Load demo media and persisted preferences through one generation-guarded snapshot, preventing hidden-item flash and stale async overwrites.
@@ -157,7 +180,7 @@ Known external-data gate:
 Remaining work after this checkpoint:
 
 - [x] Close the carousel-source investigation: the accepted MVP uses one default embed preview per saved post and requires no secondary media source.
-- [ ] Add optional code splitting for the `583.80 kB` minified JavaScript bundle if deployment performance becomes a priority.
+- [x] Split the production bundle by React, animation, data, and icon dependencies so every JavaScript chunk stays below the build warning threshold.
 - [x] Introduce bounded queue virtualization before profiling the full private library in the browser.
 - [x] Profile the full private library after the user confirms the revised loading behavior.
 
@@ -271,7 +294,7 @@ Rules:
 
 - Full-height dark media surface.
 - Media-level counter plus subtle source-post boundary.
-- Honest loading, partial-resolution, unavailable, and offline states.
+- Quiet loading and silent omission for unavailable sources, with partial-resolution and offline behavior kept honest.
 - Previous, play/pause, next, shuffle, loop, and session controls.
 - Immediate Skip, Hide/Downvote, Undo, and Open Source actions.
 - Controls fade when idle but return on pointer movement, focus, touch, or keyboard input.
@@ -280,7 +303,7 @@ Rules:
 
 - Replace the current shortcode/date list with a thumbnail filmstrip or compact contact sheet.
 - Group media by source post without forcing post-level playback.
-- Distinguish visible, hidden, unavailable, cached, and uncached states without relying only on color.
+- Distinguish visible, hidden, cached, and uncached states without surfacing failed sources as cards.
 - Keep text metadata secondary; creator and collection are more prominent than shortcode and save time.
 - Keep the implemented virtual windows bounded, then tune row/card overscan after profiling a real large media library.
 - Never render fake thumbnails when only an iframe URL is available.
@@ -353,7 +376,7 @@ Native thumbnails, independently flattened carousel children, and pixel-based ef
 - [ ] Implement configurable cache limits and LRU eviction.
 - [ ] Handle `QuotaExceededError` and recover by evicting nonessential blobs, never preferences.
 - [ ] Expose storage usage, Clear Cache, and Clear Library as distinct actions.
-- [ ] Make cached, remote, unavailable, and local-only states visible in the UI.
+- [x] Keep unavailable sources out of the browsing UI instead of presenting an error state.
 - [ ] Verify re-import and schema migration never lose hide/downvote state.
 
 ## Revision 10: Media-First Cinematic Lightbox Checkpoint
@@ -419,7 +442,7 @@ Remaining architectural work is intentionally not hidden by this checkpoint:
 
 - [x] Rebuild the shell with the selected black, graphite, projector-amber, and privacy-mint visual system.
 - [x] Replace the MVP library with the visual queue.
-- [x] Add polished unavailable and loading states; explicit offline detection remains future work.
+- [x] Keep the loading state but replace terminal unavailable UI with silent omission.
 - [x] Add responsive mobile queue access directly below the first-viewport stage.
 
 ### Phase 5: Motion And Effects
@@ -538,13 +561,16 @@ Remaining architectural work is intentionally not hidden by this checkpoint:
 ## Current Active UI
 
 - [x] Upload-only empty-library composition with click and drag/drop import.
-- [x] Horizontal, wheel-driven virtual media view with approximately 70–80% viewport-height images.
-- [x] Four-column desktop Grid View with a maximum three-row render window.
+- [x] Horizontal, smooth wheel-driven virtual media view with approximately 70–80% viewport-height images and two-photo overscan on each side.
+- [x] Four-column desktop Grid View with exactly one visible row plus one four-photo preload row (eight mounted cards maximum).
 - [x] Creator, collection, local-text, and hidden-state filters.
 - [x] Per-media hide/downvote plus hidden-media restoration.
-- [x] Label-free, count-free photo cards with full-brightness `contain` rendering and hover lift/border/shadow.
+- [x] Label-free, count-free photo cards with full-brightness `contain` rendering, hover lift/shadow, and no selected-photo border.
 - [x] Configurable dwell time, transition duration, transition preset, and loop mode.
-- [x] Full-screen previous, play/pause, next, hide, settings, and close controls.
+- [x] Full-viewport previous, play/pause, next, hide, settings, and close controls with an Instagram-inspired pink/orange/violet theme.
+- [x] `?slideshow=1` browser history entry so Back returns to the photo field instead of leaving the app.
+- [x] Global no-selection behavior plus a generated dark magenta/violet custom cursor.
+- [x] Ahead-of-viewport direct-image preloading plus a cache-first browser service worker for previously loaded image requests.
 - [x] Explicit iframe compatibility previews for unresolved posts.
 - [x] Responsive bottom dock on desktop and mobile.
 - [x] Non-personal `?demo=1` route containing 19 resolved media records.
@@ -563,21 +589,23 @@ Remaining architectural work is intentionally not hidden by this checkpoint:
 
 ## Latest Verification
 
-- [x] `npm test` passes with 44 tests across 13 files.
+- [x] `npm test` passes with 50 tests across 14 files.
 - [x] `npm run build` passes.
 - [x] `npm run lint` passes TypeScript checking.
 - [x] Local dev server responds at `http://127.0.0.1:5173/`.
 - [x] `git status --ignored` shows `saved_posts.json` as ignored.
 - [x] Active router only serves the one-page `HomePage`.
 - [x] Active header has no navigation tabs.
-- [x] Long-library tests keep the desktop Grid DOM to 12 cards and the Horizontal DOM to a bounded visible/overscan window.
-- [x] Browser QA confirms `24px` root text, hidden scrollbars, a `76.7%` viewport-height Horizontal media surface, one visible four-card desktop Grid row, one visible mobile Grid card, bounded DOM windows, and last-media reachability in all three states.
+- [x] Long-library tests keep the desktop Grid DOM to eight cards (current four plus next four) and the Horizontal DOM to a bounded visible/two-photo-overscan window.
+- [x] Browser QA confirms `24px` root text, `user-select: none`, no selected-photo border, hidden scrollbars, no horizontal scroll snap, one visible four-card desktop Grid row plus four preloaded cards, bounded DOM windows, and last-media reachability.
 - [x] Browser QA imports three resolved data images and confirms three ordered direct-image cards with stable IDs and no compatibility iframes.
-- [x] Vertical wheel input advances Horizontal View using index math rather than scanning every mounted card.
+- [x] Real vertical mouse-wheel input moved Horizontal View from `scrollLeft 0` to `676` and selected the next media without snap.
 - [x] Creator filtering reduces the demo session to the expected five `@quietframes` media items.
 - [x] Browser QA confirms next media advances within a multi-frame source.
 - [x] Browser QA confirms no document overflow at `1280 × 720` or `390 × 844`.
 - [x] Browser QA confirms slideshow controls and media remain inside both viewports.
+- [x] Browser QA confirms slideshow uses the full viewport, writes `?slideshow=1`, and browser Back restores the photo field without leaving the app.
+- [x] Real public-embed QA visually hides Instagram's profile header, social actions, counts, comment field, and footer while retaining the photo surface.
 - [x] Same-viewport PhotoYoshi/implementation comparison is stored at `artifacts/photoyoshi-mobile-comparison.png`.
 - [x] Full findings and evidence are recorded in all-caps `DESIGN-QA.md`.
 
@@ -585,8 +613,9 @@ Remaining architectural work is intentionally not hidden by this checkpoint:
 
 - [x] Add an automated direct JSON importer integration test with fake IndexedDB.
 - [x] Add bounded virtualization to both browsing modes.
-- [x] Profile the ignored real JSON in an isolated browser context with deterministic slow embeds; viewer ready in `1571ms`, Horizontal requested two visible previews, Grid limited 12 mounted cards to four visible-row iframes, the next row made four new requests, and navigation concurrency peaked at two.
-- [x] Add a timed unavailable-preview state and session failure memory for stalled/failed compatibility embeds.
+- [x] Profile the ignored real JSON in an isolated browser context with deterministic slow embeds; viewer ready in `1004ms`, Horizontal requested two visible previews, Grid limited 12 mounted cards to four visible-row iframes, the next row made four new requests, and navigation concurrency peaked at two.
+- [x] Add timed silent omission and session failure memory for stalled/failed compatibility embeds.
+- [x] Preserve per-child slideshow order whenever independent child-media records are available.
 - [ ] Add optional manual URL paste only if needed.
 - [ ] Consider opt-in authenticated sync only as a separate, security-reviewed product phase.
 

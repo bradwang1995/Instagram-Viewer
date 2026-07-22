@@ -9,13 +9,14 @@ const playwrightPackagePath =
 const chromeExecutable = process.env.CHROME_EXECUTABLE;
 
 if (!chromeExecutable) {
-  throw new Error(
-    "Set CHROME_EXECUTABLE before running visual QA.",
-  );
+  throw new Error("Set CHROME_EXECUTABLE before running visual QA.");
 }
 
 const { chromium } = require(playwrightPackagePath);
-const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const projectRoot = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 const artifactDir = path.join(projectRoot, "artifacts");
 await mkdir(artifactDir, { recursive: true });
 
@@ -43,6 +44,7 @@ try {
       screenshot: path.join(artifactDir, "audit-04-manifest-grid.png"),
     }),
   );
+  results.push(await verifySilentSourceFiltering({ browser }));
   results.push(
     await captureState({
       browser,
@@ -69,6 +71,105 @@ try {
   process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
 } finally {
   await browser.close();
+}
+
+async function verifySilentSourceFiltering({ browser }) {
+  const context = await browser.newContext({
+    viewport: { width: 1920, height: 1080 },
+  });
+  const page = await context.newPage();
+
+  try {
+    await page.route(
+      /graph\.facebook\.com\/v25\.0\/instagram_oembed/,
+      async (route) => {
+        const postUrl = new URL(route.request().url()).searchParams.get("url");
+        const unavailable = postUrl?.includes("BLOCKEDQA");
+        await route.fulfill({
+          status: unavailable ? 400 : 200,
+          contentType: "application/json",
+          headers: { "access-control-allow-origin": "*" },
+          body: unavailable ? '{"error":"not embeddable"}' : "{}",
+        });
+      },
+    );
+    await page.route(/instagram\.com\/p\/.*\/embed\//, async (route) => {
+      await route.fulfill({
+        contentType: "text/html",
+        body: "<!doctype html><title>Available compatibility preview</title>",
+      });
+    });
+
+    const savedPosts = ["AVAILABLEQA1", "BLOCKEDQA", "AVAILABLEQA2"].map(
+      (shortcode, index) => ({
+        timestamp: 1_710_000_000 + index,
+        media: [],
+        label_values: [
+          {
+            label: "URL",
+            value: `https://www.instagram.com/p/${shortcode}/`,
+            href: `https://www.instagram.com/p/${shortcode}/`,
+          },
+        ],
+      }),
+    );
+
+    await page.goto("http://127.0.0.1:5173/?view=grid", {
+      waitUntil: "domcontentloaded",
+    });
+    await page.locator('input[type="file"]').setInputFiles({
+      name: "saved-posts-silent-filtering-qa.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(savedPosts)),
+    });
+    await page.getByTestId("archive-scroller").waitFor({
+      state: "visible",
+      timeout: 20_000,
+    });
+    await page.waitForFunction(() => {
+      const cards = Array.from(
+        document.querySelectorAll("[data-testid='archive-media-card']"),
+      );
+      return (
+        cards.length === 2 &&
+        !document.querySelector('[data-media-id="post:BLOCKEDQA:media:0"]') &&
+        cards.every((card) => card.querySelector("iframe"))
+      );
+    });
+
+    const evidence = await page.evaluate(() => ({
+      cardCount: document.querySelectorAll("[data-testid='archive-media-card']")
+        .length,
+      iframeCount: document.querySelectorAll(
+        "[data-testid='archive-media-card'] iframe",
+      ).length,
+      blockedCardPresent: Boolean(
+        document.querySelector('[data-media-id="post:BLOCKEDQA:media:0"]'),
+      ),
+      hasFailureCopy: /unavailable|could not display|failed post/i.test(
+        document.body.innerText,
+      ),
+    }));
+
+    if (
+      evidence.cardCount !== 2 ||
+      evidence.iframeCount !== 2 ||
+      evidence.blockedCardPresent ||
+      evidence.hasFailureCopy
+    ) {
+      throw new Error(
+        `unavailable source was not silently omitted: ${JSON.stringify(evidence)}`,
+      );
+    }
+
+    return {
+      name: "silent-source-filtering",
+      viewport: { width: 1920, height: 1080 },
+      evidence,
+    };
+  } finally {
+    await context.close();
+  }
 }
 
 async function captureManifestImport({ browser, screenshot }) {
@@ -202,11 +303,14 @@ async function captureState({
     await page.waitForTimeout(1_500);
 
     const initial = await page.evaluate(() => {
-      const scroller = document.querySelector("[data-testid='archive-scroller']");
+      const scroller = document.querySelector(
+        "[data-testid='archive-scroller']",
+      );
       const cards = Array.from(
         document.querySelectorAll("[data-testid='archive-media-card']"),
       );
-      if (!(scroller instanceof HTMLElement)) throw new Error("Missing scroller");
+      if (!(scroller instanceof HTMLElement))
+        throw new Error("Missing scroller");
       const scrollerRect = scroller.getBoundingClientRect();
       const cardRects = cards.map((card) => {
         const rect = card.getBoundingClientRect();
@@ -226,6 +330,9 @@ async function captureState({
       );
       const bodyText = document.body.innerText;
       const style = getComputedStyle(scroller);
+      const selectedSurface = document.querySelector(
+        ".archive-card.is-selected .archive-media-surface",
+      );
       const logo = document.querySelector(".archive-logo");
       const dockActions = document.querySelector(".dock-actions");
       const rectSnapshot = (element) => {
@@ -252,7 +359,12 @@ async function captureState({
       };
       return {
         rootFontSize: getComputedStyle(document.documentElement).fontSize,
+        userSelect: getComputedStyle(document.body).userSelect,
         scrollbarWidth: style.scrollbarWidth,
+        scrollSnapType: style.scrollSnapType,
+        selectedBorderWidth: selectedSurface
+          ? getComputedStyle(selectedSurface).borderTopWidth
+          : undefined,
         overflowX: style.overflowX,
         overflowY: style.overflowY,
         scrollerWidth: scroller.clientWidth,
@@ -275,10 +387,21 @@ async function captureState({
     });
 
     if (initial.rootFontSize !== "24px") {
-      throw new Error(`${name}: expected 24px root font, got ${initial.rootFontSize}`);
+      throw new Error(
+        `${name}: expected 24px root font, got ${initial.rootFontSize}`,
+      );
     }
     if (initial.scrollbarWidth !== "none") {
       throw new Error(`${name}: visible scrollbar styling detected`);
+    }
+    if (initial.userSelect !== "none") {
+      throw new Error(`${name}: selectable gallery content detected`);
+    }
+    if (initial.scrollSnapType !== "none") {
+      throw new Error(`${name}: horizontal scroll snap is still active`);
+    }
+    if (initial.selectedBorderWidth !== "0px") {
+      throw new Error(`${name}: selected photo border is still visible`);
     }
     if (initial.hasRejectedCopy) {
       throw new Error(`${name}: rejected card copy is still visible`);
@@ -286,7 +409,14 @@ async function captureState({
     if (!initial.logoVisible || !initial.dockActionsVisible) {
       throw new Error(`${name}: primary viewer chrome is not visible`);
     }
-    if (initial.cardCount > 12) {
+    const maximumMountedCards = name.includes("grid")
+      ? viewport.width <= 640
+        ? 2
+        : viewport.width <= 1100
+          ? 4
+          : 8
+      : 9;
+    if (initial.cardCount > maximumMountedCards) {
       throw new Error(`${name}: mounted ${initial.cardCount} cards`);
     }
     if (
@@ -338,8 +468,10 @@ async function captureState({
     if (end.maximumIndex !== 18) {
       throw new Error(`${name}: last demo media is not reachable`);
     }
-    if (end.mountedCardCount > 12) {
-      throw new Error(`${name}: end window mounted ${end.mountedCardCount} cards`);
+    if (end.mountedCardCount > maximumMountedCards) {
+      throw new Error(
+        `${name}: end window mounted ${end.mountedCardCount} cards`,
+      );
     }
 
     return { name, viewport, initial, end, screenshot };

@@ -78,7 +78,11 @@ async function readViewerMetrics() {
 }
 
 function assertViewportBound(label, metrics) {
-  if (metrics.mountedCardCount > 12 || metrics.renderedCount > 12) {
+  const maximumMountedCards = label.startsWith("Grid View") ? 8 : 9;
+  if (
+    metrics.mountedCardCount > maximumMountedCards ||
+    metrics.renderedCount > maximumMountedCards
+  ) {
     throw new Error(`${label}: mounted an unbounded media window.`);
   }
   if (maximumConcurrentEmbedRequests > 2) {
@@ -86,14 +90,14 @@ function assertViewportBound(label, metrics) {
       `${label}: observed ${maximumConcurrentEmbedRequests} concurrent embed requests.`,
     );
   }
-  if (totalEmbedRequests > metrics.visibleCardCount) {
+  if (totalEmbedRequests > metrics.mountedCardCount) {
     throw new Error(
-      `${label}: requested ${totalEmbedRequests} embeds for ${metrics.visibleCardCount} visible cards.`,
+      `${label}: requested ${totalEmbedRequests} embeds for ${metrics.mountedCardCount} mounted cards.`,
     );
   }
-  if (metrics.mountedIframeCount > metrics.visibleCardCount) {
+  if (metrics.mountedIframeCount > metrics.mountedCardCount) {
     throw new Error(
-      `${label}: mounted ${metrics.mountedIframeCount} iframes for ${metrics.visibleCardCount} visible cards.`,
+      `${label}: mounted ${metrics.mountedIframeCount} iframes for ${metrics.mountedCardCount} mounted cards.`,
     );
   }
   if (metrics.hasVisibleSourceOrMediaTotals) {
@@ -102,6 +106,16 @@ function assertViewportBound(label, metrics) {
 }
 
 try {
+  await page.route(
+    /graph\.facebook\.com\/v25\.0\/instagram_oembed/,
+    async (route) => {
+      await route.fulfill({
+        contentType: "application/json",
+        headers: { "access-control-allow-origin": "*" },
+        body: "{}",
+      });
+    },
+  );
   await page.route(/instagram\.com\/p\/.*\/embed\//, async (route) => {
     activeEmbedRequests += 1;
     totalEmbedRequests += 1;
@@ -143,7 +157,7 @@ try {
   await page.waitForFunction(
     () =>
       document.querySelectorAll("[data-testid='archive-media-card']").length ===
-      12,
+      8,
   );
   await waitForEmbedQueueToSettle();
   const gridInitial = {

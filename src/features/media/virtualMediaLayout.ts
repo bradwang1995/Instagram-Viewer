@@ -23,7 +23,7 @@ export type RibbonMetrics = {
   totalWidth: number;
 };
 
-const GRID_RENDERED_ROWS = 3;
+const GRID_RENDERED_ROWS = 2;
 const RIBBON_OVERSCAN_ITEMS = 2;
 
 export function getGridMetrics(
@@ -40,8 +40,8 @@ export function getGridMetrics(
   const rowGap = columns === 1 ? 22 : clamp(safeHeight * 0.045, 26, 44);
   const itemWidth =
     (safeWidth - paddingX * 2 - columnGap * (columns - 1)) / columns;
-  // Keep the next row entirely below the fold. The rendered window still
-  // includes two rows of overscan, but the viewport presents one row at a time.
+  // Keep the next row entirely below the fold. The rendered window includes
+  // one row of overscan, while the viewport presents one row at a time.
   const targetHeight = safeHeight - paddingY * 2;
   const naturalHeight = itemWidth * (columns === 1 ? 1.18 : 1.12);
   const itemHeight = Math.max(targetHeight, naturalHeight);

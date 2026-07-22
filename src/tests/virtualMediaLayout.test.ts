@@ -8,7 +8,7 @@ import {
 } from "../features/media/virtualMediaLayout";
 
 describe("virtual media layout", () => {
-  it("keeps a desktop grid to four columns and at most three rendered rows", () => {
+  it("keeps a desktop grid to the visible row plus one preloaded row", () => {
     const metrics = getGridMetrics(1_800, 1920, 900);
     const firstWindow = getGridWindow(1_800, 0, metrics);
     const laterWindow = getGridWindow(
@@ -19,11 +19,11 @@ describe("virtual media layout", () => {
 
     expect(metrics.columns).toBe(4);
     expect(firstWindow[4].top).toBeGreaterThanOrEqual(900);
-    expect(firstWindow).toHaveLength(12);
+    expect(firstWindow).toHaveLength(8);
     expect(firstWindow.map((item) => item.index)).toEqual(
-      Array.from({ length: 12 }, (_, index) => index),
+      Array.from({ length: 8 }, (_, index) => index),
     );
-    expect(laterWindow).toHaveLength(12);
+    expect(laterWindow).toHaveLength(8);
     expect(laterWindow[0].index).toBe(480);
     expect(metrics.totalHeight).toBeGreaterThan(900);
     const finalWindow = getGridWindow(
@@ -102,7 +102,7 @@ describe("virtual media layout", () => {
     expect(getGridMetrics(100, 900, 700).columns).toBe(2);
     const mobile = getGridMetrics(100, 390, 654);
     expect(mobile.columns).toBe(1);
-    expect(getGridWindow(100, 0, mobile)).toHaveLength(3);
+    expect(getGridWindow(100, 0, mobile)).toHaveLength(2);
     expect(getGridWindow(100, 0, mobile)[1].top).toBeGreaterThanOrEqual(654);
   });
 });

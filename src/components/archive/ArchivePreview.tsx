@@ -24,6 +24,7 @@ import {
   getRibbonMetrics,
   getRibbonWindow,
 } from "../../features/media/virtualMediaLayout";
+import { preloadMediaItems } from "../../features/media/mediaPreload";
 import { ArchiveMediaCard } from "./ArchiveMediaCard";
 
 export type ArchiveViewMode = "ribbon" | "grid";
@@ -36,6 +37,7 @@ type ArchivePreviewProps = {
   hasFilters: boolean;
   isImporting: boolean;
   onSelect: (mediaId: string) => void;
+  onMediaUnavailable: (mediaId: string) => void;
   onImport: () => void;
   onOpenFilters: () => void;
   onOpenSettings: () => void;
@@ -56,6 +58,7 @@ export function ArchivePreview({
   hasFilters,
   isImporting,
   onSelect,
+  onMediaUnavailable,
   onImport,
   onOpenFilters,
   onOpenSettings,
@@ -64,6 +67,8 @@ export function ArchivePreview({
 }: ArchivePreviewProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
   const scrollFrame = useRef<number>();
+  const wheelFrame = useRef<number>();
+  const wheelTarget = useRef(0);
   const [scrollOffset, setScrollOffset] = useState(0);
   const [viewport, setViewport] = useState<ViewportSize>(() => ({
     width: typeof window === "undefined" ? 1280 : window.innerWidth,
@@ -114,6 +119,22 @@ export function ArchivePreview({
   );
 
   useEffect(() => {
+    preloadMediaItems(
+      visibleLayouts
+        .map((layout) => items[layout.index])
+        .filter((item): item is MediaQueueItem => Boolean(item)),
+    );
+  }, [items, visibleLayouts]);
+
+  useEffect(
+    () => () => {
+      if (scrollFrame.current) window.cancelAnimationFrame(scrollFrame.current);
+      if (wheelFrame.current) window.cancelAnimationFrame(wheelFrame.current);
+    },
+    [],
+  );
+
+  useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller) return undefined;
 
@@ -146,6 +167,11 @@ export function ArchivePreview({
       scroller.scrollTop = 0;
     }
     setScrollOffset(0);
+    wheelTarget.current = 0;
+    if (wheelFrame.current) {
+      window.cancelAnimationFrame(wheelFrame.current);
+      wheelFrame.current = undefined;
+    }
   }, [items, viewMode]);
 
   useEffect(() => {
@@ -183,6 +209,7 @@ export function ArchivePreview({
       } else {
         scroller.scrollLeft = left;
       }
+      wheelTarget.current = left;
     }
   }, [gridMetrics, ribbonMetrics.layouts, selectedId, selectedIndex, viewMode]);
 
@@ -210,9 +237,48 @@ export function ArchivePreview({
 
   function handleWheel(event: WheelEvent<HTMLDivElement>) {
     if (viewMode !== "ribbon") return;
-    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) return;
+    const dominantDelta =
+      Math.abs(event.deltaX) > Math.abs(event.deltaY)
+        ? event.deltaX
+        : event.deltaY;
+    if (!dominantDelta) return;
+
     event.preventDefault();
-    event.currentTarget.scrollLeft += event.deltaY * 1.2;
+    const scroller = event.currentTarget;
+    const unit =
+      event.deltaMode === 1
+        ? 24
+        : event.deltaMode === 2
+          ? Math.max(320, scroller.clientWidth)
+          : 1;
+    const maximum = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
+    const currentTarget = wheelFrame.current
+      ? wheelTarget.current
+      : scroller.scrollLeft;
+    wheelTarget.current = Math.min(
+      maximum,
+      Math.max(0, currentTarget + dominantDelta * unit * 1.05),
+    );
+
+    if (wheelFrame.current) return;
+    const animate = () => {
+      const currentScroller = scrollerRef.current;
+      if (!currentScroller || viewMode !== "ribbon") {
+        wheelFrame.current = undefined;
+        return;
+      }
+
+      const distance = wheelTarget.current - currentScroller.scrollLeft;
+      if (Math.abs(distance) < 0.5) {
+        currentScroller.scrollLeft = wheelTarget.current;
+        wheelFrame.current = undefined;
+        return;
+      }
+
+      currentScroller.scrollLeft += distance * 0.2;
+      wheelFrame.current = window.requestAnimationFrame(animate);
+    };
+    wheelFrame.current = window.requestAnimationFrame(animate);
   }
 
   return (
@@ -244,24 +310,13 @@ export function ArchivePreview({
           {items.length ? (
             visibleLayouts.map((layout) => {
               const item = items[layout.index];
-              const layoutStart =
-                viewMode === "grid" ? layout.top : layout.left;
-              const layoutEnd =
-                layoutStart +
-                (viewMode === "grid" ? layout.height : layout.width);
-              const viewportExtent =
-                viewMode === "grid" ? viewport.height : viewport.width;
-              const allowCompatibilityPreview =
-                (viewMode === "ribbon" && item.media.id === selectedId) ||
-                (layoutStart < scrollOffset + viewportExtent &&
-                  layoutEnd > scrollOffset);
               return (
                 <ArchiveMediaCard
                   key={item.media.id}
                   item={item}
                   index={layout.index}
                   selected={item.media.id === selectedId}
-                  allowCompatibilityPreview={allowCompatibilityPreview}
+                  allowCompatibilityPreview
                   layoutStyle={{
                     position: "absolute",
                     left: layout.left,
@@ -270,15 +325,16 @@ export function ArchivePreview({
                     height: layout.height,
                   }}
                   onSelect={() => onSelect(item.media.id)}
+                  onUnavailable={() => onMediaUnavailable(item.media.id)}
                 />
               );
             })
-          ) : (
+          ) : hasFilters ? (
             <div className="archive-empty-field">
               <strong>No photos match.</strong>
               <span>Open Filter and clear the current search.</span>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
