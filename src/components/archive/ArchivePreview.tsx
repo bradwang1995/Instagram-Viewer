@@ -1,4 +1,3 @@
-import { useGSAP } from "@gsap/react";
 import {
   EyeOff,
   Grid2X2,
@@ -8,15 +7,23 @@ import {
   Settings2,
   Upload,
 } from "lucide-react";
+import { motion } from "motion/react";
 import {
   useEffect,
   useMemo,
   useRef,
-  type PointerEvent as ReactPointerEvent,
+  useState,
+  type CSSProperties,
   type WheelEvent,
 } from "react";
-import gsap from "gsap";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
+import {
+  getClosestRibbonIndex,
+  getGridMetrics,
+  getGridWindow,
+  getRibbonMetrics,
+  getRibbonWindow,
+} from "../../features/media/virtualMediaLayout";
 import { ArchiveMediaCard } from "./ArchiveMediaCard";
 
 export type ArchiveViewMode = "ribbon" | "grid";
@@ -25,13 +32,10 @@ type ArchivePreviewProps = {
   items: MediaQueueItem[];
   selectedId?: string;
   hiddenCount: number;
-  sourceFrameCounts: Record<string, number>;
   viewMode: ArchiveViewMode;
   hasFilters: boolean;
-  isDemo: boolean;
   isImporting: boolean;
   onSelect: (mediaId: string) => void;
-  onHide: (item: MediaQueueItem) => void;
   onImport: () => void;
   onOpenFilters: () => void;
   onOpenSettings: () => void;
@@ -39,100 +43,169 @@ type ArchivePreviewProps = {
   onStartSlideshow: () => void;
 };
 
+type ViewportSize = {
+  width: number;
+  height: number;
+};
+
 export function ArchivePreview({
   items,
   selectedId,
   hiddenCount,
-  sourceFrameCounts,
   viewMode,
   hasFilters,
-  isDemo,
   isImporting,
   onSelect,
-  onHide,
   onImport,
   onOpenFilters,
   onOpenSettings,
   onViewModeChange,
   onStartSlideshow,
 }: ArchivePreviewProps) {
-  const rootRef = useRef<HTMLElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const scrollFrame = useRef<number>();
+  const [scrollOffset, setScrollOffset] = useState(0);
+  const [viewport, setViewport] = useState<ViewportSize>(() => ({
+    width: typeof window === "undefined" ? 1280 : window.innerWidth,
+    height:
+      typeof window === "undefined"
+        ? 720
+        : Math.max(320, window.innerHeight - 160),
+  }));
   const selectedIndex = Math.max(
     0,
     items.findIndex((item) => item.media.id === selectedId),
   );
-  const selectedItem = items[selectedIndex];
-  const creator =
-    selectedItem?.media.creatorHandle ??
-    selectedItem?.post.embedAuthorName ??
-    "Instagram source";
-  const progress = items.length ? ((selectedIndex + 1) / items.length) * 100 : 0;
-
-  const label = useMemo(() => {
-    if (items.length === 0) return "No visible media";
-    return `${items.length.toLocaleString()} media · ${new Set(items.map((item) => item.post.id)).size.toLocaleString()} sources`;
-  }, [items]);
-
-  useGSAP(
-    () => {
-      gsap.fromTo(
-        ".archive-watermark span",
-        { yPercent: 105 },
-        {
-          yPercent: 0,
-          duration: 1.05,
-          stagger: 0.055,
-          ease: "power4.out",
-        },
-      );
-      gsap.fromTo(
-        ".archive-dock",
-        { yPercent: 120 },
-        { yPercent: 0, duration: 0.8, delay: 0.45, ease: "power3.out" },
-      );
-    },
-    { scope: rootRef },
+  const aspects = useMemo(
+    () =>
+      items.map(({ media }) =>
+        media.width && media.height ? media.width / media.height : 0.78,
+      ),
+    [items],
+  );
+  const ribbonMetrics = useMemo(
+    () => getRibbonMetrics(aspects, viewport.width, viewport.height),
+    [aspects, viewport],
+  );
+  const gridMetrics = useMemo(
+    () => getGridMetrics(items.length, viewport.width, viewport.height),
+    [items.length, viewport],
+  );
+  const visibleLayouts = useMemo(
+    () =>
+      viewMode === "grid"
+        ? getGridWindow(items.length, scrollOffset, gridMetrics)
+        : getRibbonWindow(ribbonMetrics.layouts, scrollOffset, viewport.width),
+    [
+      gridMetrics,
+      items.length,
+      ribbonMetrics.layouts,
+      scrollOffset,
+      viewMode,
+      viewport.width,
+    ],
+  );
+  const trackStyle = useMemo<CSSProperties>(
+    () =>
+      viewMode === "grid"
+        ? { width: "100%", height: gridMetrics.totalHeight }
+        : { width: ribbonMetrics.totalWidth, height: "100%" },
+    [gridMetrics.totalHeight, ribbonMetrics.totalWidth, viewMode],
   );
 
   useEffect(() => {
-    if (viewMode !== "ribbon") return;
     const scroller = scrollerRef.current;
-    if (!scroller || !selectedId) return;
-    const card = Array.from(
-      scroller.querySelectorAll<HTMLElement>("[data-media-id]"),
-    ).find((node) => node.dataset.mediaId === selectedId);
-    if (!card) return;
-    const cardCenter = card.offsetLeft + card.offsetWidth / 2;
-    const viewportCenter = scroller.scrollLeft + scroller.clientWidth / 2;
-    if (Math.abs(cardCenter - viewportCenter) > scroller.clientWidth * 0.42) {
-      scroller.scrollTo({
-        left: Math.max(0, cardCenter - scroller.clientWidth / 2),
-        behavior: "smooth",
-      });
-    }
-  }, [selectedId, viewMode]);
+    if (!scroller) return undefined;
 
-  function selectCenteredCard() {
+    const measure = () => {
+      setViewport({
+        width: scroller.clientWidth || window.innerWidth,
+        height:
+          scroller.clientHeight || Math.max(320, window.innerHeight - 160),
+      });
+    };
+    measure();
+
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
     const scroller = scrollerRef.current;
-    if (!scroller || viewMode !== "ribbon") return;
-    const center = scroller.getBoundingClientRect().left + scroller.clientWidth / 2;
-    let closest: { id: string; distance: number } | undefined;
-    for (const card of scroller.querySelectorAll<HTMLElement>("[data-media-id]")) {
-      const rect = card.getBoundingClientRect();
-      const distance = Math.abs(rect.left + rect.width / 2 - center);
-      const id = card.dataset.mediaId;
-      if (id && (!closest || distance < closest.distance)) {
-        closest = { id, distance };
+    if (!scroller) return;
+    if (typeof scroller.scrollTo === "function") {
+      scroller.scrollTo({ left: 0, top: 0 });
+    } else {
+      scroller.scrollLeft = 0;
+      scroller.scrollTop = 0;
+    }
+    setScrollOffset(0);
+  }, [items, viewMode]);
+
+  useEffect(() => {
+    if (!selectedId) return;
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+
+    if (viewMode === "grid") {
+      const row = Math.floor(selectedIndex / gridMetrics.columns);
+      const itemTop = gridMetrics.paddingY + row * gridMetrics.rowStride;
+      const itemBottom = itemTop + gridMetrics.itemHeight;
+      const visibleTop = scroller.scrollTop;
+      const visibleBottom = visibleTop + scroller.clientHeight;
+      if (itemTop < visibleTop || itemBottom > visibleBottom) {
+        const top = Math.max(0, itemTop - gridMetrics.paddingY);
+        if (typeof scroller.scrollTo === "function") {
+          scroller.scrollTo({ top, behavior: "smooth" });
+        } else {
+          scroller.scrollTop = top;
+        }
+      }
+      return;
+    }
+
+    const layout = ribbonMetrics.layouts[selectedIndex];
+    if (!layout) return;
+
+    const cardCenter = layout.left + layout.width / 2;
+    const visibleStart = scroller.scrollLeft + scroller.clientWidth * 0.12;
+    const visibleEnd = scroller.scrollLeft + scroller.clientWidth * 0.88;
+    if (cardCenter < visibleStart || cardCenter > visibleEnd) {
+      const left = Math.max(0, cardCenter - scroller.clientWidth / 2);
+      if (typeof scroller.scrollTo === "function") {
+        scroller.scrollTo({ left, behavior: "smooth" });
+      } else {
+        scroller.scrollLeft = left;
       }
     }
-    if (closest && closest.id !== selectedId) onSelect(closest.id);
-  }
+  }, [gridMetrics, ribbonMetrics.layouts, selectedId, selectedIndex, viewMode]);
 
   function handleScroll() {
     if (scrollFrame.current) window.cancelAnimationFrame(scrollFrame.current);
-    scrollFrame.current = window.requestAnimationFrame(selectCenteredCard);
+    scrollFrame.current = window.requestAnimationFrame(() => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      const nextOffset =
+        viewMode === "grid" ? scroller.scrollTop : scroller.scrollLeft;
+      setScrollOffset(nextOffset);
+
+      if (viewMode === "ribbon" && items.length) {
+        const nextIndex = getClosestRibbonIndex(
+          ribbonMetrics.layouts,
+          scroller.scrollLeft + scroller.clientWidth / 2,
+        );
+        const nextItem = items[nextIndex];
+        if (nextItem && nextItem.media.id !== selectedId) {
+          onSelect(nextItem.media.id);
+        }
+      }
+    });
   }
 
   function handleWheel(event: WheelEvent<HTMLDivElement>) {
@@ -142,107 +215,93 @@ export function ArchivePreview({
     event.currentTarget.scrollLeft += event.deltaY * 1.2;
   }
 
-  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
-    if (!rootRef.current) return;
-    const rect = rootRef.current.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width - 0.5;
-    const y = (event.clientY - rect.top) / rect.height - 0.5;
-    gsap.to(".archive-watermark", {
-      xPercent: x * -2.8,
-      yPercent: y * -1.8,
-      duration: 1.1,
-      overwrite: "auto",
-      ease: "power2.out",
-    });
-  }
-
   return (
-    <section
-      ref={rootRef}
-      className={`archive-preview is-${viewMode}`}
-      onPointerMove={handlePointerMove}
-    >
+    <section className={`archive-preview is-${viewMode}`}>
       <header className="archive-header">
         <a className="archive-logo" href={import.meta.env.BASE_URL}>
-          <strong>INS/ARCHIVE</strong>
-          <span>Private image viewer</span>
+          <strong>Instagram Viewer</strong>
+          <span>Local-first photo viewer</span>
         </a>
-        <div className="archive-session-meta">
-          <span className="archive-live-dot" />
-          <strong>{isDemo ? "Demo archive" : "Local archive"}</strong>
-          <span>{label}</span>
-        </div>
-        <button className="archive-import-link" type="button" onClick={onImport}>
-          <Upload size={15} aria-hidden="true" />
+        <button
+          className="archive-import-link"
+          type="button"
+          onClick={onImport}
+        >
+          <Upload size={18} aria-hidden="true" />
           {isImporting ? "Importing…" : "Import JSON"}
         </button>
       </header>
-
-      <h1 className="archive-watermark" aria-hidden="true">
-        <span>YOUR</span>
-        <span>ARCHIVE</span>
-      </h1>
 
       <div
         ref={scrollerRef}
         className="archive-scroller"
         data-testid="archive-scroller"
+        data-rendered-count={visibleLayouts.length}
         onWheel={handleWheel}
         onScroll={handleScroll}
       >
-        <div className="archive-track">
+        <div className="archive-track" style={trackStyle}>
           {items.length ? (
-            items.map((item, index) => (
-              <ArchiveMediaCard
-                key={item.media.id}
-                item={item}
-                index={index}
-                total={items.length}
-                sourceFrameCount={sourceFrameCounts[item.post.id] ?? 1}
-                selected={item.media.id === selectedId}
-                mountEmbed={Math.abs(index - selectedIndex) <= 2}
-                onSelect={() => onSelect(item.media.id)}
-                onHide={() => onHide(item)}
-              />
-            ))
+            visibleLayouts.map((layout) => {
+              const item = items[layout.index];
+              const layoutStart =
+                viewMode === "grid" ? layout.top : layout.left;
+              const layoutEnd =
+                layoutStart +
+                (viewMode === "grid" ? layout.height : layout.width);
+              const viewportExtent =
+                viewMode === "grid" ? viewport.height : viewport.width;
+              const allowCompatibilityPreview =
+                (viewMode === "ribbon" && item.media.id === selectedId) ||
+                (layoutStart < scrollOffset + viewportExtent &&
+                  layoutEnd > scrollOffset);
+              return (
+                <ArchiveMediaCard
+                  key={item.media.id}
+                  item={item}
+                  index={layout.index}
+                  selected={item.media.id === selectedId}
+                  allowCompatibilityPreview={allowCompatibilityPreview}
+                  layoutStyle={{
+                    position: "absolute",
+                    left: layout.left,
+                    top: layout.top,
+                    width: layout.width,
+                    height: layout.height,
+                  }}
+                  onSelect={() => onSelect(item.media.id)}
+                />
+              );
+            })
           ) : (
             <div className="archive-empty-field">
-              <strong>No frames match.</strong>
+              <strong>No photos match.</strong>
               <span>Open Filter and clear the current search.</span>
             </div>
           )}
         </div>
       </div>
 
-      <div className="archive-identity" aria-live="polite">
-        <strong>{creator}</strong>
-        <span>{selectedItem?.post.collectionNames[0] ?? "Saved posts"}</span>
-      </div>
-
-      <div className="archive-dock">
-        <div className="dock-progress">
-          <span>
-            {String(selectedIndex + 1).padStart(2, "0")} / {String(items.length).padStart(2, "0")}
-          </span>
-          <div aria-hidden="true">
-            <i style={{ width: `${progress}%` }} />
-          </div>
-        </div>
-
-        <div className="dock-modes" aria-label="Preview layout">
+      <motion.div
+        className="archive-dock"
+        initial={{ y: "110%" }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.7, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="dock-modes" aria-label="Photo layout">
           <button
             className={viewMode === "ribbon" ? "is-active" : ""}
             type="button"
             onClick={() => onViewModeChange("ribbon")}
           >
-            <MoveHorizontal size={15} aria-hidden="true" /> Ribbon
+            <MoveHorizontal size={18} aria-hidden="true" /> Horizontal View
           </button>
           <button
             className={viewMode === "grid" ? "is-active" : ""}
             type="button"
             onClick={() => onViewModeChange("grid")}
           >
-            <Grid2X2 size={14} aria-hidden="true" /> Index
+            <Grid2X2 size={17} aria-hidden="true" /> Grid View
           </button>
         </div>
 
@@ -252,11 +311,15 @@ export function ArchivePreview({
             type="button"
             onClick={onOpenFilters}
           >
-            <Search size={15} aria-hidden="true" /> Filter
+            <Search size={18} aria-hidden="true" /> Filter
           </button>
           <button type="button" onClick={onOpenSettings}>
-            {hiddenCount ? <EyeOff size={15} aria-hidden="true" /> : <Settings2 size={15} aria-hidden="true" />}
-            {hiddenCount ? `${hiddenCount} hidden` : "Settings"}
+            {hiddenCount ? (
+              <EyeOff size={18} aria-hidden="true" />
+            ) : (
+              <Settings2 size={18} aria-hidden="true" />
+            )}
+            Settings
           </button>
           <button
             className="dock-play"
@@ -264,10 +327,10 @@ export function ArchivePreview({
             disabled={items.length === 0}
             onClick={onStartSlideshow}
           >
-            Slideshow <Play size={14} fill="currentColor" aria-hidden="true" />
+            Slideshow <Play size={16} fill="currentColor" aria-hidden="true" />
           </button>
         </div>
-      </div>
+      </motion.div>
     </section>
   );
 }

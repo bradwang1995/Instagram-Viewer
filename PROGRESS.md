@@ -13,7 +13,7 @@ Extract Instagram `/p/` photo-post URLs
         ↓
 Store local library in IndexedDB
         ↓
-Enter a horizontal visual archive
+Enter Horizontal View or Grid View
         ↓
 Filter + hide + configure + slideshow
 ```
@@ -22,31 +22,26 @@ The product remains one page with bottom sheets and a full-screen slideshow over
 
 ## Selected Direction: PhotoYoshi Archive Field
 
-Status: **full visual redesign completed and browser-tested; media acquisition remains an open gate**.
+Status: **accepted MVP complete and browser-tested: one saved post maps to one default Instagram preview, with viewport-scoped compatibility loading**.
 
-The next major version is no longer a layout-only refresh. It changes the application's primary object from a saved Instagram post to an individual resolved media item.
+The accepted saved-JSON workflow intentionally produces one compatibility item per post. Instagram's default first preview is sufficient for this MVP; native carousel-child extraction is not a release requirement.
 
 ```mermaid
 flowchart TD
-    A[Saved post import] --> B[Source post record]
-    B --> C{Media resolution layer}
-    C -->|Resolved| D[Individual media items]
-    C -->|Unavailable| E[Honest source-unavailable state]
-    D --> F[Horizontal archive field]
-    F --> G[Filtered playback session]
-    G --> H[Transition engine]
-    D --> I[Persistent hide/downvote preference]
-    I --> F
-    D --> J[Thumbnail/media cache]
+    A[Saved post import] --> B[One source-post record]
+    B --> C[One default preview card]
+    C --> D[Horizontal View or Grid View]
+    D --> E[Filtered slideshow session]
+    B --> F[Honest unavailable state]
 ```
 
 Approved product principles:
 
 - Use `photoyoshi.com` as the visual reference: clipped display typography, deep olive-black canvas, centered imagery, sparse editorial metadata, and scroll-driven spatial motion.
 - Make the empty state an upload-only composition rather than an application dashboard.
-- After import, make the media field the product center and treat metadata as supporting context below each image.
-- Replace the shortcode/date library list with a horizontal ribbon and optional contact-sheet Index when legitimate media exists.
-- Flatten multi-photo source posts into media-level playback order.
+- After import, make the media field the product center and keep per-card metadata out of the visual surface.
+- Replace the shortcode/date library list with a virtual Horizontal View and four-column desktop Grid View.
+- Represent each ordinary saved post once and show Instagram's default first preview.
 - Persist hide/downvote state per media item and keep it reversible.
 - Search primarily by creator, collection, and local tags when those fields are available.
 - Separate slideshow dwell time, transition duration, transition style, ordering, and looping.
@@ -54,6 +49,92 @@ Approved product principles:
 - Use Motion for component/interaction motion and GSAP for authored timelines; keep GPU/WebGL optional.
 - Keep local-first privacy as the default and make every network/cache boundary explicit.
 - Do not implement carousel extraction, thumbnails, or GPU media transitions by scraping Instagram or reading a cross-origin iframe.
+
+## Revision 15: Saved-JSON-Only Instagram Loading
+
+- [x] Confirm the product's only user input is Instagram's exported saved-posts JSON; users are not expected to provide image files or a resolved manifest.
+- [x] Remove the local-image manifest builder and its workflow documentation after the input requirement was clarified.
+- [x] Verify from Meta's current official documentation that public embeds can display eligible posts, while the authenticated API is scoped to professional-account media and exposes no saved-post URL resolver.
+- [x] Keep the two-request iframe concurrency limit, timeout teardown, and session failure memory.
+- [x] Separate DOM overscan from network permission: mounted preload cards no longer contact Instagram before becoming visible.
+- [x] Restrict desktop Grid compatibility requests to the visible row instead of eventually requesting all 12 mounted cards.
+- [x] Restrict Horizontal compatibility requests to cards intersecting the real viewport plus any explicitly selected card, preventing offscreen overscan from taking request permits first.
+- [x] Add component regressions for deferred enable/disable and an integration regression proving a 12-card Grid window creates only four visible-row embeds.
+- [x] Import the ignored 6 MB real export in isolated Chrome with four-second deterministic embed responses: Horizontal mounted four cards but requested only its two visible previews; Grid mounted 12 cards but kept only four visible-row iframes; the next Grid row produced exactly four new requests; concurrency never exceeded two.
+
+Accepted scope boundary:
+
+- [x] The export has post URLs but no carousel-child URLs or image bytes. One default Instagram preview per post is the accepted result; independent carousel children are not required.
+
+## Revision 16: MVP Acceptance And Release
+
+- [x] Confirm one ordinary `saved_posts.json` record maps to one post card and one default first preview.
+- [x] Remove native carousel-child extraction from the MVP acceptance criteria.
+- [x] Retain bounded Horizontal/Grid rendering, visible-card-only iframe loading, and the two-request concurrency ceiling.
+- [x] Complete unit, type, build, real-export browser, and responsive visual QA before release.
+
+## Revision 14: Atomic Resolved-Media Manifest Import
+
+- [x] Add a strict `instagram-viewer.resolved-media` V1 discriminator without changing ordinary `saved_posts.json` parsing.
+- [x] Require a stable per-post media ID and derive deterministic IndexedDB identities that survive array reordering.
+- [x] Flatten every manifest photo into an independent Horizontal/Grid queue item in source order.
+- [x] Replace a referenced post's fallback or prior resolved set atomically while leaving unrelated posts unchanged.
+- [x] Preserve media preferences for stable IDs across replacement and repeated imports.
+- [x] Reject duplicate post/media identities, unsupported media types, insecure/private URLs, persistent-unsafe schemes, SVG data, oversized embedded images, and invalid dimensions.
+- [x] Limit JSON imports to 120 MiB, individual data images to 10 MiB, and total embedded data media to 100 MiB.
+- [x] Key direct-image and embed failure memory by media revision so an updated URL can retry instead of inheriting a stale failure.
+- [x] Suppress referrer information for direct image requests and document the remaining remote-host network boundary.
+- [x] Add fake IndexedDB parser/repository/importer integration coverage, including fallback replacement, idempotence, unrelated-post preservation, preference survival, and transaction rollback.
+- [x] Browser-import a three-photo data manifest and verify three independent direct-image cards with stable IDs, source order, and zero iframes.
+- [x] Capture the resolved manifest evidence at `artifacts/audit-04-manifest-grid.png`.
+
+Remaining external-data gate:
+
+- [x] The standard Instagram export contains no carousel child records or media bytes. The experimental internal manifest contract is retained for tests but is not an expected user workflow.
+
+## Revision 13: Failure Containment And Browser-Proven Infinite Viewing
+
+- [x] Make Grid View show exactly one four-card row per desktop viewport while retaining two prefetched rows and the 12-card DOM ceiling.
+- [x] Keep one visible card per mobile Grid viewport with three cards mounted for the current plus two prefetched rows.
+- [x] Unmount compatibility iframes that time out or fail, show an honest unavailable state, and remember terminal failures so virtual remounts do not retry them.
+- [x] Prove timeout queue draining with fake timers: the active iframe navigation window remains bounded at two until all five test items reach a terminal state.
+- [x] Add mixed-aspect and `390/1280/1920/3440` Horizontal layout coverage, including maximum-scroll reachability of the last media item.
+- [x] Set the verified `1920 × 1080` Horizontal media height to `828px` (approximately 76.7% of the viewport).
+- [x] Parse real `saved_posts.json` records atomically so repeated `value`/`href` URLs are counted once, Owner Username/Caption/Title/`fbid` metadata is preserved, and structural labels such as `URL` are not fabricated as collections.
+- [x] Add repeatable local Chrome QA scripts for resolved-media visual states and the ignored real import file.
+- [x] Capture current evidence at `artifacts/audit-01-horizontal.png`, `artifacts/audit-02-grid.png`, and `artifacts/audit-03-mobile-grid.png`.
+- [x] In an isolated browser context, import the full local JSON in `946ms` while replacing Instagram with deterministic four-second delayed responses; the viewer mounted four cards, exposed no media/source totals, and never exceeded two concurrent embed navigations.
+
+Known external-data gate:
+
+- [x] The application can now ingest a legitimate local resolved-media manifest and replace fallback records atomically.
+- [x] The actual export contains no carousel child records or media bytes; the confirmed product accepts this platform limitation instead of asking the user for a second source package.
+
+## Revision 12: Readability And Bounded Media Loading
+
+- [x] Restore the visible product name to `Instagram Viewer` on import, loading, and viewer surfaces.
+- [x] Rename the browsing controls to `Horizontal View` and `Grid View`.
+- [x] Increase functional text to 150% of the previous root scale.
+- [x] Remove the oversized `YOUR ARCHIVE` watermark, session totals, progress totals, and left-side creator/collection identity from the active viewer.
+- [x] Remove per-card creator/collection/frame labels, ordinal counters, Hide/Open Source actions, and source-count labels.
+- [x] Keep all cards at full opacity and remove saturation, brightness, grayscale, and dark overlay treatments.
+- [x] Use `object-fit: contain` so resolved photos remain fully visible.
+- [x] Increase Horizontal View media to approximately 70–80% of the desktop viewport height.
+- [x] Replace the full-library React/Motion map with a variable-width horizontal virtual window and an O(log n) centered-item lookup.
+- [x] Make desktop Grid View exactly four columns and virtualize it to three mounted rows (12 cards maximum); use two columns on tablet and one on mobile.
+- [x] Mount media only inside the active virtual window; eagerly request bounded direct images and limit compatibility iframe navigation starts to two at a time.
+- [x] Fall back from a failed asset URL to its preview URL, then show a non-blocking unavailable state.
+- [x] Crop compatibility iframes beyond both horizontal edges to reduce visible scrollbar/carousel-edge chrome; retain the documented cross-origin limitation because the parent cannot guarantee control of iframe internals.
+- [x] Batch-create missing fallback media records during import instead of issuing two sequential IndexedDB operations per post.
+- [x] Load demo media and persisted preferences through one generation-guarded snapshot, preventing hidden-item flash and stale async overwrites.
+- [x] Stabilize the media refresh subscription and remove redundant post/media refresh calls after repository mutations.
+- [x] Add long-library layout tests proving four columns, a 12-card Grid limit, a bounded Horizontal window, and full-track reachability.
+- [x] Update HomePage tests to assert the new brand, mode names, independent media cards, and absence of rejected card controls/counts.
+- [x] Verify Horizontal and Grid at `1920 × 1080` plus mobile Grid at `390 × 844`; store current evidence in the three `artifacts/audit-*` captures.
+
+Known external-data gate:
+
+- [x] Standard `saved_posts.json` records contain post URLs, not carousel children or media bytes. The saved-JSON-only product uses official embeds and does not promise native per-child cards.
 
 ## Revision 11: PhotoYoshi Archive Field
 
@@ -75,9 +156,10 @@ Approved product principles:
 
 Remaining work after this checkpoint:
 
-- [ ] Choose a legitimate source for carousel child media, creator metadata, thumbnails, and direct image/video bytes.
+- [x] Close the carousel-source investigation: the accepted MVP uses one default embed preview per saved post and requires no secondary media source.
 - [ ] Add optional code splitting for the `583.80 kB` minified JavaScript bundle if deployment performance becomes a priority.
-- [ ] Profile large real libraries before introducing queue virtualization or a GPU layer.
+- [x] Introduce bounded queue virtualization before profiling the full private library in the browser.
+- [x] Profile the full private library after the user confirms the revised loading behavior.
 
 ## July 2026 Investigation Findings
 
@@ -90,7 +172,7 @@ Remaining work after this checkpoint:
 - [x] Confirm creator search is more useful than shortcode search, provided creator metadata can be resolved.
 - [x] Confirm the current three-value speed selector is too limited.
 - [x] Confirm animation configuration needs separate dwell, transition, effect, order, and loop settings.
-- [x] Confirm `saved_posts.json` does not contain carousel children, original media, reliable thumbnails, or creator metadata.
+- [x] Confirm `saved_posts.json` does not contain carousel children, original media, or reliable thumbnails; confirm it does contain owner usernames and caption/title metadata that can be preserved without resolving media.
 - [x] Confirm the parent app cannot inspect the Instagram iframe DOM or use its pixels for shader transitions because it is cross-origin.
 - [x] Record the proposed Motion + GSAP + optional React Three Fiber stack.
 - [x] Record the media acquisition decision gate before implementation.
@@ -200,7 +282,7 @@ Rules:
 - Group media by source post without forcing post-level playback.
 - Distinguish visible, hidden, unavailable, cached, and uncached states without relying only on color.
 - Keep text metadata secondary; creator and collection are more prominent than shortcode and save time.
-- Virtualize or window the queue only after profiling a real large media library.
+- Keep the implemented virtual windows bounded, then tune row/card overscan after profiling a real large media library.
 - Never render fake thumbnails when only an iframe URL is available.
 
 ### Session Builder
@@ -251,18 +333,17 @@ Performance and accessibility budgets:
 - Maintain keyboard operation and visible focus even when controls visually fade.
 - Avoid text blur, continuous parallax, or long entrance choreography during repeated browsing.
 
-## Media Acquisition Decision Gate
+## Saved-JSON Media Boundary
 
-Implementation must begin with a time-boxed feasibility spike. The current iframe-only source cannot satisfy the target media model.
+The product path is confirmed: the user imports only `saved_posts.json`, and the viewer loads eligible posts through Instagram embeds. No second local image package is required.
 
-- [ ] Define the exact metadata and bytes needed for thumbnails, carousel children, creator search, media-level hiding, video playback, and GPU effects.
-- [ ] Test whether a user-provided local manifest/media package can satisfy those requirements while preserving local-first privacy.
-- [ ] Investigate an official authenticated resolver only if the local package is insufficient.
-- [ ] Document authentication, permissions, rate limits, retention, deletion, and unavailable/private-content behavior before choosing a hosted resolver.
-- [ ] Reject any approach that depends on credentials pasted into the app, unofficial tokens, automated crawling, or silent bulk downloads.
-- [ ] Keep iframe-only mode as an explicit compatibility fallback, with post-level limitations clearly labeled.
+- [x] Confirm which metadata is present in the Saved export and preserve the available owner/caption fields.
+- [x] Confirm public embeds can display eligible posts without making users provide image files.
+- [x] Confirm the official authenticated API does not resolve an arbitrary Saved-post collection for this static viewer.
+- [x] Reject credentials pasted into the app, unofficial tokens, automated crawling, and silent bulk downloads.
+- [x] Keep post-level iframe compatibility honest and restrict it to the real viewport.
 
-No visual queue implementation should promise thumbnails until this gate is resolved.
+Native thumbnails, independently flattened carousel children, and pixel-based effects remain unavailable unless Instagram provides those media assets through a future supported product path.
 
 ## Cache And Storage Plan
 
@@ -309,7 +390,7 @@ Remaining architectural work is intentionally not hidden by this checkpoint:
 
 ### Phase 0: Source Feasibility
 
-- [ ] Complete the media acquisition decision gate.
+- [x] Complete the media acquisition decision gate by accepting one default embed preview per saved post.
 - [x] Produce a non-personal fixture containing multiple source posts and multiple media items per post.
 - [x] Prove deterministic media identity for the current source/index model.
 - [x] Limit the first resolved-media checkpoint to still images while retaining a video-capable schema.
@@ -457,11 +538,11 @@ Remaining architectural work is intentionally not hidden by this checkpoint:
 ## Current Active UI
 
 - [x] Upload-only empty-library composition with click and drag/drop import.
-- [x] Horizontal, wheel-driven resolved-media ribbon.
-- [x] Contact-sheet Index mode.
+- [x] Horizontal, wheel-driven virtual media view with approximately 70–80% viewport-height images.
+- [x] Four-column desktop Grid View with a maximum three-row render window.
 - [x] Creator, collection, local-text, and hidden-state filters.
 - [x] Per-media hide/downvote plus hidden-media restoration.
-- [x] Creator, collection, frame position, and source provenance below images.
+- [x] Label-free, count-free photo cards with full-brightness `contain` rendering and hover lift/border/shadow.
 - [x] Configurable dwell time, transition duration, transition preset, and loop mode.
 - [x] Full-screen previous, play/pause, next, hide, settings, and close controls.
 - [x] Explicit iframe compatibility previews for unresolved posts.
@@ -475,22 +556,24 @@ Remaining architectural work is intentionally not hidden by this checkpoint:
 - [x] `extractPostsFromJson` for `saved_posts.json` array shape
 - [x] `extractPostsFromHtml`
 - [x] `mergeSavedPost`
-- [ ] Direct JSON importer integration test with mocked IndexedDB
+- [x] Direct JSON importer integration test with fake IndexedDB
 - [x] One-page UI selection/navigation/loading smoke test
 - [x] Date range filtering test
 - [x] Embed URL and wrapping navigation tests
 
 ## Latest Verification
 
-- [x] `npm test -- --run` passes with 16 tests across 8 files.
+- [x] `npm test` passes with 44 tests across 13 files.
 - [x] `npm run build` passes.
 - [x] `npm run lint` passes TypeScript checking.
-- [x] Local dev server responds at `http://127.0.0.1:4317/`.
+- [x] Local dev server responds at `http://127.0.0.1:5173/`.
 - [x] `git status --ignored` shows `saved_posts.json` as ignored.
 - [x] Active router only serves the one-page `HomePage`.
 - [x] Active header has no navigation tabs.
-- [x] Browser QA renders all 19 demo media items in Ribbon and Index views.
-- [x] Vertical wheel input advances the horizontal ribbon and updates selection.
+- [x] Long-library tests keep the desktop Grid DOM to 12 cards and the Horizontal DOM to a bounded visible/overscan window.
+- [x] Browser QA confirms `24px` root text, hidden scrollbars, a `76.7%` viewport-height Horizontal media surface, one visible four-card desktop Grid row, one visible mobile Grid card, bounded DOM windows, and last-media reachability in all three states.
+- [x] Browser QA imports three resolved data images and confirms three ordered direct-image cards with stable IDs and no compatibility iframes.
+- [x] Vertical wheel input advances Horizontal View using index math rather than scanning every mounted card.
 - [x] Creator filtering reduces the demo session to the expected five `@quietframes` media items.
 - [x] Browser QA confirms next media advances within a multi-frame source.
 - [x] Browser QA confirms no document overflow at `1280 × 720` or `390 × 844`.
@@ -500,9 +583,10 @@ Remaining architectural work is intentionally not hidden by this checkpoint:
 
 ## Next Candidate Improvements
 
-- [ ] Add an automated direct JSON importer integration test with mocked IndexedDB.
-- [ ] Consider list virtualization only if many infinite-scroll batches become slow.
-- [ ] Add a timed unavailable-preview message if Instagram changes embed behavior.
+- [x] Add an automated direct JSON importer integration test with fake IndexedDB.
+- [x] Add bounded virtualization to both browsing modes.
+- [x] Profile the ignored real JSON in an isolated browser context with deterministic slow embeds; viewer ready in `1571ms`, Horizontal requested two visible previews, Grid limited 12 mounted cards to four visible-row iframes, the next row made four new requests, and navigation concurrency peaked at two.
+- [x] Add a timed unavailable-preview state and session failure memory for stalled/failed compatibility embeds.
 - [ ] Add optional manual URL paste only if needed.
 - [ ] Consider opt-in authenticated sync only as a separate, security-reviewed product phase.
 

@@ -23,6 +23,18 @@ const COLLECTION_KEYS = [
   "label",
 ];
 
+const RESERVED_COLLECTION_NAMES = new Set([
+  "caption",
+  "hashtags",
+  "link",
+  "name",
+  "owner",
+  "saved on",
+  "title",
+  "url",
+  "username",
+]);
+
 export function extractPostsFromJson(
   json: unknown,
   context: ExtractContext,
@@ -60,6 +72,16 @@ export function extractPostsFromJson(
     }
 
     if (node && typeof node === "object") {
+      const savedPostsRecord = extractSavedPostsRecord(
+        node,
+        context,
+        collectionStack,
+      );
+      if (savedPostsRecord.matched) {
+        if (savedPostsRecord.post) results.push(savedPostsRecord.post);
+        return;
+      }
+
       const collectionName = inferCollectionNameFromObject(node);
       const nextStack = collectionName
         ? [...collectionStack, collectionName]
@@ -73,6 +95,102 @@ export function extractPostsFromJson(
 
   walk(json, undefined, inferCollectionNamesFromPath(context.sourceFilePath));
   return results;
+}
+
+function extractSavedPostsRecord(
+  node: object,
+  context: ExtractContext,
+  collectionStack: string[],
+): { matched: boolean; post?: SavedPost } {
+  const record = node as Record<string, unknown>;
+  if (!Array.isArray(record.label_values) || !Array.isArray(record.media)) {
+    return { matched: false };
+  }
+
+  const rawUrl = findLabeledString(record.label_values, "URL");
+  if (!rawUrl) return { matched: false };
+
+  const post = createSavedPostFromUrl(rawUrl, context, {
+    savedAt: inferTimestampFromNearbyObject(record),
+    collectionNames: collectionStack,
+  });
+  if (!post) return { matched: true };
+
+  const owner = findTitledObject(record.label_values, "Owner");
+  const creator = owner
+    ? findLabeledString(owner, "Username") ?? findLabeledString(owner, "Name")
+    : undefined;
+  const title = compactString(findLabeledString(record.label_values, "Title"));
+  const description = compactString(
+    findLabeledString(record.label_values, "Caption"),
+  );
+  const externalId = compactString(record.fbid);
+
+  return {
+    matched: true,
+    post: {
+      ...post,
+      externalId,
+      title,
+      description,
+      embedAuthorName: creator ? normalizeCreatorHandle(creator) : undefined,
+    },
+  };
+}
+
+function findLabeledString(node: unknown, label: string): string | undefined {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const result = findLabeledString(child, label);
+      if (result) return result;
+    }
+    return undefined;
+  }
+
+  if (!node || typeof node !== "object") return undefined;
+  const record = node as Record<string, unknown>;
+  if (
+    record.label === label &&
+    typeof record.value === "string" &&
+    record.value.trim()
+  ) {
+    return record.value.trim();
+  }
+
+  for (const child of Object.values(record)) {
+    const result = findLabeledString(child, label);
+    if (result) return result;
+  }
+  return undefined;
+}
+
+function findTitledObject(node: unknown, title: string): object | undefined {
+  if (Array.isArray(node)) {
+    for (const child of node) {
+      const result = findTitledObject(child, title);
+      if (result) return result;
+    }
+    return undefined;
+  }
+
+  if (!node || typeof node !== "object") return undefined;
+  const record = node as Record<string, unknown>;
+  if (record.title === title) return record;
+
+  for (const child of Object.values(record)) {
+    const result = findTitledObject(child, title);
+    if (result) return result;
+  }
+  return undefined;
+}
+
+function compactString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function normalizeCreatorHandle(value: string): string {
+  const compact = value.trim();
+  return compact.startsWith("@") ? compact : `@${compact}`;
 }
 
 export function inferTimestampFromNearbyObject(parent: unknown): string | undefined {
@@ -196,6 +314,10 @@ function isUsefulCollectionName(value: string): boolean {
   }
 
   if (/^https?:\/\//i.test(cleaned)) {
+    return false;
+  }
+
+  if (RESERVED_COLLECTION_NAMES.has(cleaned.toLowerCase())) {
     return false;
   }
 

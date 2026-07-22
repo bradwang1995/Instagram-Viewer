@@ -81,15 +81,15 @@ export function ArchiveLanding({
     >
       <header className="landing-header">
         <a href={import.meta.env.BASE_URL} className="archive-logo">
-          <strong>INS/ARCHIVE</strong>
-          <span>Private image viewer</span>
+          <strong>Instagram Viewer</strong>
+          <span>Local-first photo viewer</span>
         </a>
         <span className="landing-step">01 — Import</span>
       </header>
 
-      <h1 className="landing-wordmark" aria-label="Saved frames">
-        <span>SAVED</span>
-        <span>FRAMES</span>
+      <h1 className="landing-wordmark" aria-label="Instagram Viewer">
+        <span>INSTAGRAM</span>
+        <span>VIEWER</span>
       </h1>
 
       <motion.button
@@ -102,11 +102,13 @@ export function ArchiveLanding({
       >
         <img
           src={`${import.meta.env.BASE_URL}demo/warm-interior.webp`}
-          alt="A quiet interior preview representing the local photo archive"
+          alt="A quiet interior preview representing the local photo collection"
         />
         <span className="landing-image-wash" aria-hidden="true" />
         <span className="landing-upload-copy">
-          <span>{isImporting ? "Indexing your archive" : "Drop JSON or click"}</span>
+          <span>
+            {isImporting ? "Preparing your photos" : "Drop JSON or click"}
+          </span>
           <strong>
             {isImporting ? "Building preview…" : "Import saved posts"}
             <Upload size={18} aria-hidden="true" />
@@ -117,19 +119,18 @@ export function ArchiveLanding({
       <div className="landing-manifesto">
         <p>
           Your saved Instagram references become one private, scrollable image
-          field. Nothing leaves this device.
+          field. Imported JSON stays in this browser.
         </p>
         <span>JSON only · local browser storage</span>
       </div>
 
       <button className="landing-demo" type="button" onClick={onDemo}>
-        View the 19-frame demo <ArrowRight size={15} aria-hidden="true" />
+        View demo <ArrowRight size={18} aria-hidden="true" />
       </button>
 
       <span className="landing-private">
         <ShieldCheck size={14} aria-hidden="true" /> Local by design
       </span>
-      <strong className="landing-count">00</strong>
 
       {error ? <div className="landing-error">{error}</div> : null}
       {isDragging ? (

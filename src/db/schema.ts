@@ -13,6 +13,7 @@ export type MediaSourceKind = "local" | "remote" | "embed" | "demo";
 export type MediaItem = {
   id: string;
   sourcePostId: string;
+  sourceMediaId?: string;
   sourceIndex: number;
   type: "image" | "video";
   sourceKind: MediaSourceKind;
@@ -46,6 +47,7 @@ export type TransitionPreset =
 
 export type SavedPost = {
   id: string;
+  externalId?: string;
   url: string;
   canonicalUrl: string;
   shortcode?: string;

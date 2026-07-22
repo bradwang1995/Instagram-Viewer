@@ -32,14 +32,14 @@ export function ArchiveFilterSheet({
   onClose,
 }: FilterSheetProps) {
   return (
-    <ArchiveSheet open={open} label="Filter archive" onClose={onClose}>
+    <ArchiveSheet open={open} label="Filter photos" onClose={onClose}>
       <div className="archive-sheet-lede">
         <span>Find a source</span>
         <h2>Reduce the field without losing the visual flow.</h2>
       </div>
       <label className="archive-search-field">
         <Search size={18} aria-hidden="true" />
-        <span className="sr-only">Search archive</span>
+        <span className="sr-only">Search photos</span>
         <input
           autoFocus
           value={query}
@@ -189,7 +189,7 @@ export function ArchiveSettingsSheet({
             }
           >
             <option value="off">Stop at the end</option>
-            <option value="session">Loop full archive</option>
+            <option value="session">Loop all photos</option>
             <option value="source-post">Loop current post</option>
           </select>
         </label>
@@ -232,7 +232,9 @@ export function ArchiveSettingsSheet({
             </div>
           ))
         ) : (
-          <p>Nothing is hidden. Use the eye control on any frame to remove it.</p>
+          <p>
+            Nothing is hidden. Use the eye control on any frame to remove it.
+          </p>
         )}
       </div>
     </ArchiveSheet>

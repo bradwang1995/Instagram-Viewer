@@ -1,6 +1,6 @@
 import { mergeSavedPost } from "../features/import/mergeSavedPost";
 import { createFallbackMediaItem, db, notifyDbChanged } from "./db";
-import type { Collection, SavedPost } from "./schema";
+import type { Collection, MediaItem, SavedPost } from "./schema";
 
 export type UpsertResult = {
   posts: SavedPost[];
@@ -23,8 +23,12 @@ export async function getPost(id: string): Promise<SavedPost | undefined> {
 
 export async function bulkUpsertImportedPosts(
   incomingPosts: SavedPost[],
+  resolvedMediaItems: MediaItem[] = [],
 ): Promise<UpsertResult> {
   if (incomingPosts.length === 0) {
+    if (resolvedMediaItems.length > 0) {
+      throw new Error("Resolved media cannot be imported without its source posts.");
+    }
     return { posts: [], newCount: 0, updatedCount: 0 };
   }
 
@@ -45,6 +49,7 @@ export async function bulkUpsertImportedPosts(
     newCount += 1;
     return incomingPost;
   });
+  validateResolvedMediaItems(mergedPosts, resolvedMediaItems);
 
   await db.transaction(
     "rw",
@@ -54,7 +59,7 @@ export async function bulkUpsertImportedPosts(
     async () => {
       await db.posts.bulkPut(mergedPosts);
       await upsertCollectionsForPosts(mergedPosts);
-      await ensureMediaItemsForPosts(mergedPosts);
+      await ensureMediaItemsForPosts(mergedPosts, resolvedMediaItems);
     },
   );
 
@@ -114,16 +119,70 @@ export async function clearLocalDatabase(): Promise<void> {
   notifyDbChanged();
 }
 
-async function ensureMediaItemsForPosts(posts: SavedPost[]): Promise<void> {
-  for (const post of posts) {
-    const existingCount = await db.mediaItems
-      .where("sourcePostId")
-      .equals(post.id)
-      .count();
+async function ensureMediaItemsForPosts(
+  posts: SavedPost[],
+  resolvedMediaItems: MediaItem[],
+): Promise<void> {
+  if (posts.length === 0) return;
 
-    if (existingCount === 0) {
-      await db.mediaItems.put(createFallbackMediaItem(post));
+  const existingItems = await db.mediaItems
+    .where("sourcePostId")
+    .anyOf(posts.map((post) => post.id))
+    .toArray();
+  const populatedPostIds = new Set(
+    existingItems.map((media) => media.sourcePostId),
+  );
+  const resolvedPostIds = new Set(
+    resolvedMediaItems.map((media) => media.sourcePostId),
+  );
+  const incomingMediaIds = new Set(
+    resolvedMediaItems.map((media) => media.id),
+  );
+  const existingById = new Map(existingItems.map((media) => [media.id, media]));
+  const resolvedItemsToPut = resolvedMediaItems.map((media) => ({
+    ...media,
+    createdAt: existingById.get(media.id)?.createdAt ?? media.createdAt,
+  }));
+  const staleMediaIds = existingItems
+    .filter(
+      (media) =>
+        resolvedPostIds.has(media.sourcePostId) &&
+        !incomingMediaIds.has(media.id),
+    )
+    .map((media) => media.id);
+  const missingItems = posts
+    .filter(
+      (post) =>
+        !resolvedPostIds.has(post.id) && !populatedPostIds.has(post.id),
+    )
+    .map((post) => createFallbackMediaItem(post));
+
+  if (staleMediaIds.length > 0) {
+    await db.mediaItems.bulkDelete(staleMediaIds);
+  }
+  if (resolvedItemsToPut.length > 0) {
+    await db.mediaItems.bulkPut(resolvedItemsToPut);
+  }
+  if (missingItems.length > 0) {
+    await db.mediaItems.bulkPut(missingItems);
+  }
+}
+
+function validateResolvedMediaItems(
+  posts: SavedPost[],
+  mediaItems: MediaItem[],
+): void {
+  const postIds = new Set(posts.map((post) => post.id));
+  const mediaIds = new Set<string>();
+
+  for (const media of mediaItems) {
+    if (!postIds.has(media.sourcePostId)) {
+      throw new Error(`Resolved media references unknown post ${media.sourcePostId}.`);
     }
+    if (mediaIds.has(media.id)) {
+      throw new Error(`Resolved media id ${media.id} is duplicated.`);
+    }
+    mediaIds.add(media.id);
   }
 }
 

@@ -4,7 +4,6 @@ import {
   render,
   screen,
   waitFor,
-  within,
 } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, type MediaItem, type SavedPost } from "../db/schema";
@@ -47,6 +46,14 @@ vi.mock("../features/slideshow/shuffle", () => ({
 describe("Photo archive preview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    Object.defineProperty(window, "innerWidth", {
+      configurable: true,
+      value: 1920,
+    });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 1080,
+    });
     const first = createPost("A", "@north.archive", "Night drives");
     const second = createPost("B", "@quietframes", "Landscapes");
     testState.posts = [first, second];
@@ -59,32 +66,33 @@ describe("Photo archive preview", () => {
     testState.setMediaVisibility.mockResolvedValue(undefined);
   });
 
-  it("selects a frame from the horizontal preview and hides it", async () => {
+  it("shows each media item as a separate, control-free photo card", async () => {
     render(<HomePage />);
     await act(async () => undefined);
 
     expect(screen.getAllByTestId("archive-media-card")).toHaveLength(3);
-    const secondFrame = screen.getByRole("button", {
-      name: "@north.archive, frame 2 of 2",
-    });
+    const secondFrame = screen.getAllByRole("button", {
+      name: "View photo from @north.archive",
+    })[1];
     fireEvent.click(secondFrame);
 
     const selectedCard = secondFrame.closest("article");
     expect(selectedCard).toHaveClass("is-selected");
-    fireEvent.click(
-      within(selectedCard as HTMLElement).getByRole("button", {
-        name: "Hide this media",
-      }),
-    );
-    await waitFor(() =>
-      expect(testState.setMediaVisibility).toHaveBeenCalledWith(
-        "post:A:media:1",
-        "hidden",
-      ),
-    );
     expect(
-      screen.getByText("Frame hidden from future sessions."),
+      screen.queryByRole("button", { name: "Hide this media" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Open source on Instagram" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Instagram Viewer")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Horizontal View/ }),
     ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Grid View/ }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("INS/ARCHIVE")).not.toBeInTheDocument();
+    expect(screen.queryByText("YOUR ARCHIVE")).not.toBeInTheDocument();
   });
 
   it("filters the visual field by creator", async () => {
@@ -95,7 +103,7 @@ describe("Photo archive preview", () => {
       target: { value: "@quietframes" },
     });
     expect(screen.getAllByTestId("archive-media-card")).toHaveLength(1);
-    expect(screen.getByText("1 media · 1 sources")).toBeInTheDocument();
+    expect(screen.queryByText(/media · .*sources/)).not.toBeInTheDocument();
   });
 
   it("shows the import-first landing when the library is empty", async () => {
@@ -110,6 +118,57 @@ describe("Photo archive preview", () => {
         name: "Choose Instagram saved posts JSON file",
       }),
     ).toBeInTheDocument();
+  });
+
+  it("keeps a large desktop grid to twelve mounted cards and reaches the end", async () => {
+    const source = createPost("LONG", "@long.library", "Reference");
+    testState.posts = [source];
+    testState.queue = Array.from({ length: 100 }, (_, index) =>
+      createQueueItem(source, index, 100),
+    );
+    render(<HomePage />);
+    await act(async () => undefined);
+
+    fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
+    await waitFor(() =>
+      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(12),
+    );
+
+    const scroller = screen.getByTestId("archive-scroller");
+    scroller.scrollTop = Number.MAX_SAFE_INTEGER;
+    fireEvent.scroll(scroller);
+    await waitFor(() =>
+      expect(
+        document.querySelector('[data-media-id="post:LONG:media:99"]'),
+      ).toBeInTheDocument(),
+    );
+    expect(
+      screen.getAllByTestId("archive-media-card").length,
+    ).toBeLessThanOrEqual(12);
+  });
+
+  it("does not request compatibility embeds for the Grid preload rows", async () => {
+    const source = createPost("NETWORKBOUND", "@network.bound", "Saved");
+    testState.posts = [source];
+    testState.queue = Array.from({ length: 100 }, (_, index) =>
+      createUnresolvedQueueItem(source, index),
+    );
+    const view = render(<HomePage />);
+    await act(async () => undefined);
+
+    expect(view.container.querySelectorAll("iframe")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
+    await waitFor(() =>
+      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(12),
+    );
+    expect(view.container.querySelectorAll("iframe")).toHaveLength(2);
+
+    view.container
+      .querySelectorAll("iframe")
+      .forEach((frame) => fireEvent.load(frame));
+    await waitFor(() =>
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(4),
+    );
   });
 });
 
@@ -151,6 +210,23 @@ function createQueueItem(
     caption: `${post.embedAuthorName} frame ${sourceIndex + 1} of ${sourceCount}`,
     previewUrl: `https://example.com/${post.shortcode}-${sourceIndex}.jpg`,
     assetUrl: `https://example.com/${post.shortcode}-${sourceIndex}.jpg`,
+    createdAt: post.importedAt,
+    updatedAt: post.updatedAt,
+  };
+  return { media, post };
+}
+
+function createUnresolvedQueueItem(
+  post: SavedPost,
+  sourceIndex: number,
+): MediaQueueItem {
+  const media: MediaItem = {
+    id: `${post.id}:unresolved:${sourceIndex}`,
+    sourcePostId: post.id,
+    sourceIndex,
+    type: "image",
+    sourceKind: "embed",
+    creatorHandle: post.embedAuthorName,
     createdAt: post.importedAt,
     updatedAt: post.updatedAt,
   };

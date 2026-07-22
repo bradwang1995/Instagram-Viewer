@@ -13,11 +13,7 @@ import {
 import { ArchiveSlideshow } from "../components/archive/ArchiveSlideshow";
 import { restoreAllMedia, setMediaVisibility } from "../db/mediaRepository";
 import { getSettings, updateSettings } from "../db/settingsRepository";
-import {
-  DEFAULT_SETTINGS,
-  type ImportJob,
-  type TransitionPreset,
-} from "../db/schema";
+import { DEFAULT_SETTINGS, type TransitionPreset } from "../db/schema";
 import { importSavedPostsJsonFile } from "../features/import/importJson";
 import {
   filterMediaQueue,
@@ -27,9 +23,13 @@ import { useMediaLibrary } from "../hooks/useMediaLibrary";
 
 export function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { posts, queue, isLoading, error, isDemo, refresh } = useMediaLibrary();
+  const { posts, queue, isLoading, error, refresh } = useMediaLibrary();
   const [selectedMediaId, setSelectedMediaId] = useState<string>();
-  const [viewMode, setViewMode] = useState<ArchiveViewMode>("ribbon");
+  const [viewMode, setViewMode] = useState<ArchiveViewMode>(() =>
+    new URLSearchParams(window.location.search).get("view") === "grid"
+      ? "grid"
+      : "ribbon",
+  );
   const [query, setQuery] = useState("");
   const [creator, setCreator] = useState("");
   const [collection, setCollection] = useState("");
@@ -47,7 +47,6 @@ export function HomePage() {
   );
   const [loopMode, setLoopMode] = useState(DEFAULT_SETTINGS.slideshowLoopMode);
   const [isImporting, setIsImporting] = useState(false);
-  const [latestJob, setLatestJob] = useState<ImportJob>();
   const [actionError, setActionError] = useState("");
   const [undoItem, setUndoItem] = useState<MediaQueueItem>();
   const [landingDismissed, setLandingDismissed] = useState(false);
@@ -72,8 +71,7 @@ export function HomePage() {
         new Set(
           queue
             .map(
-              (item) =>
-                item.media.creatorHandle ?? item.post.embedAuthorName,
+              (item) => item.media.creatorHandle ?? item.post.embedAuthorName,
             )
             .filter((value): value is string => Boolean(value)),
         ),
@@ -81,20 +79,14 @@ export function HomePage() {
     [queue],
   );
   const collections = useMemo(
-    () => Array.from(new Set(posts.flatMap((post) => post.collectionNames))).sort(),
+    () =>
+      Array.from(new Set(posts.flatMap((post) => post.collectionNames))).sort(),
     [posts],
   );
   const hiddenItems = useMemo(
     () => queue.filter((item) => item.preference?.visibility === "hidden"),
     [queue],
   );
-  const sourceFrameCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const item of queue) {
-      counts[item.post.id] = (counts[item.post.id] ?? 0) + 1;
-    }
-    return counts;
-  }, [queue]);
   const visibleItems = useMemo(
     () =>
       filterMediaQueue(queue, {
@@ -116,8 +108,7 @@ export function HomePage() {
     visibleItems[0];
   const hasFilters = Boolean(query || creator || collection);
   const showLanding =
-    !isLoading &&
-    (posts.length === 0 || (forceLanding && !landingDismissed));
+    !isLoading && (posts.length === 0 || (forceLanding && !landingDismissed));
 
   useEffect(() => {
     if (!selectedItem) {
@@ -189,7 +180,14 @@ export function HomePage() {
       }
     }, 80);
     return () => window.clearInterval(timer);
-  }, [dwellMs, isPlaying, isSlideshowOpen, move, selectedItem?.media.id, visibleItems.length]);
+  }, [
+    dwellMs,
+    isPlaying,
+    isSlideshowOpen,
+    move,
+    selectedItem?.media.id,
+    visibleItems.length,
+  ]);
 
   useEffect(() => {
     function handleKeyboard(event: KeyboardEvent) {
@@ -230,7 +228,6 @@ export function HomePage() {
     setIsImporting(true);
     setActionError("");
     const job = await importSavedPostsJsonFile(file);
-    setLatestJob(job);
     setIsImporting(false);
     if (job.status === "completed") {
       await refresh();
@@ -255,18 +252,15 @@ export function HomePage() {
     if (next) setSelectedMediaId(next.media.id);
     setUndoItem(item);
     await setMediaVisibility(item.media.id, "hidden");
-    await refresh();
   }
 
   async function restoreMedia(mediaId: string) {
     await setMediaVisibility(mediaId, "visible");
-    await refresh();
     if (undoItem?.media.id === mediaId) setUndoItem(undefined);
   }
 
   async function restoreEverything() {
     await restoreAllMedia();
-    await refresh();
   }
 
   function persistPlayback(patch: Parameters<typeof updateSettings>[0]) {
@@ -290,8 +284,8 @@ export function HomePage() {
 
       {isLoading ? (
         <div className="archive-loading">
-          <span>INS/ARCHIVE</span>
-          <strong>Opening the local image field…</strong>
+          <span>Instagram Viewer</span>
+          <strong>Opening your photos…</strong>
         </div>
       ) : null}
 
@@ -312,16 +306,13 @@ export function HomePage() {
           items={visibleItems}
           selectedId={selectedItem?.media.id}
           hiddenCount={hiddenItems.length}
-          sourceFrameCounts={sourceFrameCounts}
           viewMode={viewMode}
           hasFilters={hasFilters}
-          isDemo={isDemo}
           isImporting={isImporting}
           onSelect={(mediaId) => {
             setSelectedMediaId(mediaId);
             setElapsedMs(0);
           }}
-          onHide={(item) => void hideMedia(item)}
           onImport={() => fileInputRef.current?.click()}
           onOpenFilters={() => setIsFilterOpen(true)}
           onOpenSettings={() => setIsSettingsOpen(true)}
@@ -416,7 +407,10 @@ export function HomePage() {
           >
             <EyeOff size={16} aria-hidden="true" />
             <span>Frame hidden from future sessions.</span>
-            <button type="button" onClick={() => void restoreMedia(undoItem.media.id)}>
+            <button
+              type="button"
+              onClick={() => void restoreMedia(undoItem.media.id)}
+            >
               <RotateCcw size={14} aria-hidden="true" /> Undo
             </button>
             <button
@@ -429,19 +423,6 @@ export function HomePage() {
           </motion.div>
         ) : null}
       </AnimatePresence>
-
-      {latestJob?.status === "completed" && !showLanding ? (
-        <motion.div
-          className="archive-import-notice"
-          initial={{ opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
-          {latestJob.totalUniquePostsFound.toLocaleString()} sources indexed locally
-          <button type="button" aria-label="Dismiss import notice" onClick={() => setLatestJob(undefined)}>
-            <X size={14} aria-hidden="true" />
-          </button>
-        </motion.div>
-      ) : null}
     </div>
   );
 }

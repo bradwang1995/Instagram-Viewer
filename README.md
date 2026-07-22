@@ -1,6 +1,6 @@
 # Instagram Viewer
 
-A local-first, media-first viewer for Instagram Saved photos. Import `saved_posts.json`, move through a visual archive field, hide individual resolved frames, and run a configurable slideshow from one responsive page.
+A local-first, image-first viewer for Instagram Saved posts. Import `saved_posts.json`, browse accessible posts in a horizontal or grid view, and run a configurable slideshow from one responsive page.
 
 The current interface is a PhotoYoshi-inspired private archive: oversized editorial typography, a deep olive-black canvas, horizontal image navigation, sparse metadata, and an always-available playback dock. It remains a personal reference viewer, not an Instagram downloader, scraper, or full data-export explorer.
 
@@ -12,30 +12,51 @@ Live app: [bradwang1995.github.io/Instagram-Viewer](https://bradwang1995.github.
 
 1. Export your Instagram Saved posts JSON.
 2. Open the hosted app or run it locally.
-3. Import `saved_posts.json`.
+3. Import `saved_posts.json` (or the equivalent saved-posts JSON filename in your export).
 4. Browse the library or play the slideshow.
 
 The app does not ask for Instagram credentials and does not upload your JSON file to GitHub, GitHub Pages, or an application server.
 
+### What The Saved-Posts JSON Can Load
+
+The export supplies Instagram post URLs and descriptive metadata, not direct image URLs or carousel-child records. Each imported post therefore becomes one card, and Instagram Viewer loads that post's default first preview directly from Instagram through its official embed page. The JSON itself remains in browser-local storage, while the embed necessarily makes a normal request to Instagram.
+
+Compatibility requests are now scoped to the real viewport rather than the larger DOM preload window. Horizontal View requests only cards that are actually on screen (plus an explicitly selected card); Grid View requests only the visible row. Two requests may be in flight at once. The next two Grid rows can remain mounted for smooth scrolling without contacting Instagram until they become visible.
+
+An Instagram embed is a cross-origin document controlled by Instagram. The viewer cannot inspect its internal carousel, extract its child image URLs, remove its internal controls, or turn those children into separate parent-page cards. Meta's current API requires access tokens and is designed around media owned by authenticated professional accounts; it does not expose a saved-posts endpoint that resolves arbitrary saved URLs. The app does not use undocumented scraping endpoints or ask for Instagram credentials.
+
+## Current Viewer Refinement
+
+The active UI is branded `Instagram Viewer`. Functional text is rendered at 150% of the previous scale, and the two browsing modes are named `Horizontal View` and `Grid View`.
+
+- Horizontal View uses a virtual media track: only the visible photos and two neighboring items on each side are mounted. At `1920 × 1080`, the media surface occupies about 76.7% of the viewport height.
+- Grid View is four columns on desktop, shows one row per viewport, and preloads two additional rows. A large library therefore keeps no more than 12 desktop cards in the active DOM window without exposing the next row before scrolling.
+- Direct images inside the active window load immediately. Compatibility iframe navigation is restricted to the real viewport and uses a two-request queue; DOM overscan cards do not contact Instagram. Timeouts and terminal errors unmount the failed iframe and are remembered for the browser session instead of retrying on every virtual remount.
+- Resolved media is shown at normal brightness with `object-fit: contain`. Hover and selection use lift, scale, border, and shadow instead of dimming the other photos.
+- Photo cards contain only the media surface. Per-card source labels, creator/collection captions, ordinal counters, Hide/Open Source buttons, and parent-page carousel controls were removed. Cross-origin Instagram iframe internals cannot be guaranteed or restyled by the viewer.
+- The full media list remains reachable through the virtual track, and both scrollbars stay visually hidden.
+
+Ordinary `saved_posts.json` imports use one bounded compatibility preview per post. Native carousel-child extraction is deliberately outside the accepted MVP scope; the app does not scrape Instagram or fabricate children from a cross-origin iframe.
+
 ## PhotoYoshi-Inspired Archive Field
 
-> Implementation status: the full viewport archive-field redesign was implemented and browser-tested in July 2026. Legitimate carousel/media resolution remains the external-data gate; iframe-only imports continue in an explicitly labeled compatibility mode.
+> Implementation status: the full viewport archive-field redesign and viewport-scoped Instagram compatibility loading were implemented and browser-tested in July 2026. The standard export remains the only user input; iframe previews use honest loading and unavailable states.
 
-The selected direction treats the app as an animated editorial image field instead of a list beside an Instagram viewer. The empty state is deliberately simple: one full-screen composition whose primary action is importing the JSON export. After import, resolved media becomes a continuous horizontal ribbon with creator and collection context beneath each image. Vertical wheel input drives horizontal movement, pointer position adds restrained parallax, and an Index view provides a compact contact sheet.
+The selected direction treats the app as an animated editorial image field instead of a list beside an Instagram viewer. The empty state is deliberately simple: one full-screen composition whose primary action is importing the JSON export. After import, each saved post becomes one card in the virtual horizontal field, while Grid View provides a larger four-column contact sheet.
 
-The bottom dock owns the session: progress, Ribbon/Index mode, creator/collection filtering, dwell time, transition duration, transition preset, loop behavior, hidden-media recovery, and full-screen slideshow launch. Motion for React owns component/interaction motion and GSAP owns authored entrance and playback timelines.
+The bottom dock owns the session: Horizontal/Grid mode, filtering, playback settings, hidden-media recovery, and full-screen slideshow launch. Motion for React owns component/interaction motion and GSAP owns authored playback timelines.
 
 ### Implemented Checkpoint
 
 - Replaced the old white Instagram stage and shortcode/date library split with a full-viewport olive-black media canvas.
 - Added a JSON-only upload landing screen modeled on the PhotoYoshi composition without copying or hotlinking its media assets.
-- Added a horizontal, wheel-driven media ribbon and a compact Index view.
-- Shows creator, collection, source-frame position, and source link beneath each resolved frame.
+- Added a horizontal, wheel-driven media view and a four-column Grid View.
+- Keeps the photo surface free of per-card labels, counters, source links, and curation controls.
 - Keeps the bottom playback dock visible on desktop and mobile.
-- Mounts iframe compatibility previews only for the selected unresolved item and nearby neighbors instead of the entire library.
+- Virtualizes both layouts so only the current viewport and bounded preload window mount media.
 - Added IndexedDB `mediaItems` and `mediaPreferences` tables with deterministic media identity.
 - Migrates existing source posts to honest iframe-compatible media records without fabricating carousel children or thumbnails.
-- Added a thumbnail-based Visual Queue for resolved media and source-group frame counts.
+- Added an ordered visual queue that gives every resolved source frame its own card.
 - Added media-level Skip, Hide/Downvote, immediate Undo, Hidden Media, single restore, and restore-all flows.
 - Added creator, collection, local-tag/text, and advanced saved-date session filtering.
 - Added independent dwell time, transition duration, transition preset, shuffle, and loop behavior.
@@ -44,13 +65,13 @@ The bottom dock owns the session: progress, Ribbon/Index mode, creator/collectio
 - Added an explicit `?demo=1` fixture with eight non-personal source posts and nineteen resolved media items to prove multi-photo source playback.
 - Added responsive `1280 × 720` and `390 × 844` layouts, interaction tests, same-viewport comparison evidence, and a passing [`DESIGN-QA.md`](DESIGN-QA.md) report.
 
-### Investigation Findings
+### Historical Investigation Findings
 
-The current MVP is structurally sound, but its data and interface are organized around saved posts when the desired experience is organized around individual media items.
+Before the media-first redesign, the MVP was structurally sound but its data and interface were organized around saved posts rather than individual media items. The findings below explain the redesign decisions; the active Horizontal/Grid surfaces no longer use the old text-list model.
 
 - Shortcodes such as `DEMO001` and saved timestamps do not help users visually recognize a save.
 - A text-only library row is a weak browsing model for an image-focused product.
-- A carousel post is treated as one slideshow item, so playback advances from the first visible carousel frame directly to the next post instead of traversing every image in the carousel.
+- An unresolved carousel post is still one compatibility item because the export contains no child media. Resolved sources already advance through every supplied `MediaItem`.
 - The existing `hidden` field applies to an entire saved post. The future product needs reversible hide/downvote state per photo or video.
 - Search by shortcode has little everyday value. Search should prioritize creator, collection, and local tags once that metadata is available.
 - The current speed selector exposes only three dwell times. Dwell time, transition duration, transition style, shuffle, and looping should become separate settings.
@@ -88,14 +109,14 @@ Post B / media 1
 ...
 ```
 
-Post boundaries remain visible as subtle separators and provenance, but the slideshow counter should primarily report media progress, for example `Media 132 of 981 · Post 48 of 220`.
+Post provenance remains in the data model, while the browsing surfaces intentionally avoid post/media totals and ordinal labels.
 
 ### Target Workspace
 
 The selected mock establishes the dark Lightbox shell, but the right-side text list is only a visual placeholder for the future queue.
 
 - **Stage:** the dominant full-height media surface, with honest unavailable/loading states and controls that never compete with the image.
-- **Visual queue:** a thumbnail filmstrip or compact contact sheet, not a shortcode list. It should show post grouping without forcing the user to think in post records.
+- **Visual queue:** a virtual horizontal field or four-column Grid View, not a shortcode list. Every resolved media item is independently reachable.
 - **Session builder:** clicking a creator, collection, or filter creates a slideshow session from the matching visible media.
 - **Inspector:** provenance and advanced metadata stay available on demand instead of occupying every queue row.
 - **Hidden media tray:** excluded items remain recoverable and auditable.
@@ -168,19 +189,13 @@ Motion and GSAP should not animate the same property on the same element. Motion
 
 The current project uses React 18, so any React Three Fiber implementation must use a compatible major version or upgrade React deliberately. GPU effects should reduce resolution or disable expensive post-processing on constrained devices.
 
-### Media Source Decision Gate
+### Confirmed Instagram Source Path
 
-The current `saved_posts.json` import supplies URLs, timestamps, and sometimes collection labels. It does **not** supply the original saved images, carousel children, reliable thumbnails, creator handles, or CORS-safe media assets. The existing Instagram iframe is cross-origin, so the app cannot inspect its internal carousel or use its pixels as a WebGL texture.
+The only user input is Instagram's exported `saved_posts.json`. It supplies post URLs, timestamps, owner usernames, captions/titles, hashtags, and platform record IDs. It does **not** include the original image bytes, carousel-child URLs, reliable thumbnails, or CORS-safe media assets. The importer deduplicates repeated `value`/`href` URLs, preserves the available owner/caption metadata, and avoids treating structural labels such as `URL` as collections.
 
-One of these product paths must be chosen before media-level implementation begins:
+The selected credential-free path is Instagram's public embed for each eligible post. [Instagram's embed documentation](https://www.facebook.com/help/instagram/620154495870484) states that only public content with embedding enabled can be embedded. The app therefore loads from Instagram at viewing time; it does not ask the user for local image files or a resolved-media manifest. Compatibility embeds are limited to the real viewport and two concurrent navigations.
 
-| Path                                   | Capability                                                                                                                         | Trade-off                                                                                                                                             |
-| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| User-supplied local media/manifest     | Best match for the local-first privacy model; supports true thumbnails, carousel flattening, caching, hiding, and GPU transitions. | Requires users to provide a richer media package that does not currently exist in `saved_posts.json`.                                                 |
-| Official, authenticated media resolver | Could provide structured post/media/creator metadata when platform permissions allow it.                                           | Introduces authentication, a backend or token flow, policy review, deletion/retention rules, and incomplete coverage for unavailable/private content. |
-| Continue iframe-only                   | Preserves the current static, credential-free deployment.                                                                          | Cannot reliably implement per-photo carousel playback, visual thumbnails, per-photo hide, creator search, or pixel-based effects.                     |
-
-Automated scraping, unofficial tokens, and silent bulk downloading remain outside the product boundary.
+The embedded Instagram page can present its own carousel controls when Instagram permits it, but it remains cross-origin. The viewer cannot inspect that page, extract each child as an independent native card, remove controls inside it with certainty, or use its pixels for WebGL effects. The [official Meta Instagram API collection](https://www.postman.com/meta/instagram/collection/6yqw8pt/instagram-api) documents an access-token flow for Professional accounts; it is not a resolver for arbitrary URLs in a user's Saved export. Automated scraping, unofficial tokens, credentials pasted into the app, and silent bulk downloading remain outside the product boundary.
 
 ### Cache And Preference Persistence
 
@@ -212,7 +227,7 @@ The redesign remains local-first by default. Any future backend or authenticated
 - Hides/downvotes individual media items, persists the preference locally, and supports immediate or later restoration.
 - Includes an explicit cinematic demo mode at `?demo=1` without mixing demo posts into the user's library.
 - Adapts to desktop, tablet, and mobile widths without horizontal scrolling.
-- Opens the original Instagram post when needed.
+- Retains the canonical Instagram post URL locally as source provenance without placing an Open Source control on every photo.
 - Ignores personal export JSON files by default.
 
 ## What It Avoids
@@ -252,11 +267,11 @@ Cross-device sync would require user authentication, access controls, secure ser
 
 ## Preview Availability
 
-The JSON export contains Instagram links and timestamps, not the original photo files. Those imports therefore use Instagram's public embed page as an explicitly labeled compatibility mode. The media-first architecture also supports resolved media records when a legitimate local manifest or future official resolver supplies them.
+The JSON export contains Instagram links and descriptive metadata, not the original photo files. Those imports therefore use Instagram's public embed page as a bounded compatibility preview; no additional user-supplied image package is part of the workflow.
 
 - Public and available photo posts can render directly in the viewer.
 - Private, removed, age-restricted, or login-gated posts may not render.
-- The reload and Instagram buttons remain available when a particular embed is unavailable.
+- Unavailable direct images fall back from the asset URL to the preview URL, then show a quiet unavailable state without breaking the queue.
 
 The app does not read likes or comments and does not recreate Instagram's social interface.
 
@@ -339,8 +354,8 @@ src/
   tests/                Unit tests
 ```
 
-The ZIP importer and some richer components still exist in the codebase as reusable pieces, but the active UI is JSON-first and one-page. During local development, `/?demo=1` opens a non-personal 45-item fixture for UI testing; this path is disabled in production builds.
+The ZIP importer and some richer components still exist in the codebase as reusable pieces, but the active UI is saved-JSON-first and one-page. `/?demo=1` opens a bundled non-personal direct-image fixture for UI testing; `/?demo=1&view=grid` opens the same fixture directly in Grid View.
 
 ## Current Status
 
-The current MVP is a responsive one-page photo viewer with reliable selection, embedded photos, filters, infinite scrolling, slideshow controls, browser-local storage, and automated GitHub Pages deployment. See [PROGRESS.md](./PROGRESS.md) for the internal tracker.
+The accepted MVP is a responsive one-page Saved-post viewer with one default preview per post, bounded virtual scrolling, a four-column desktop grid, a full-height horizontal view, filters, slideshow controls, browser-local storage, and automated GitHub Pages deployment. See [PROGRESS.md](./PROGRESS.md) for the internal tracker.

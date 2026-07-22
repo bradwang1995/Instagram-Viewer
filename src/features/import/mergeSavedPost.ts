@@ -8,6 +8,7 @@ export function mergeSavedPost(
 
   return {
     ...existing,
+    externalId: existing.externalId ?? incoming.externalId,
     url: incoming.url || existing.url,
     canonicalUrl: incoming.canonicalUrl || existing.canonicalUrl,
     shortcode: incoming.shortcode ?? existing.shortcode,

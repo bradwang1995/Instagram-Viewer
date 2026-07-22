@@ -50,8 +50,16 @@ describe("extractPostsFromJson", () => {
               href: "https://www.instagram.com/p/ABC123/?igsh=test",
             },
             {
+              label: "Caption",
+              value: "A real caption",
+            },
+            {
               title: "Owner",
-              dict: [{ value: "example" }],
+              dict: [
+                {
+                  dict: [{ label: "Username", value: "example_owner" }],
+                },
+              ],
             },
           ],
           fbid: "example-fbid",
@@ -63,10 +71,14 @@ describe("extractPostsFromJson", () => {
       },
     );
 
-    expect(posts.map((post) => post.id)).toContain("post:ABC123");
+    expect(posts).toHaveLength(1);
     expect(posts[0]).toMatchObject({
       canonicalUrl: "https://www.instagram.com/p/ABC123/",
       savedAt: "2024-03-09T16:00:00.000Z",
+      externalId: "example-fbid",
+      embedAuthorName: "@example_owner",
+      description: "A real caption",
     });
+    expect(posts[0].collectionNames).not.toContain("URL");
   });
 });

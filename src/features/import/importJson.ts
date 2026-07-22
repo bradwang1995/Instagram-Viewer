@@ -2,7 +2,10 @@ import { db } from "../../db/db";
 import { bulkUpsertImportedPosts } from "../../db/postRepository";
 import type { ImportJob, ImportWarning, SavedPost } from "../../db/schema";
 import { extractPostsFromJson } from "./extractPostsFromJson";
+import { extractResolvedMediaManifest } from "./extractResolvedMediaManifest";
 import { mergeSavedPost } from "./mergeSavedPost";
+
+const MAX_JSON_IMPORT_BYTES = 120 * 1024 * 1024;
 
 export async function importSavedPostsJsonFile(file: File): Promise<ImportJob> {
   const startedAt = new Date().toISOString();
@@ -32,14 +35,21 @@ export async function importSavedPostsJsonFile(file: File): Promise<ImportJob> {
       });
       throw new Error("Please choose your Instagram saved photos JSON file.");
     }
+    if (file.size > MAX_JSON_IMPORT_BYTES) {
+      throw new Error("JSON files larger than 120 MiB are not supported.");
+    }
 
     const text = await file.text();
     const json = JSON.parse(text) as unknown;
-    const extractedPosts = extractPostsFromJson(json, {
+    const context = {
       sourceFilePath: file.name,
-      sourceFormat: "json",
+      sourceFormat: "json" as const,
       candidateCollectionName: "saved photos",
-    });
+    };
+    const manifest = extractResolvedMediaManifest(json, context);
+    const extractedPosts = manifest.matched
+      ? manifest.posts
+      : extractPostsFromJson(json, context);
     const postsById = dedupePosts(extractedPosts);
     const uniquePosts = Array.from(postsById.values());
 
@@ -53,7 +63,10 @@ export async function importSavedPostsJsonFile(file: File): Promise<ImportJob> {
       });
     }
 
-    const result = await bulkUpsertImportedPosts(uniquePosts);
+    const result = await bulkUpsertImportedPosts(
+      uniquePosts,
+      manifest.mediaItems,
+    );
     job.totalNewPostsAdded = result.newCount;
     job.totalExistingPostsUpdated = result.updatedCount;
     job.status = "completed";

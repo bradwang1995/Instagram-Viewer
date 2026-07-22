@@ -1,41 +1,94 @@
-import { ExternalLink, EyeOff, LoaderCircle } from "lucide-react";
+import { ImageOff, LoaderCircle } from "lucide-react";
 import { motion } from "motion/react";
-import { useEffect, useState, type CSSProperties, type KeyboardEvent } from "react";
-import type { MediaQueueItem } from "../../features/media/mediaQueue";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type KeyboardEvent,
+} from "react";
 import { getInstagramEmbedUrl } from "../../features/embed/instagramEmbedUrl";
+import type { MediaQueueItem } from "../../features/media/mediaQueue";
+
+const resolvedCandidateByRevision = new Map<string, string>();
+const failedDirectMediaRevisions = new Set<string>();
+const failedEmbedMediaRevisions = new Set<string>();
+const MAX_CONCURRENT_EMBED_REQUESTS = 2;
+const EMBED_REQUEST_TIMEOUT_MS = 12_000;
+let activeEmbedRequests = 0;
+const pendingEmbedRequests: EmbedRequest[] = [];
+
+type EmbedRequest = {
+  cancelled: boolean;
+  granted: boolean;
+  onGrant: () => void;
+};
 
 type ArchiveMediaCardProps = {
   item: MediaQueueItem;
   index: number;
-  total: number;
-  sourceFrameCount: number;
   selected: boolean;
-  mountEmbed: boolean;
+  allowCompatibilityPreview: boolean;
+  layoutStyle: CSSProperties;
   onSelect: () => void;
-  onHide: () => void;
 };
 
 export function ArchiveMediaCard({
   item,
   index,
-  total,
-  sourceFrameCount,
   selected,
-  mountEmbed,
+  allowCompatibilityPreview,
+  layoutStyle,
   onSelect,
-  onHide,
 }: ArchiveMediaCardProps) {
   const { media, post } = item;
-  const resolvedUrl = media.assetUrl ?? media.previewUrl;
+  const mediaRevision = `${media.id}\u0000${media.assetUrl ?? ""}\u0000${media.previewUrl ?? ""}`;
   const creator =
-    media.creatorHandle ?? post.embedAuthorName ?? "Instagram source";
-  const collection = post.collectionNames[0] ?? "Saved posts";
-  const aspect =
-    media.width && media.height ? media.width / media.height : 0.78;
-  const cardStyle = {
-    "--media-aspect": Math.max(0.62, Math.min(aspect, 1.65)).toFixed(3),
-    "--card-order": index,
-  } as CSSProperties;
+    media.creatorHandle ?? post.embedAuthorName ?? "Instagram photo";
+  const candidateUrls = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          [media.assetUrl, media.previewUrl].filter((value): value is string =>
+            Boolean(value),
+          ),
+        ),
+      ),
+    [media.assetUrl, media.previewUrl],
+  );
+  const cachedCandidate = resolvedCandidateByRevision.get(mediaRevision);
+  const [candidateIndex, setCandidateIndex] = useState(() =>
+    Math.max(0, cachedCandidate ? candidateUrls.indexOf(cachedCandidate) : 0),
+  );
+  const [isLoading, setIsLoading] = useState(
+    candidateUrls.length > 0 && !cachedCandidate,
+  );
+  const [hasFailed, setHasFailed] = useState(() =>
+    failedDirectMediaRevisions.has(mediaRevision),
+  );
+  const resolvedUrl = candidateUrls[candidateIndex];
+
+  useEffect(() => {
+    const cached = resolvedCandidateByRevision.get(mediaRevision);
+    const nextIndex = cached ? candidateUrls.indexOf(cached) : 0;
+    const failed = failedDirectMediaRevisions.has(mediaRevision);
+    setCandidateIndex(Math.max(0, nextIndex));
+    setIsLoading(candidateUrls.length > 0 && !cached && !failed);
+    setHasFailed(failed);
+  }, [candidateUrls, mediaRevision]);
+
+  function handleImageError() {
+    if (candidateIndex + 1 < candidateUrls.length) {
+      setCandidateIndex((value) => value + 1);
+      setIsLoading(true);
+      return;
+    }
+    setIsLoading(false);
+    setHasFailed(true);
+    failedDirectMediaRevisions.add(mediaRevision);
+  }
 
   function selectFromKeyboard(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Enter" || event.key === " ") {
@@ -48,113 +101,190 @@ export function ArchiveMediaCard({
     <motion.article
       className={`archive-card${selected ? " is-selected" : ""}`}
       data-media-id={media.id}
+      data-media-index={index}
       data-testid="archive-media-card"
-      style={cardStyle}
-      initial={{ opacity: 0, y: 70, rotate: index % 2 ? 1.2 : -1.1 }}
-      animate={{
-        opacity: 1,
-        y: 0,
-        rotate: selected ? 0 : index % 2 ? 0.7 : -0.6,
-      }}
+      style={layoutStyle}
+      initial={{ opacity: 0, y: 55, scale: 0.985 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
       transition={{
-        duration: 0.72,
-        delay: Math.min(index * 0.035, 0.45),
+        duration: 0.62,
+        delay: Math.min((index % 12) * 0.025, 0.22),
         ease: [0.22, 1, 0.36, 1],
       }}
-      whileHover={{ y: -12, rotate: 0 }}
+      whileHover={{ y: -10, scale: 1.015 }}
     >
       <div
         className="archive-card-hit"
         role="button"
         tabIndex={0}
-        aria-label={`${creator}, frame ${media.sourceIndex + 1} of ${sourceFrameCount}`}
+        aria-label={`View photo from ${creator}`}
         onClick={onSelect}
         onKeyDown={selectFromKeyboard}
       >
         <div className="archive-media-surface">
-          {resolvedUrl ? (
-            <img
-              src={resolvedUrl}
-              alt={media.caption ?? `${creator} saved frame`}
-              loading={index < 6 ? "eager" : "lazy"}
-              draggable={false}
-            />
-          ) : mountEmbed ? (
-            <CroppedInstagramPreview item={item} />
-          ) : (
-            <div className="archive-source-plate">
-              <span>Instagram source</span>
-              <strong>{post.shortcode ?? String(index + 1).padStart(4, "0")}</strong>
-              <small>Move here to load the live preview</small>
+          {resolvedUrl && !hasFailed ? (
+            <>
+              <img
+                key={resolvedUrl}
+                src={resolvedUrl}
+                alt={media.caption ?? `${creator} saved photo`}
+                loading="eager"
+                decoding="async"
+                referrerPolicy="no-referrer"
+                draggable={false}
+                onLoad={() => {
+                  resolvedCandidateByRevision.set(mediaRevision, resolvedUrl);
+                  failedDirectMediaRevisions.delete(mediaRevision);
+                  setIsLoading(false);
+                }}
+                onError={handleImageError}
+              />
+              {isLoading ? (
+                <MediaLoadingState className="archive-image-loading" />
+              ) : null}
+            </>
+          ) : hasFailed ? (
+            <div
+              className="archive-media-unavailable"
+              role="img"
+              aria-label="Photo unavailable"
+            >
+              <ImageOff size={26} aria-hidden="true" />
             </div>
-          )}
-          <span className="archive-media-shade" aria-hidden="true" />
-          <span className="archive-card-number">
-            {String(index + 1).padStart(2, "0")}
-          </span>
+          ) : allowCompatibilityPreview ? (
+            <CroppedInstagramPreview item={item} />
+          ) : null}
         </div>
       </div>
-
-      <footer className="archive-card-caption">
-        <div>
-          <strong>{creator}</strong>
-          <span>
-            {collection} · frame {media.sourceIndex + 1}/{sourceFrameCount}
-          </span>
-        </div>
-        <div className="archive-card-actions">
-          <button
-            type="button"
-            aria-label="Hide this media"
-            title="Hide this media"
-            onClick={(event) => {
-              event.stopPropagation();
-              onHide();
-            }}
-          >
-            <EyeOff size={15} aria-hidden="true" />
-          </button>
-          <a
-            href={post.canonicalUrl}
-            target="_blank"
-            rel="noreferrer"
-            aria-label="Open source on Instagram"
-            title="Open source on Instagram"
-          >
-            <ExternalLink size={15} aria-hidden="true" />
-          </a>
-        </div>
-      </footer>
-
-      <span className="archive-card-total" aria-hidden="true">
-        /{String(total).padStart(2, "0")}
-      </span>
     </motion.article>
   );
 }
 
 function CroppedInstagramPreview({ item }: { item: MediaQueueItem }) {
-  const [isLoading, setIsLoading] = useState(true);
   const embedUrl = getInstagramEmbedUrl(item.post);
+  const embedRevision = `${item.media.id}\u0000${embedUrl}`;
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasFailed, setHasFailed] = useState(() =>
+    failedEmbedMediaRevisions.has(embedRevision),
+  );
+  const { granted, release } = useEmbedRequestPermit(
+    embedUrl,
+    !hasFailed,
+  );
 
-  useEffect(() => setIsLoading(true), [embedUrl]);
+  useEffect(() => {
+    const failed = failedEmbedMediaRevisions.has(embedRevision);
+    setHasFailed(failed);
+    setIsLoading(!failed);
+  }, [embedRevision]);
+  useEffect(() => {
+    if (!granted || !isLoading || hasFailed) return undefined;
+    const timeout = window.setTimeout(() => {
+      failedEmbedMediaRevisions.add(embedRevision);
+      setHasFailed(true);
+      setIsLoading(false);
+      release();
+    }, EMBED_REQUEST_TIMEOUT_MS);
+    return () => window.clearTimeout(timeout);
+  }, [embedRevision, granted, hasFailed, isLoading, release]);
 
   return (
     <div className="archive-embed-crop">
-      {isLoading ? (
-        <div className="archive-embed-loading">
-          <LoaderCircle size={20} className="spin" aria-hidden="true" />
-          <span>Loading source preview</span>
+      {hasFailed ? (
+        <div
+          className="archive-media-unavailable"
+          role="img"
+          aria-label="Photo unavailable"
+        >
+          <ImageOff size={26} aria-hidden="true" />
         </div>
+      ) : isLoading ? (
+        <MediaLoadingState className="archive-embed-loading" />
       ) : null}
-      <iframe
-        src={embedUrl}
-        title={`Instagram preview ${item.post.shortcode ?? item.post.id}`}
-        loading="lazy"
-        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-        referrerPolicy="strict-origin-when-cross-origin"
-        onLoad={() => setIsLoading(false)}
-      />
+      {granted && !hasFailed ? (
+        <iframe
+          src={embedUrl}
+          title={`Instagram photo preview ${item.post.shortcode ?? item.post.id}`}
+          loading="lazy"
+          scrolling="no"
+          tabIndex={-1}
+          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+          referrerPolicy="strict-origin-when-cross-origin"
+          onLoad={() => {
+            setIsLoading(false);
+            release();
+          }}
+          onError={() => {
+            failedEmbedMediaRevisions.add(embedRevision);
+            setHasFailed(true);
+            setIsLoading(false);
+            release();
+          }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+function useEmbedRequestPermit(key: string, enabled: boolean) {
+  const [granted, setGranted] = useState(false);
+  const releaseRef = useRef<() => void>(() => undefined);
+
+  useEffect(() => {
+    setGranted(false);
+    if (!enabled) {
+      releaseRef.current = () => undefined;
+      return undefined;
+    }
+    releaseRef.current = acquireEmbedRequest(() => setGranted(true));
+    return () => releaseRef.current();
+  }, [enabled, key]);
+
+  const release = useCallback(() => {
+    releaseRef.current();
+    releaseRef.current = () => undefined;
+  }, []);
+
+  return { granted, release };
+}
+
+function acquireEmbedRequest(onGrant: () => void): () => void {
+  const request: EmbedRequest = {
+    cancelled: false,
+    granted: false,
+    onGrant,
+  };
+  pendingEmbedRequests.push(request);
+  drainEmbedRequests();
+
+  return () => {
+    if (request.cancelled) return;
+    request.cancelled = true;
+    if (request.granted) {
+      request.granted = false;
+      activeEmbedRequests = Math.max(0, activeEmbedRequests - 1);
+      drainEmbedRequests();
+    }
+  };
+}
+
+function drainEmbedRequests() {
+  while (
+    activeEmbedRequests < MAX_CONCURRENT_EMBED_REQUESTS &&
+    pendingEmbedRequests.length > 0
+  ) {
+    const request = pendingEmbedRequests.shift();
+    if (!request || request.cancelled) continue;
+    request.granted = true;
+    activeEmbedRequests += 1;
+    request.onGrant();
+  }
+}
+
+function MediaLoadingState({ className }: { className: string }) {
+  return (
+    <span className={className} role="status" aria-label="Loading photo">
+      <LoaderCircle size={22} className="spin" aria-hidden="true" />
+    </span>
   );
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getAllMediaItems,
   getAllMediaPreferences,
@@ -10,37 +10,56 @@ import { isDemoMode, usePosts } from "./usePosts";
 
 export function useMediaLibrary() {
   const postsState = usePosts();
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const demo = isDemoMode();
+  const postsRef = useRef(postsState.posts);
+  postsRef.current = postsState.posts;
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>(() =>
+    demo ? createDemoMediaItems(postsState.posts) : [],
+  );
   const [preferences, setPreferences] = useState<MediaPreference[]>([]);
   const [mediaError, setMediaError] = useState<string>();
   const [isMediaLoading, setIsMediaLoading] = useState(true);
-  const demo = isDemoMode();
+  const refreshGeneration = useRef(0);
 
   const refreshMedia = useCallback(async () => {
+    const generation = ++refreshGeneration.current;
     try {
       setMediaError(undefined);
+
+      if (demo) {
+        const storedPreferences = await getAllMediaPreferences();
+        if (generation !== refreshGeneration.current) return;
+        setMediaItems(createDemoMediaItems(postsRef.current));
+        setPreferences(storedPreferences);
+        return;
+      }
+
       const [storedItems, storedPreferences] = await Promise.all([
         getAllMediaItems(),
         getAllMediaPreferences(),
       ]);
-      setMediaItems(
-        demo ? createDemoMediaItems(postsState.posts) : storedItems,
-      );
+      if (generation !== refreshGeneration.current) return;
+      setMediaItems(storedItems);
       setPreferences(storedPreferences);
     } catch (error) {
+      if (generation !== refreshGeneration.current) return;
       setMediaError(
         error instanceof Error ? error.message : "Could not load media.",
       );
     } finally {
-      setIsMediaLoading(false);
+      if (generation === refreshGeneration.current) {
+        setIsMediaLoading(false);
+      }
     }
-  }, [demo, postsState.posts]);
+  }, [demo]);
 
   useEffect(() => {
     void refreshMedia();
     window.addEventListener("instagram-viewer:db-changed", refreshMedia);
-    return () =>
+    return () => {
+      refreshGeneration.current += 1;
       window.removeEventListener("instagram-viewer:db-changed", refreshMedia);
+    };
   }, [refreshMedia]);
 
   const queue = useMemo(
@@ -55,9 +74,6 @@ export function useMediaLibrary() {
     preferences,
     isDemo: demo,
     error: postsState.error ?? mediaError,
-    refresh: async () => {
-      await postsState.refresh();
-      await refreshMedia();
-    },
+    refresh: postsState.refresh,
   };
 }
