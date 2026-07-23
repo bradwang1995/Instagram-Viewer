@@ -8,7 +8,7 @@ import {
 } from "../features/media/virtualMediaLayout";
 
 describe("virtual media layout", () => {
-  it("keeps a desktop grid to the visible row plus one preloaded row", () => {
+  it("keeps a dense desktop grid to visible rows plus bounded preload", () => {
     const metrics = getGridMetrics(1_800, 1920, 900);
     const firstWindow = getGridWindow(1_800, 0, metrics);
     const laterWindow = getGridWindow(
@@ -18,12 +18,12 @@ describe("virtual media layout", () => {
     );
 
     expect(metrics.columns).toBe(4);
-    expect(firstWindow[4].top).toBeGreaterThanOrEqual(900);
-    expect(firstWindow).toHaveLength(8);
+    expect(firstWindow[8].top).toBeGreaterThanOrEqual(850);
+    expect(firstWindow).toHaveLength(12);
     expect(firstWindow.map((item) => item.index)).toEqual(
-      Array.from({ length: 8 }, (_, index) => index),
+      Array.from({ length: 12 }, (_, index) => index),
     );
-    expect(laterWindow).toHaveLength(8);
+    expect(laterWindow).toHaveLength(12);
     expect(laterWindow[0].index).toBe(480);
     expect(metrics.totalHeight).toBeGreaterThan(900);
     const finalWindow = getGridWindow(
@@ -44,8 +44,8 @@ describe("virtual media layout", () => {
     const middleOffset = metrics.layouts[900].left;
     const middleWindow = getRibbonWindow(metrics.layouts, middleOffset, 1920);
 
-    expect(firstWindow.length).toBeLessThanOrEqual(8);
-    expect(middleWindow.length).toBeLessThanOrEqual(9);
+    expect(firstWindow.length).toBeLessThanOrEqual(9);
+    expect(middleWindow.length).toBeLessThanOrEqual(11);
     expect(middleWindow.some((item) => item.index === 900)).toBe(true);
     expect(metrics.totalWidth).toBeGreaterThan(1_000_000);
     expect(
@@ -86,7 +86,7 @@ describe("virtual media layout", () => {
             layout.left + layout.width >= offset &&
             layout.left <= offset + width,
         ).length;
-        expect(window.length).toBeLessThanOrEqual(visibleCount + 4);
+        expect(window.length).toBeLessThanOrEqual(visibleCount + 6);
       }
 
       const finalWindow = getRibbonWindow(
@@ -102,7 +102,7 @@ describe("virtual media layout", () => {
     expect(getGridMetrics(100, 900, 700).columns).toBe(2);
     const mobile = getGridMetrics(100, 390, 654);
     expect(mobile.columns).toBe(1);
-    expect(getGridWindow(100, 0, mobile)).toHaveLength(2);
-    expect(getGridWindow(100, 0, mobile)[1].top).toBeGreaterThanOrEqual(654);
+    expect(getGridWindow(100, 0, mobile)).toHaveLength(3);
+    expect(getGridWindow(100, 0, mobile)[1].top).toBeLessThan(654);
   });
 });

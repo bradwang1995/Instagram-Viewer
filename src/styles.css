@@ -28,9 +28,7 @@
 
 * {
   box-sizing: border-box;
-  cursor:
-    url("/cursors/instagram-viewer-cursor.png") 3 3,
-    auto !important;
+  cursor: default !important;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -43,9 +41,6 @@ body,
   min-height: 100%;
   margin: 0;
   background: var(--black);
-  cursor:
-    url("/cursors/instagram-viewer-cursor.png") 3 3,
-    auto;
 }
 
 body {
@@ -61,9 +56,6 @@ select {
 button,
 a {
   -webkit-tap-highlight-color: transparent;
-  cursor:
-    url("/cursors/instagram-viewer-cursor.png") 3 3,
-    pointer;
 }
 
 button:focus-visible,
@@ -76,7 +68,6 @@ select:focus-visible,
 }
 
 button:disabled {
-  cursor: not-allowed;
   opacity: 0.35;
 }
 
@@ -106,26 +97,21 @@ p {
 }
 
 .archive-logo {
-  display: grid;
-  gap: 2px;
-  color: var(--paper);
-  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
 }
 
 .archive-logo strong {
+  background: var(--instagram-gradient);
+  background-clip: text;
   font-family: var(--display-font);
-  font-size: 0.8rem;
+  font-size: 1.6rem;
   font-style: italic;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.archive-logo span {
-  color: var(--dim);
-  font-size: 0.57rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-weight: 780;
+  letter-spacing: -0.055em;
+  line-height: 1;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 /* Landing */
@@ -346,9 +332,57 @@ p {
 }
 
 .archive-header {
-  height: 72px;
+  display: grid;
+  height: 104px;
+  grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
+  gap: 24px;
   background: rgb(5 6 6 / 72%);
   backdrop-filter: blur(12px);
+}
+
+.archive-header .archive-logo {
+  justify-self: start;
+}
+
+.archive-view-tabs {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  justify-content: center;
+  gap: 6px;
+}
+
+.archive-view-tabs button {
+  display: inline-flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border: 1px solid transparent;
+  border-radius: 18px;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 24px;
+  font-size: 1.08rem;
+  font-weight: 780;
+  letter-spacing: -0.025em;
+  transition:
+    border-color 180ms ease,
+    background 180ms ease,
+    color 180ms ease,
+    transform 180ms ease;
+}
+
+.archive-view-tabs button:hover {
+  color: var(--paper);
+  transform: translateY(-1px);
+}
+
+.archive-view-tabs button.is-active {
+  border-color: rgb(255 77 154 / 38%);
+  background: linear-gradient(135deg, #24131e 0%, #171019 100%);
+  color: #fff;
+  box-shadow: 0 12px 36px rgb(255 77 154 / 13%);
 }
 
 .archive-import-link {
@@ -359,8 +393,8 @@ p {
   background: transparent;
   color: var(--paper);
   padding: 0;
-  cursor: pointer;
-  font-size: 0.68rem;
+  justify-self: end;
+  font-size: 1rem;
   font-weight: 780;
 }
 
@@ -370,7 +404,7 @@ p {
 
 .archive-scroller {
   position: absolute;
-  inset: 72px 0 88px;
+  inset: 104px 0 88px;
   z-index: 4;
   overflow-x: auto;
   overflow-y: hidden;
@@ -405,9 +439,7 @@ p {
 .archive-card-hit {
   width: 100%;
   height: 100%;
-  cursor:
-    url("/cursors/instagram-viewer-cursor.png") 3 3,
-    pointer;
+  border-radius: 22px;
 }
 
 .archive-media-surface {
@@ -415,9 +447,12 @@ p {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  border: 0;
-  background: #0b0c0b;
-  box-shadow: 0 28px 85px rgb(0 0 0 / 42%);
+  border: 2px solid #2a202b;
+  border-radius: inherit;
+  background: #0f0d10;
+  box-shadow:
+    inset 0 0 0 1px rgb(0 0 0 / 55%),
+    0 28px 85px rgb(0 0 0 / 42%);
   transition:
     box-shadow 420ms ease;
 }
@@ -455,9 +490,10 @@ p {
 }
 
 .archive-embed-crop {
-  inset: 50% 0 auto;
+  inset: 50% -2px auto;
   aspect-ratio: 1;
   overflow: hidden;
+  border-radius: inherit;
   background: #0a0b0a;
   transform: translateY(-50%);
 }
@@ -465,9 +501,9 @@ p {
 .archive-embed-crop iframe {
   position: absolute;
   top: -60px;
-  left: 0;
+  left: -2px;
   display: block;
-  width: 100%;
+  width: calc(100% + 4px);
   height: calc(100% + 200px);
   border: 0;
   background: #0a0b0a;
@@ -495,18 +531,16 @@ p {
   right: 0;
   bottom: 0;
   left: 0;
-  display: grid;
+  display: flex;
   height: 88px;
-  grid-template-columns: 1fr auto;
   align-items: center;
-  gap: 18px;
+  justify-content: flex-end;
   border-top: 1px solid var(--line);
   background: rgb(5 6 6 / 88%);
   padding: 0 clamp(18px, 2.2vw, 38px);
   backdrop-filter: blur(18px);
 }
 
-.dock-modes,
 .dock-actions {
   display: flex;
   align-items: center;
@@ -517,7 +551,6 @@ p {
   justify-content: flex-end;
 }
 
-.dock-modes button,
 .dock-actions button {
   display: inline-flex;
   min-height: 48px;
@@ -528,20 +561,14 @@ p {
   background: transparent;
   color: var(--muted);
   padding: 0 14px;
-  font-size: 0.62rem;
+  font-size: 1.08rem;
   font-weight: 760;
   letter-spacing: 0.01em;
 }
 
-.dock-modes button:hover,
 .dock-actions button:hover,
-.dock-modes button.is-active,
 .dock-actions button.is-active {
   color: var(--paper);
-}
-
-.dock-modes button.is-active {
-  background: #181119;
 }
 
 .dock-actions .dock-play {
@@ -918,22 +945,22 @@ p {
 
 .slideshow-embed {
   position: relative;
-  width: min(100vw, 100dvh);
-  aspect-ratio: 1;
-  height: auto;
+  width: min(92vw, 760px);
+  height: min(calc(100dvh - 150px), 900px);
   overflow: hidden;
+  border: 2px solid #2a202b;
+  border-radius: 24px;
   background: #050405;
+  box-shadow: 0 32px 120px rgb(0 0 0 / 58%);
 }
 
 .slideshow-embed iframe {
-  position: absolute;
-  top: -60px;
-  left: 0;
+  display: block;
   width: 100%;
-  height: calc(100% + 200px);
+  height: 100%;
   border: 0;
   background: #050405;
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .slideshow-film-flash {
@@ -1105,14 +1132,40 @@ p {
 }
 
 @media (max-width: 980px) {
-  .archive-dock {
+  .archive-header {
+    height: 136px;
     grid-template-columns: 1fr auto;
-    gap: 8px;
+    grid-template-rows: 64px 72px;
+    gap: 0 16px;
+    padding-inline: 20px;
   }
 
-  .dock-modes button,
+  .archive-header .archive-logo {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .archive-import-link {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .archive-view-tabs {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .archive-scroller {
+    inset: 136px 0 88px;
+  }
+
+  .archive-dock {
+    gap: 0;
+  }
+
   .dock-actions button {
-    padding-inline: 8px;
+    padding-inline: 12px;
+    font-size: 0.92rem;
   }
 
   .archive-sheet {
@@ -1133,15 +1186,42 @@ p {
     min-height: 0;
   }
 
-  .landing-header,
-  .archive-header {
+  .landing-header {
     height: 64px;
     padding: 0 15px;
   }
 
-  .archive-logo span,
   .landing-step {
     display: none;
+  }
+
+  .archive-header {
+    height: 118px;
+    grid-template-rows: 50px 68px;
+    gap: 0 10px;
+    padding: 0 12px;
+  }
+
+  .archive-logo strong {
+    font-size: 1.15rem;
+  }
+
+  .archive-view-tabs {
+    gap: 4px;
+  }
+
+  .archive-view-tabs button {
+    min-height: 50px;
+    gap: 6px;
+    border-radius: 14px;
+    padding-inline: 10px;
+    font-size: 0.68rem;
+    letter-spacing: -0.03em;
+  }
+
+  .archive-view-tabs button svg {
+    width: 17px;
+    height: 17px;
   }
 
   .landing-wordmark {
@@ -1186,32 +1266,17 @@ p {
   }
 
   .archive-scroller {
-    inset: 64px 0 126px;
+    inset: 118px 0 74px;
   }
 
   .archive-dock {
-    height: 126px;
-    grid-template-columns: 1fr;
-    grid-template-rows: 56px 58px;
-    gap: 2px;
+    height: 74px;
+    justify-content: center;
     padding: 5px 10px;
   }
 
-  .dock-modes {
-    grid-column: 1;
-    grid-row: 1;
-    justify-content: center;
-  }
-
-  .dock-modes button {
-    min-height: 44px;
-    padding-inline: 10px;
-    font-size: 0.56rem;
-  }
-
   .dock-actions {
-    grid-column: 1;
-    grid-row: 2;
+    width: 100%;
     justify-content: center;
   }
 
@@ -1225,7 +1290,7 @@ p {
   .dock-actions > button:not(.dock-play) {
     min-height: 44px;
     padding-inline: 8px;
-    font-size: 0.54rem;
+    font-size: 0.64rem;
   }
 
   .archive-sheet {
@@ -1262,6 +1327,12 @@ p {
     height: 100dvh;
   }
 
+  .slideshow-embed {
+    width: calc(100vw - 20px);
+    height: calc(100dvh - 132px);
+    border-radius: 18px;
+  }
+
   .slideshow-controls {
     grid-template-columns: 1fr auto;
     grid-template-rows: 28px 60px;
@@ -1292,7 +1363,7 @@ p {
 
   .archive-undo {
     right: 12px;
-    bottom: 116px;
+    bottom: 68px;
     left: 12px;
     justify-content: space-between;
     transform: none;

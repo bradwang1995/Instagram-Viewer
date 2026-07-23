@@ -22,15 +22,21 @@ import {
 import { preloadMediaItems } from "../features/media/mediaPreload";
 import { useMediaLibrary } from "../hooks/useMediaLibrary";
 
+function getViewModeFromUrl(): ArchiveViewMode {
+  return new URLSearchParams(window.location.search).get("view") === "grid"
+    ? "grid"
+    : "ribbon";
+}
+
+function getViewModeParam(viewMode: ArchiveViewMode): string {
+  return viewMode === "grid" ? "grid" : "horizontal";
+}
+
 export function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { posts, queue, isLoading, error, refresh } = useMediaLibrary();
   const [selectedMediaId, setSelectedMediaId] = useState<string>();
-  const [viewMode, setViewMode] = useState<ArchiveViewMode>(() =>
-    new URLSearchParams(window.location.search).get("view") === "grid"
-      ? "grid"
-      : "ribbon",
-  );
+  const [viewMode, setViewMode] = useState<ArchiveViewMode>(getViewModeFromUrl);
   const [query, setQuery] = useState("");
   const [creator, setCreator] = useState("");
   const [collection, setCollection] = useState("");
@@ -62,6 +68,20 @@ export function HomePage() {
     [],
   );
 
+  const setViewModeRoute = useCallback((mode: ArchiveViewMode) => {
+    const url = new URL(window.location.href);
+    const nextView = getViewModeParam(mode);
+    if (url.searchParams.get("view") !== nextView) {
+      url.searchParams.set("view", nextView);
+      window.history.pushState(
+        {},
+        "",
+        `${url.pathname}${url.search}${url.hash}`,
+      );
+    }
+    setViewMode(mode);
+  }, []);
+
   const setSlideshowRoute = useCallback(
     (open: boolean, replace = false) => {
       const url = new URL(window.location.href);
@@ -78,10 +98,23 @@ export function HomePage() {
   );
 
   useEffect(() => {
+    const url = new URL(window.location.href);
+    const initialView = getViewModeFromUrl();
+    const initialViewParam = getViewModeParam(initialView);
+    if (url.searchParams.get("view") !== initialViewParam) {
+      url.searchParams.set("view", initialViewParam);
+      window.history.replaceState(
+        {},
+        "",
+        `${url.pathname}${url.search}${url.hash}`,
+      );
+    }
+
     const handleHistoryChange = () => {
       const open = new URLSearchParams(window.location.search).has(
         "slideshow",
       );
+      setViewMode(getViewModeFromUrl());
       setIsSlideshowOpen(open);
       setIsPlaying(open);
       setElapsedMs(0);
@@ -267,8 +300,14 @@ export function HomePage() {
           closeSlideshow();
         }
       }
-      if (event.key === "ArrowRight") move(1);
-      if (event.key === "ArrowLeft") move(-1);
+      const hasInteractiveSlideshowEmbed = Boolean(
+        isSlideshowOpen &&
+          selectedItem &&
+          !selectedItem.media.assetUrl &&
+          !selectedItem.media.previewUrl,
+      );
+      if (event.key === "ArrowRight" && !hasInteractiveSlideshowEmbed) move(1);
+      if (event.key === "ArrowLeft" && !hasInteractiveSlideshowEmbed) move(-1);
       if (event.key === " " && isSlideshowOpen) {
         event.preventDefault();
         setIsPlaying((value) => !value);
@@ -415,7 +454,7 @@ export function HomePage() {
           onImport={() => fileInputRef.current?.click()}
           onOpenFilters={() => setIsFilterOpen(true)}
           onOpenSettings={() => setIsSettingsOpen(true)}
-          onViewModeChange={setViewMode}
+          onViewModeChange={setViewModeRoute}
           onStartSlideshow={openSlideshow}
         />
       ) : null}
@@ -481,6 +520,7 @@ export function HomePage() {
             onPrevious={() => move(-1)}
             onNext={() => move(1)}
             onTogglePlaying={() => setIsPlaying((value) => !value)}
+            onPause={() => setIsPlaying(false)}
             onOpenSettings={() => setIsSettingsOpen(true)}
             onHide={() => selectedItem && void hideMedia(selectedItem)}
             onUnavailable={() =>

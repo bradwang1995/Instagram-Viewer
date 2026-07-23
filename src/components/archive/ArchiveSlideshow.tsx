@@ -27,6 +27,7 @@ type ArchiveSlideshowProps = {
   onPrevious: () => void;
   onNext: () => void;
   onTogglePlaying: () => void;
+  onPause: () => void;
   onOpenSettings: () => void;
   onHide: () => void;
   onUnavailable: () => void;
@@ -46,6 +47,7 @@ export function ArchiveSlideshow({
   onPrevious,
   onNext,
   onTogglePlaying,
+  onPause,
   onOpenSettings,
   onHide,
   onUnavailable,
@@ -55,6 +57,7 @@ export function ArchiveSlideshow({
   const creator =
     item.media.creatorHandle ?? item.post.embedAuthorName ?? "Saved photo";
   const resolvedUrl = item.media.assetUrl ?? item.media.previewUrl;
+  const isInteractiveEmbed = !resolvedUrl;
   const motionState = getMotionState(transitionPreset);
 
   return (
@@ -97,8 +100,9 @@ export function ArchiveSlideshow({
                 onError={onUnavailable}
               />
             ) : (
-              <SilentInstagramSlideshowEmbed
+              <InteractiveInstagramSlideshowEmbed
                 item={item}
+                onInteraction={onPause}
                 onUnavailable={onUnavailable}
               />
             )}
@@ -131,7 +135,7 @@ export function ArchiveSlideshow({
           <button
             type="button"
             onClick={onPrevious}
-            aria-label="Previous media"
+            aria-label={isInteractiveEmbed ? "Previous post" : "Previous photo"}
           >
             <ChevronLeft size={22} aria-hidden="true" />
           </button>
@@ -147,7 +151,11 @@ export function ArchiveSlideshow({
               <Play size={19} fill="currentColor" aria-hidden="true" />
             )}
           </button>
-          <button type="button" onClick={onNext} aria-label="Next media">
+          <button
+            type="button"
+            onClick={onNext}
+            aria-label={isInteractiveEmbed ? "Next post" : "Next photo"}
+          >
             <ChevronRight size={22} aria-hidden="true" />
           </button>
         </div>
@@ -164,11 +172,13 @@ export function ArchiveSlideshow({
   );
 }
 
-function SilentInstagramSlideshowEmbed({
+function InteractiveInstagramSlideshowEmbed({
   item,
+  onInteraction,
   onUnavailable,
 }: {
   item: MediaQueueItem;
+  onInteraction: () => void;
   onUnavailable: () => void;
 }) {
   const [isValidated, setIsValidated] = useState(false);
@@ -203,9 +213,11 @@ function SilentInstagramSlideshowEmbed({
         src={getInstagramEmbedUrl(item.post)}
         title={`Instagram preview ${item.post.shortcode ?? item.post.id}`}
         allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+        allowFullScreen
         referrerPolicy="strict-origin-when-cross-origin"
-        scrolling="no"
-        tabIndex={-1}
+        tabIndex={0}
+        onFocus={onInteraction}
+        onPointerEnter={onInteraction}
         onError={onUnavailable}
       />
     </div>

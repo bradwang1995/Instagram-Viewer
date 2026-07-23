@@ -98,8 +98,71 @@ describe("Photo archive preview", () => {
     expect(
       screen.getByRole("button", { name: /Grid View/ }),
     ).toBeInTheDocument();
+    expect(screen.queryByText(/local-first photo viewer/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Instagram Viewer").closest("a")).toBeNull();
+    expect(
+      document.querySelector(".archive-header .archive-view-tabs"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /reload|refresh/i }),
+    ).not.toBeInTheDocument();
     expect(screen.queryByText("INS/ARCHIVE")).not.toBeInTheDocument();
     expect(screen.queryByText("YOUR ARCHIVE")).not.toBeInTheDocument();
+  });
+
+  it("keeps view tabs synchronized with URL history navigation", async () => {
+    window.history.replaceState({}, "", "/?view=grid");
+    render(<HomePage />);
+    await act(async () => undefined);
+
+    const horizontalTab = screen.getByRole("button", {
+      name: /Horizontal View/,
+    });
+    const gridTab = screen.getByRole("button", { name: /Grid View/ });
+    expect(gridTab).toHaveClass("is-active");
+    expect(horizontalTab).not.toHaveClass("is-active");
+
+    const initialHistoryLength = window.history.length;
+    fireEvent.click(horizontalTab);
+    expect(window.location.search).toBe("?view=horizontal");
+    expect(horizontalTab).toHaveClass("is-active");
+
+    fireEvent.click(gridTab);
+    expect(window.location.search).toBe("?view=grid");
+    expect(gridTab).toHaveClass("is-active");
+    expect(window.history.length).toBe(initialHistoryLength + 2);
+
+    const backToHorizontal = new Promise<void>((resolve) => {
+      window.addEventListener("popstate", () => resolve(), { once: true });
+    });
+    window.history.back();
+    await act(async () => backToHorizontal);
+    expect(window.location.search).toBe("?view=horizontal");
+    expect(horizontalTab).toHaveClass("is-active");
+
+    const backToInitialGrid = new Promise<void>((resolve) => {
+      window.addEventListener("popstate", () => resolve(), { once: true });
+    });
+    window.history.back();
+    await act(async () => backToInitialGrid);
+    expect(window.location.search).toBe("?view=grid");
+    expect(gridTab).toHaveClass("is-active");
+
+    const forwardToHorizontal = new Promise<void>((resolve) => {
+      window.addEventListener("popstate", () => resolve(), { once: true });
+    });
+    window.history.forward();
+    await act(async () => forwardToHorizontal);
+    expect(window.location.search).toBe("?view=horizontal");
+    expect(horizontalTab).toHaveClass("is-active");
+
+    const forwardToGrid = new Promise<void>((resolve) => {
+      window.addEventListener("popstate", () => resolve(), { once: true });
+    });
+    window.history.forward();
+    await act(async () => forwardToGrid);
+    expect(window.location.search).toBe("?view=grid");
+    expect(gridTab).toHaveClass("is-active");
   });
 
   it("filters the visual field by creator", async () => {
@@ -127,7 +190,7 @@ describe("Photo archive preview", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps a large desktop grid to the current and next four-card groups", async () => {
+  it("keeps a dense desktop grid to three bounded four-card rows", async () => {
     const source = createPost("LONG", "@long.library", "Reference");
     testState.posts = [source];
     testState.queue = Array.from({ length: 100 }, (_, index) =>
@@ -138,7 +201,7 @@ describe("Photo archive preview", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
     await waitFor(() =>
-      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(8),
+      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(12),
     );
 
     const scroller = screen.getByTestId("archive-scroller");
@@ -151,10 +214,10 @@ describe("Photo archive preview", () => {
     );
     expect(
       screen.getAllByTestId("archive-media-card").length,
-    ).toBeLessThanOrEqual(8);
+    ).toBeLessThanOrEqual(12);
   });
 
-  it("preloads the next Grid group while keeping embed requests bounded", async () => {
+  it("preloads three posts beyond the visible Grid rows with bounded requests", async () => {
     const source = createPost("NETWORKBOUND", "@network.bound", "Saved");
     testState.posts = [source];
     testState.queue = Array.from({ length: 100 }, (_, index) =>
@@ -164,20 +227,14 @@ describe("Photo archive preview", () => {
     await act(async () => undefined);
 
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(2),
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(3),
     );
     fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
     await waitFor(() =>
-      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(8),
+      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(12),
     );
-    expect(view.container.querySelectorAll("iframe")).toHaveLength(2);
+    expect(view.container.querySelectorAll("iframe")).toHaveLength(3);
 
-    view.container
-      .querySelectorAll("iframe")
-      .forEach((frame) => fireEvent.load(frame));
-    await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(4),
-    );
     view.container
       .querySelectorAll("iframe")
       .forEach((frame) => fireEvent.load(frame));
@@ -188,7 +245,13 @@ describe("Photo archive preview", () => {
       .querySelectorAll("iframe")
       .forEach((frame) => fireEvent.load(frame));
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(8),
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(9),
+    );
+    view.container
+      .querySelectorAll("iframe")
+      .forEach((frame) => fireEvent.load(frame));
+    await waitFor(() =>
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(11),
     );
   });
 
@@ -202,17 +265,28 @@ describe("Photo archive preview", () => {
       name: "Slideshow viewer",
     });
     expect(slideshow).toBeInTheDocument();
+    expect(within(slideshow).getByText("5s")).toBeInTheDocument();
+    expect(DEFAULT_SETTINGS.slideshowIntervalMs).toBe(5_000);
     expect(
       within(slideshow).getByRole("img", {
         name: "@north.archive frame 1 of 2",
       }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next media" }));
+    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
     await waitFor(() =>
       expect(
         within(slideshow).getByRole("img", {
           name: "@north.archive frame 2 of 2",
+        }),
+      ).toBeInTheDocument(),
+    );
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    await waitFor(() =>
+      expect(
+        within(slideshow).getByRole("img", {
+          name: "@quietframes frame 1 of 1",
         }),
       ).toBeInTheDocument(),
     );
@@ -224,6 +298,28 @@ describe("Photo archive preview", () => {
         screen.queryByRole("region", { name: "Slideshow viewer" }),
       ).not.toBeInTheDocument(),
     );
+  });
+
+  it("keeps a slideshow iframe interactive and pauses when it is engaged", async () => {
+    const source = createPost("INTERACTIVE", "@interactive", "Saved");
+    testState.posts = [source];
+    testState.queue = [createUnresolvedQueueItem(source, 0)];
+
+    render(<HomePage />);
+    await act(async () => undefined);
+    fireEvent.click(screen.getByRole("button", { name: "Slideshow" }));
+
+    const frame = await screen.findByTitle("Instagram preview INTERACTIVE");
+    expect(frame).toHaveAttribute("tabindex", "0");
+    expect(frame).not.toHaveAttribute("scrolling", "no");
+    expect(screen.getByRole("button", { name: "Pause slideshow" })).toBeInTheDocument();
+
+    fireEvent.pointerEnter(frame);
+    expect(screen.getByRole("button", { name: "Play slideshow" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Next post" })).toBeInTheDocument();
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(screen.getByTitle("Instagram preview INTERACTIVE")).toBeInTheDocument();
   });
 
   it("silently removes posts rejected by the official embed check", async () => {

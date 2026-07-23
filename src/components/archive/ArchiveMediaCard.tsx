@@ -16,7 +16,7 @@ import type { MediaQueueItem } from "../../features/media/mediaQueue";
 const resolvedCandidateByRevision = new Map<string, string>();
 const failedDirectMediaRevisions = new Set<string>();
 const failedEmbedMediaRevisions = new Set<string>();
-const MAX_CONCURRENT_EMBED_REQUESTS = 2;
+const MAX_CONCURRENT_EMBED_REQUESTS = 3;
 const EMBED_REQUEST_TIMEOUT_MS = 12_000;
 let activeEmbedRequests = 0;
 const pendingEmbedRequests: EmbedRequest[] = [];

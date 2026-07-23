@@ -75,8 +75,9 @@ export function ArchivePreview({
     height:
       typeof window === "undefined"
         ? 720
-        : Math.max(320, window.innerHeight - 160),
+        : Math.max(320, window.innerHeight - 192),
   }));
+  const preparedCompatibilityMediaIds = useRef(new Set<string>());
   const selectedIndex = Math.max(
     0,
     items.findIndex((item) => item.media.id === selectedId),
@@ -110,6 +111,38 @@ export function ArchivePreview({
       viewport.width,
     ],
   );
+  const compatibilityPreviewIndexes = useMemo(() => {
+    const visibleIndexes = visibleLayouts
+      .filter((layout) =>
+        viewMode === "grid"
+          ? layout.top + layout.height > scrollOffset &&
+            layout.top < scrollOffset + viewport.height
+          : layout.left + layout.width > scrollOffset &&
+            layout.left < scrollOffset + viewport.width,
+      )
+      .map((layout) => layout.index);
+    const lastVisibleIndex = visibleIndexes.length
+      ? Math.max(...visibleIndexes)
+      : selectedIndex;
+    const indexes = new Set(visibleIndexes);
+    for (let offset = 1; offset <= 3; offset += 1) {
+      const index = lastVisibleIndex + offset;
+      if (index < items.length) indexes.add(index);
+    }
+    return indexes;
+  }, [
+    items.length,
+    scrollOffset,
+    selectedIndex,
+    viewMode,
+    viewport.height,
+    viewport.width,
+    visibleLayouts,
+  ]);
+  for (const index of compatibilityPreviewIndexes) {
+    const item = items[index];
+    if (item) preparedCompatibilityMediaIds.current.add(item.media.id);
+  }
   const trackStyle = useMemo<CSSProperties>(
     () =>
       viewMode === "grid"
@@ -142,7 +175,7 @@ export function ArchivePreview({
       setViewport({
         width: scroller.clientWidth || window.innerWidth,
         height:
-          scroller.clientHeight || Math.max(320, window.innerHeight - 160),
+          scroller.clientHeight || Math.max(320, window.innerHeight - 192),
       });
     };
     measure();
@@ -284,10 +317,27 @@ export function ArchivePreview({
   return (
     <section className={`archive-preview is-${viewMode}`}>
       <header className="archive-header">
-        <a className="archive-logo" href={import.meta.env.BASE_URL}>
+        <div className="archive-logo">
           <strong>Instagram Viewer</strong>
-          <span>Local-first photo viewer</span>
-        </a>
+        </div>
+        <div className="archive-view-tabs" aria-label="Photo layout">
+          <button
+            className={viewMode === "ribbon" ? "is-active" : ""}
+            type="button"
+            aria-pressed={viewMode === "ribbon"}
+            onClick={() => onViewModeChange("ribbon")}
+          >
+            <MoveHorizontal size={22} aria-hidden="true" /> Horizontal View
+          </button>
+          <button
+            className={viewMode === "grid" ? "is-active" : ""}
+            type="button"
+            aria-pressed={viewMode === "grid"}
+            onClick={() => onViewModeChange("grid")}
+          >
+            <Grid2X2 size={21} aria-hidden="true" /> Grid View
+          </button>
+        </div>
         <button
           className="archive-import-link"
           type="button"
@@ -316,7 +366,9 @@ export function ArchivePreview({
                   item={item}
                   index={layout.index}
                   selected={item.media.id === selectedId}
-                  allowCompatibilityPreview
+                  allowCompatibilityPreview={preparedCompatibilityMediaIds.current.has(
+                    item.media.id,
+                  )}
                   layoutStyle={{
                     position: "absolute",
                     left: layout.left,
@@ -344,23 +396,6 @@ export function ArchivePreview({
         animate={{ y: 0 }}
         transition={{ duration: 0.7, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="dock-modes" aria-label="Photo layout">
-          <button
-            className={viewMode === "ribbon" ? "is-active" : ""}
-            type="button"
-            onClick={() => onViewModeChange("ribbon")}
-          >
-            <MoveHorizontal size={18} aria-hidden="true" /> Horizontal View
-          </button>
-          <button
-            className={viewMode === "grid" ? "is-active" : ""}
-            type="button"
-            onClick={() => onViewModeChange("grid")}
-          >
-            <Grid2X2 size={17} aria-hidden="true" /> Grid View
-          </button>
-        </div>
-
         <div className="dock-actions">
           <button
             className={hasFilters ? "is-active" : ""}

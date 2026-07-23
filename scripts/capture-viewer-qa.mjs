@@ -52,7 +52,7 @@ try {
       url: "http://127.0.0.1:5173/?demo=1&view=grid",
       viewport: { width: 1920, height: 1080 },
       expectedColumns: 4,
-      expectedVisibleCards: 4,
+      expectedVisibleCards: 8,
       screenshot: path.join(artifactDir, "audit-02-grid.png"),
     }),
   );
@@ -63,7 +63,7 @@ try {
       url: "http://127.0.0.1:5173/?demo=1&view=grid",
       viewport: { width: 390, height: 844 },
       expectedColumns: 1,
-      expectedVisibleCards: 1,
+      expectedVisibleCards: 2,
       screenshot: path.join(artifactDir, "audit-03-mobile-grid.png"),
     }),
   );
@@ -162,10 +162,36 @@ async function verifySilentSourceFiltering({ browser }) {
       );
     }
 
+    await page.getByRole("button", { name: "Slideshow" }).click();
+    const slideshowIframe = page.locator(".slideshow-embed iframe");
+    await slideshowIframe.waitFor({ state: "visible", timeout: 20_000 });
+    const slideshowEvidence = await slideshowIframe.evaluate((iframe) => {
+      const rect = iframe.getBoundingClientRect();
+      return {
+        pointerEvents: getComputedStyle(iframe).pointerEvents,
+        tabIndex: iframe.tabIndex,
+        top: Math.round(rect.top),
+        bottom: Math.round(rect.bottom),
+        height: Math.round(rect.height),
+      };
+    });
+    await slideshowIframe.focus();
+    await page.getByRole("button", { name: "Play slideshow" }).waitFor();
+    if (
+      slideshowEvidence.pointerEvents !== "auto" ||
+      slideshowEvidence.tabIndex !== 0 ||
+      slideshowEvidence.top < 0 ||
+      slideshowEvidence.bottom > 1080
+    ) {
+      throw new Error(
+        `slideshow iframe is clipped or non-interactive: ${JSON.stringify(slideshowEvidence)}`,
+      );
+    }
+
     return {
       name: "silent-source-filtering",
       viewport: { width: 1920, height: 1080 },
-      evidence,
+      evidence: { ...evidence, slideshow: slideshowEvidence },
     };
   } finally {
     await context.close();
@@ -261,10 +287,49 @@ async function captureManifestImport({ browser, screenshot }) {
     }
 
     await page.locator(".archive-preview").screenshot({ path: screenshot });
+    await page.getByRole("button", { name: "Slideshow" }).click();
+    await page.getByRole("button", { name: "Next photo" }).click();
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".slideshow-progress span")?.textContent?.trim() ===
+        "02 / 03",
+    );
+    await page.keyboard.press("ArrowRight");
+    await page.waitForFunction(
+      () =>
+        document.querySelector(".slideshow-progress span")?.textContent?.trim() ===
+        "03 / 03",
+    );
+    const slideshowEvidence = await page.evaluate(() => {
+      const image = document.querySelector(".slideshow-frame > img");
+      if (!(image instanceof HTMLImageElement)) return undefined;
+      const rect = image.getBoundingClientRect();
+      return {
+        position: document.querySelector(".slideshow-progress span")?.textContent?.trim(),
+        interval: Array.from(
+          document.querySelectorAll(".slideshow-progress span"),
+        ).at(-1)?.textContent,
+        objectFit: getComputedStyle(image).objectFit,
+        top: Math.round(rect.top),
+        bottom: Math.round(rect.bottom),
+      };
+    });
+    if (
+      !slideshowEvidence ||
+      slideshowEvidence.position !== "03 / 03" ||
+      slideshowEvidence.interval !== "5s" ||
+      slideshowEvidence.objectFit !== "contain" ||
+      slideshowEvidence.top < 0 ||
+      slideshowEvidence.bottom > 1080
+    ) {
+      throw new Error(
+        `resolved slideshow navigation or sizing failed: ${JSON.stringify(slideshowEvidence)}`,
+      );
+    }
     return {
       name: "resolved-manifest-grid",
       viewport: { width: 1920, height: 1080 },
-      evidence,
+      evidence: { ...evidence, slideshow: slideshowEvidence },
       screenshot,
     };
   } finally {
@@ -333,6 +398,9 @@ async function captureState({
       const selectedSurface = document.querySelector(
         ".archive-card.is-selected .archive-media-surface",
       );
+      const unselectedSurface = document.querySelector(
+        ".archive-card:not(.is-selected) .archive-media-surface",
+      );
       const logo = document.querySelector(".archive-logo");
       const dockActions = document.querySelector(".dock-actions");
       const rectSnapshot = (element) => {
@@ -364,6 +432,12 @@ async function captureState({
         scrollSnapType: style.scrollSnapType,
         selectedBorderWidth: selectedSurface
           ? getComputedStyle(selectedSurface).borderTopWidth
+          : undefined,
+        selectedBorderColor: selectedSurface
+          ? getComputedStyle(selectedSurface).borderTopColor
+          : undefined,
+        unselectedBorderColor: unselectedSurface
+          ? getComputedStyle(unselectedSurface).borderTopColor
           : undefined,
         overflowX: style.overflowX,
         overflowY: style.overflowY,
@@ -400,8 +474,11 @@ async function captureState({
     if (initial.scrollSnapType !== "none") {
       throw new Error(`${name}: horizontal scroll snap is still active`);
     }
-    if (initial.selectedBorderWidth !== "0px") {
-      throw new Error(`${name}: selected photo border is still visible`);
+    if (
+      initial.selectedBorderWidth !== "2px" ||
+      initial.selectedBorderColor !== initial.unselectedBorderColor
+    ) {
+      throw new Error(`${name}: card edge treatment is inconsistent`);
     }
     if (initial.hasRejectedCopy) {
       throw new Error(`${name}: rejected card copy is still visible`);
@@ -411,20 +488,20 @@ async function captureState({
     }
     const maximumMountedCards = name.includes("grid")
       ? viewport.width <= 640
-        ? 2
+        ? 3
         : viewport.width <= 1100
           ? 4
-          : 8
+          : 12
       : 9;
     if (initial.cardCount > maximumMountedCards) {
       throw new Error(`${name}: mounted ${initial.cardCount} cards`);
     }
     if (
       name === "horizontal" &&
-      (initial.maximumCardHeight / viewport.height < 0.7 ||
-        initial.maximumCardHeight / viewport.height > 0.8)
+      (initial.maximumCardHeight / viewport.height < 0.78 ||
+        initial.maximumCardHeight / viewport.height > 0.84)
     ) {
-      throw new Error(`${name}: media height is outside 70-80% of viewport`);
+      throw new Error(`${name}: media height is outside 78-84% of viewport`);
     }
     if (
       expectedColumns !== undefined &&

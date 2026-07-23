@@ -27,18 +27,19 @@ An Instagram embed is a cross-origin document controlled by Instagram. The viewe
 
 ## Current Viewer Refinement
 
-The active UI is branded `Instagram Viewer`. Functional text is rendered at 150% of the previous scale, and the two browsing modes are named `Horizontal View` and `Grid View`.
+The active UI is branded `Instagram Viewer`. Its non-clickable italic wordmark uses the same pink/orange/violet family as Slideshow, and the two browsing modes are presented as large top-center tabs named `Horizontal View` and `Grid View`.
 
-- Horizontal View uses a virtual media track: only the visible photos and two neighboring items on each side are mounted. At `1920 × 1080`, the media surface occupies about 76.7% of the viewport height.
-- Grid View is four columns on desktop, shows one row per viewport, and preloads exactly the next row. A large desktop library therefore keeps no more than eight cards in the active DOM window without exposing the next row before scrolling.
-- Direct images inside the active window load immediately and enter a retained decode window plus a cache-first image service worker where supported. Compatibility iframe navigation uses the same current/next window with a two-request queue. Meta's tokenless oEmbed check silently removes posts reported as private, deleted, or non-embeddable. Timeouts and terminal errors are also omitted without an error card or failure count.
+- Horizontal View uses a virtual media track: only visible photos and three neighboring items on each side are mounted. At `1920 × 1080`, the media surface is `870px` high, leaving only a small controlled gap between media and the overlaid page chrome.
+- Grid View is four square columns on desktop and shows two compact rows in the active viewport. A third row remains mounted as bounded overscan, so a large desktop library keeps no more than twelve cards in the DOM; mobile keeps at most three.
+- Direct images inside the active window load immediately and enter a retained decode window plus a cache-first image service worker where supported. Compatibility previews are permitted for visible cards plus the next three items, with at most three iframe navigations in flight. Meta's tokenless oEmbed check silently removes posts reported as private, deleted, or non-embeddable. Timeouts and terminal errors are also omitted without an error card or failure count.
 - Resolved media is shown at normal brightness with `object-fit: contain`. Hover and selection use lift, scale, and shadow instead of dimming the other photos; selected photos have no colored border.
-- Photo cards contain only the media surface. Per-card source labels, creator/collection captions, ordinal counters, Hide/Open Source buttons, and the Instagram social footer are outside the visible crop. Instagram may still paint a carousel arrow over the photo because the iframe's internal DOM is cross-origin.
+- Photo cards use a rounded near-black edge that stays visible against the page without a bright hairline. Per-card source labels, creator/collection captions, ordinal counters, custom next-photo buttons, Hide/Open Source buttons, and the Instagram social footer are absent. Instagram may still paint its native carousel arrow or an internal edge over the photo because the iframe's DOM is cross-origin.
 - The full media list remains reachable through the virtual track, and both scrollbars stay visually hidden.
-- The page prevents text/image selection and uses a generated dark magenta/violet cursor asset throughout the viewer.
-- Slideshow fills the viewport behind overlaid controls, uses the pink/orange/violet theme, and pushes `?slideshow=1` so browser Back returns to the photo field.
+- Horizontal View and Grid View are represented by `?view=horizontal` and `?view=grid`. Switching modes adds an in-app history entry, so browser Back and Forward restore the matching URL, active tab, and rendered layout; direct view-specific URLs also restore on refresh.
+- The page prevents text/image selection and keeps one native-size default cursor across application-controlled hover, click, and drag surfaces. A cross-origin Instagram iframe may still choose its own cursor internally because parent-page CSS cannot style the embedded document.
+- Slideshow defaults to five seconds, fills the viewport behind overlaid controls, uses the pink/orange/violet theme, and pushes `?slideshow=1` so browser Back returns to the photo field. Known resolved children advance in source order before the next post; after the last known child, manual or timed navigation advances to the next post under the selected loop mode.
 
-Ordinary `saved_posts.json` imports use one bounded compatibility preview per post because the export contains no child URLs. When independent child-media records exist, the slideshow advances each child before moving to the next post. The app does not scrape Instagram or fabricate children from a cross-origin iframe.
+Ordinary `saved_posts.json` imports use one bounded compatibility preview per post because the export contains no child URLs. In Slideshow, that iframe is focusable, playable, scrollable, and left free of a blocking application overlay; focusing or pointing into it pauses autoplay. Users can operate Instagram's native carousel controls, but the parent cannot read or command the cross-origin carousel. Parent-page arrow keys therefore do not skip an unresolved interactive post, while explicit Previous/Next post buttons remain available. The app does not scrape Instagram or fabricate children from a cross-origin iframe.
 
 ## PhotoYoshi-Inspired Archive Field
 
@@ -263,7 +264,7 @@ Instagram previews are loaded in iframes from `instagram.com`. Opening a preview
 
 On the same browser profile and the same site origin, the gallery loads automatically from IndexedDB on future visits. There is no login because no server owns a copy of the library.
 
-Direct photo assets are preloaded ahead of the current viewport and retained in a small decoded-image window. Supported browsers also register a local cache-first service worker for image requests, so revisiting a previously loaded direct photo does not require the viewer to start from zero. Grid View mounts the current four-photo row plus the next four-photo row; Horizontal View retains the visible photos plus two-photo overscan on each side.
+Direct photo assets are preloaded ahead of the current viewport and retained in a small decoded-image window. Supported browsers also register a local cache-first service worker for image requests, so revisiting a previously loaded direct photo does not require the viewer to start from zero. Grid View mounts at most three four-photo rows; Horizontal View retains the visible photos plus three-photo overscan on each side. Compatibility iframe permission is limited to visible cards plus the next three items, with three active navigations at most.
 
 Instagram compatibility previews are cross-origin iframe documents. The viewer can keep nearby previews mounted, but it cannot place Instagram's iframe document itself into the app's image cache or control Instagram's own cache headers.
 

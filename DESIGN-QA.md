@@ -25,7 +25,7 @@ The visual language follows the supplied PhotoYoshi reference: oversized clipped
 - Typography: passed. Functional text now uses a 150% root scale; the preview no longer spends image space on an oversized archive watermark or compact per-card metadata.
 - Layout and spacing: passed in current browser captures. Desktop Horizontal media remains approximately 70–80% of the viewport. Desktop Grid shows one four-card row while preloading exactly the next four; mobile Grid shows one card while preloading the next one.
 - Color and surfaces: passed. Deep black/plum backgrounds, warm off-white display text, muted gray metadata, and an Instagram-inspired orange/magenta/violet gradient replace the earlier acid-lime accent. Selected photos have no border.
-- Image quality: passed. The demo uses bundled WebP photography at native aspect ratio. Imported unresolved Instagram sources use a square media crop that visually excludes the profile header, View more on Instagram, social actions, counts, comments, and footer. Mounted next-row/side overscan is allowed to preload within the two-request concurrency gate.
+- Image quality: passed. The demo uses bundled WebP photography at native aspect ratio and `object-fit: contain`. Imported unresolved Instagram sources use a square media crop that visually excludes the profile header, View more on Instagram, social actions, counts, comments, and footer. Visible cards plus the next three items may preload within a three-request concurrency gate.
 - Icons: passed. Lucide icons share one stroke family and remain paired with understandable `Horizontal View`, `Grid View`, Filter, Settings, and Slideshow labels.
 - Copy and content: passed. The product name is `Instagram Viewer`; source/media totals, creator/collection captions, frame labels, and rejected per-card action copy are absent from the browsing surfaces.
 - Responsiveness: passed in implementation, tests, and current captures. Desktop uses exactly four Grid columns; tablet uses two and mobile uses one. Both browsing modes use bounded render windows and visually hidden scrollbars. The revised dock is visible in the current `390 × 844` capture.
@@ -130,11 +130,11 @@ The visual language follows the supplied PhotoYoshi reference: oversized clipped
 - [P1] The selected photo used an acid-green border and slideshow reused the same green accent.
   - Fix: removed the photo border and introduced the orange/magenta/violet slideshow and action gradient.
 - [P1] Slideshow reserved separate header/footer rows, had no app history state, and browser Back could leave the app.
-  - Fix: the frame now owns the full viewport with overlaid controls, opening pushes `?slideshow=1`, closing replaces it, and `popstate` restores the photo field.
+  - Fix: the frame now owns the full viewport with overlaid controls, opening pushes `?slideshow=1`, closing replaces it, and `popstate` restores the photo field. Resolved media remains `object-fit: contain`; compatibility iframes now use a viewport-safe interactive frame instead of the clipped non-interactive square.
 - [P1] Re-entering a virtual window could show a loading state for a previously decoded direct image.
   - Fix: added a 96-image retained decode window, ahead-of-viewport preloading, and a cache-first image service worker for browsers that support it.
-- [P2] Text selection, the default OS cursor, and utilitarian type weakened the intended gallery character.
-  - Fix: disabled selection globally, generated a transparent 56px dark magenta/violet cursor asset, and moved display typography to a fashion-editorial serif paired with a modern system UI stack.
+- [P2] Text selection and utilitarian type weakened the intended gallery character; the first generated cursor was subsequently reported as oversized.
+  - Fix: disabled selection globally, moved display typography to a fashion-editorial serif paired with a modern system UI stack, and standardized application-controlled surfaces on one native-size default cursor. Cross-origin iframe internals remain outside parent CSS control.
 
 ## Known Data Boundary
 
@@ -143,10 +143,11 @@ Instagram `saved_posts.json` does not contain carousel-child media, original ima
 ## Verification
 
 - `npm run lint`: passed.
-- `npm test`: 14 files and 50 tests passed, including official oEmbed availability handling, silent source omission, bounded next-group preload, per-child slideshow order/history, resolved-manifest parser regressions, transaction rollback, Grid/Horizontal end reachability, mixed-aspect viewport coverage, direct-image fallback, responsive single-row Grid behavior, and iframe timeout queue draining.
+- `npm test`: 14 files and 52 tests passed, including official oEmbed availability handling, silent source omission, triple-ahead preload, per-child slideshow button/keyboard order and history, interactive iframe pausing, resolved-manifest parser regressions, transaction rollback, Grid/Horizontal end reachability, mixed-aspect viewport coverage, direct-image fallback, responsive dense Grid behavior, and iframe timeout queue draining.
 - `npm run build`: passed.
-- Fresh local Chrome evidence confirms `24px` root text, hidden scrollbars, one visible Grid row, bounded DOM windows, a 76.7%-height Horizontal surface, current mobile dock layout, and last-media reachability.
-- Current Grid evidence mounted eight cards: four visible and four preloaded. Horizontal kept its visible window plus two-photo side overscan. Compatibility navigation concurrency remains capped at two.
+- Fresh local Chrome evidence confirms `24px` root text, hidden scrollbars, two visible desktop Grid rows, bounded DOM windows, an `870px` Horizontal surface, current mobile dock layout, rounded dark edges, and last-media reachability.
+- Current Grid evidence mounted twelve cards: eight visible and four in the next bounded row. Horizontal kept its visible window plus three-photo side overscan. Compatibility navigation permission is limited to visible cards plus the next three, and active iframe navigation remains capped at three.
+- Slideshow evidence advanced a resolved three-photo post to `03 / 03` by button then keyboard, retained the exact `5s` default, and kept the image inside `0–1080px`. Mock compatibility evidence measured an interactive focusable iframe at y=`92–988px`; focus paused playback. Cross-origin iframe child state remains intentionally unobservable.
 - A controlled browser import containing two available posts and one oEmbed-rejected post retained exactly two cards/two iframes, removed the rejected card, and exposed no failure copy.
 - Browser-uploaded three-photo internal fixture evidence confirms three ordered direct-image cards, stable IDs, and zero iframes at `artifacts/audit-04-manifest-grid.png`.
 - Known independent child-media records advance one frame at a time before the next post. Ordinary saved JSON still contains no carousel-child URLs; the cross-origin compatibility iframe cannot be auto-clicked or flattened by the parent viewer.

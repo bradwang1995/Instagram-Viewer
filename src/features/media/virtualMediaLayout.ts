@@ -23,8 +23,8 @@ export type RibbonMetrics = {
   totalWidth: number;
 };
 
-const GRID_RENDERED_ROWS = 2;
-const RIBBON_OVERSCAN_ITEMS = 2;
+const GRID_RENDERED_ROWS = 3;
+const RIBBON_OVERSCAN_ITEMS = 3;
 
 export function getGridMetrics(
   itemCount: number,
@@ -35,16 +35,15 @@ export function getGridMetrics(
   const safeHeight = Math.max(320, viewportHeight);
   const columns = safeWidth <= 640 ? 1 : safeWidth <= 1100 ? 2 : 4;
   const paddingX = columns === 1 ? 14 : clamp(safeWidth * 0.03, 24, 64);
-  const paddingY = columns === 1 ? 14 : 18;
+  const paddingY = columns === 1 ? 12 : 14;
   const columnGap = columns === 1 ? 0 : clamp(safeWidth * 0.018, 18, 36);
-  const rowGap = columns === 1 ? 22 : clamp(safeHeight * 0.045, 26, 44);
+  const rowGap = columns === 1 ? 14 : clamp(safeHeight * 0.025, 18, 26);
   const itemWidth =
     (safeWidth - paddingX * 2 - columnGap * (columns - 1)) / columns;
-  // Keep the next row entirely below the fold. The rendered window includes
-  // one row of overscan, while the viewport presents one row at a time.
-  const targetHeight = safeHeight - paddingY * 2;
-  const naturalHeight = itemWidth * (columns === 1 ? 1.18 : 1.12);
-  const itemHeight = Math.max(targetHeight, naturalHeight);
+  // A square card matches the unresolved Instagram preview surface and avoids
+  // stretching each Grid row to nearly a full viewport. Three rendered rows
+  // keep visible content plus a bounded ahead-of-scroll preload window.
+  const itemHeight = itemWidth;
   const rowStride = itemHeight + rowGap;
   const rowCount = Math.ceil(itemCount / columns);
   const totalHeight = rowCount
@@ -105,8 +104,8 @@ export function getRibbonMetrics(
 ): RibbonMetrics {
   const safeWidth = Math.max(320, viewportWidth);
   const safeHeight = Math.max(320, viewportHeight);
-  const mediaHeight = clamp(safeHeight * 0.9, 280, 960);
-  const gap = clamp(safeWidth * 0.035, 28, 72);
+  const mediaHeight = clamp(safeHeight * 0.98, 300, 1040);
+  const gap = clamp(safeWidth * 0.022, 18, 44);
   const widths = aspects.map((aspect) =>
     clamp(clamp(aspect, 0.62, 1.65) * mediaHeight, 240, safeWidth * 0.82),
   );
@@ -116,7 +115,7 @@ export function getRibbonMetrics(
     const layout: VirtualMediaLayout = {
       index,
       left: cursor,
-      top: Math.max(12, (safeHeight - mediaHeight) / 2),
+      top: Math.max(4, (safeHeight - mediaHeight) / 2),
       width,
       height: mediaHeight,
     };

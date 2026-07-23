@@ -110,7 +110,7 @@ describe("ArchiveMediaCard", () => {
     );
   });
 
-  it("starts no more than two compatibility iframe requests at once", async () => {
+  it("starts no more than three compatibility iframe requests at once", async () => {
     const items = Array.from({ length: 5 }, (_, index) => {
       const item = createItem(`embed-${index}`);
       item.media.sourceKind = "embed";
@@ -136,7 +136,7 @@ describe("ArchiveMediaCard", () => {
     );
 
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(2),
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(3),
     );
   });
 
@@ -168,15 +168,11 @@ describe("ArchiveMediaCard", () => {
     );
 
     await act(async () => undefined);
-    expect(view.container.querySelectorAll("iframe")).toHaveLength(2);
+    expect(view.container.querySelectorAll("iframe")).toHaveLength(3);
     await act(async () => vi.advanceTimersByTime(12_000));
     expect(view.container.querySelectorAll("iframe")).toHaveLength(2);
-    expect(onUnavailable).toHaveBeenCalledTimes(2);
+    expect(onUnavailable).toHaveBeenCalledTimes(3);
     expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
-
-    await act(async () => vi.advanceTimersByTime(12_000));
-    expect(view.container.querySelectorAll("iframe")).toHaveLength(1);
-    expect(onUnavailable).toHaveBeenCalledTimes(4);
 
     await act(async () => vi.advanceTimersByTime(12_000));
     expect(view.container.querySelectorAll("iframe")).toHaveLength(0);

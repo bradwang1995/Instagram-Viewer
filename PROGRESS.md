@@ -18,7 +18,7 @@ Enter Horizontal View or Grid View
 Filter + hide + configure + slideshow
 ```
 
-The product remains one page with bottom sheets and a full-viewport slideshow overlay whose `?slideshow=1` history state supports browser Back.
+The product remains one page with URL-backed Horizontal/Grid states, bottom sheets, and a full-viewport slideshow overlay. Browser Back and Forward restore the previous `?view=horizontal` / `?view=grid` state, while `?slideshow=1` keeps slideshow navigation in the same history model.
 
 ## Selected Direction: PhotoYoshi Archive Field
 
@@ -49,6 +49,50 @@ Approved product principles:
 - Use Motion for component/interaction motion and GSAP for authored timelines; keep GPU/WebGL optional.
 - Keep local-first privacy as the default and make every network/cache boundary explicit.
 - Do not implement carousel extraction, thumbnails, or GPU media transitions by scraping Instagram or reading a cross-origin iframe.
+
+## Revision 22: Interactive Five-Second Slideshow
+
+- [x] Confirm the exact default dwell interval remains `5000ms` while preserving locally persisted user-configured values.
+- [x] Keep resolved source media sorted by `sourceIndex`; manual Next and parent-page ArrowRight advance every known photo before the next post.
+- [x] Use the existing session order after the final known photo: the next action and five-second timer advance to the next post, subject to the selected loop mode.
+- [x] Rename resolved transport semantics to Previous/Next photo; unresolved compatibility embeds expose explicit Previous/Next post actions instead of pretending the parent controls their internal carousel.
+- [x] Make slideshow iframes focusable, pointer-interactive, fullscreen-capable, and internally scrollable without an application overlay blocking native post or video controls.
+- [x] Pause autoplay when the user focuses or points into the iframe; while an unresolved cross-origin embed is active, parent-page ArrowLeft/ArrowRight no longer skips the post.
+- [x] Replace the clipped square iframe crop with a rounded, viewport-safe embed frame; browser QA measured the `1920 × 1080` frame at y=`92–988px` with `pointer-events: auto` and `tabIndex=0`.
+- [x] Browser-verify a three-photo resolved slideshow at `03 / 03`, `5s`, `object-fit: contain`, and full `0–1080px` image bounds.
+
+Confirmed cross-origin limitation: ordinary `saved_posts.json` does not enumerate carousel children. Users can operate Instagram's native in-iframe media controls, but the parent cannot read the active child, send a supported “next child” command, or make parent-page keyboard events advance that internal carousel. Automatic timing therefore applies to known queue items; for an unresolved embed that means the whole post, unless iframe interaction pauses playback.
+
+## Revision 21: Denser Media Field And Triple Ahead Loading
+
+- [x] Increase Horizontal media from `799px` to `870px` at `1920 × 1080`, reduce side gaps, and retain the existing smooth requestAnimationFrame wheel path.
+- [x] Replace near-full-viewport Grid cards with square cards: desktop now shows two four-card rows while a third row remains mounted as bounded overscan (`12` cards maximum).
+- [x] Allow compatibility previews only for currently visible cards plus the next three items, retain prepared permission while cards remain in the virtual window, and cap active iframe navigations at three.
+- [x] Increase Horizontal overscan to three items so the complete ahead window can mount without making the full library resident.
+- [x] Keep resolved photos at `object-fit: contain`; no application custom next-photo button is rendered in Horizontal or Grid.
+- [x] Add consistent `22px` rounding, a `2px` near-black edge, an inset dark hairline, and a slight iframe overscan to cover application-controlled white seams.
+- [x] Confirm through browser QA that selected and unselected cards use the same dark edge, Grid exposes `8` desktop / `2` mobile cards, and the final media remains reachable.
+
+Confirmed platform boundary: a standard `saved_posts.json` item still resolves to a cross-origin Instagram embed. The parent can size and mask its container but cannot inspect its true media aspect ratio, restyle its internal carousel, guarantee removal of an iframe-internal white line, or force the first carousel child to fit differently.
+
+## Revision 20: Prominent Global Viewer Controls
+
+- [x] Move Horizontal View and Grid View from the bottom dock into two large top-center tabs with explicit active states.
+- [x] Keep only `Instagram Viewer` in the header, make it decorative instead of navigational, and give it an italic Instagram-gradient treatment related to the Slideshow action.
+- [x] Remove the `Local-first photo viewer` subtitle from both viewer and landing headers.
+- [x] Increase primary desktop title, tab, import, and dock typography while using constrained mobile sizes that keep both long view labels readable.
+- [x] Replace the oversized generated cursor with one native-size default cursor across application-controlled elements, including buttons, links, cards, disabled controls, and drag surfaces.
+- [x] Confirm the active viewer contains no refresh/reload control; retain the documented browser boundary that CSS cannot override a cross-origin iframe's internal cursor.
+- [x] Pass responsive screenshot QA at `1920 × 1080` Horizontal/Grid and `390 × 844` Grid without primary-control overlap.
+
+## Revision 19: URL-Backed View Navigation
+
+- [x] Represent Horizontal View as `?view=horizontal` and Grid View as `?view=grid` without adding a routing dependency.
+- [x] Push a browser-history entry only when the selected view changes.
+- [x] Synchronize the rendered view and active tab from `popstate` for repeated Back and Forward navigation.
+- [x] Restore direct and refreshed Grid URLs, and normalize missing or unrecognized view values to the existing Horizontal default.
+- [x] Preserve unrelated query parameters, hashes, smooth scrolling, and the existing slideshow history behavior.
+- [x] Add a regression that traverses Grid → Horizontal → Grid, then Back twice and Forward twice.
 
 ## Revision 18: Pure Media, Smooth Navigation, Cache, And Routed Slideshow
 
@@ -589,21 +633,21 @@ Remaining architectural work is intentionally not hidden by this checkpoint:
 
 ## Latest Verification
 
-- [x] `npm test` passes with 50 tests across 14 files.
+- [x] `npm test` passes with 52 tests across 14 files.
 - [x] `npm run build` passes.
 - [x] `npm run lint` passes TypeScript checking.
 - [x] Local dev server responds at `http://127.0.0.1:5173/`.
 - [x] `git status --ignored` shows `saved_posts.json` as ignored.
 - [x] Active router only serves the one-page `HomePage`.
-- [x] Active header has no navigation tabs.
-- [x] Long-library tests keep the desktop Grid DOM to eight cards (current four plus next four) and the Horizontal DOM to a bounded visible/two-photo-overscan window.
-- [x] Browser QA confirms `24px` root text, `user-select: none`, no selected-photo border, hidden scrollbars, no horizontal scroll snap, one visible four-card desktop Grid row plus four preloaded cards, bounded DOM windows, and last-media reachability.
+- [x] Active header has a non-clickable gradient title and top-center Horizontal/Grid navigation tabs.
+- [x] Long-library tests keep the desktop Grid DOM to twelve cards (three four-card rows) and the Horizontal DOM to a bounded visible/three-photo-overscan window.
+- [x] Browser QA confirms `24px` root text, `user-select: none`, consistent `2px` dark card borders, hidden scrollbars, no horizontal scroll snap, two visible four-card desktop Grid rows plus bounded overscan, and last-media reachability.
 - [x] Browser QA imports three resolved data images and confirms three ordered direct-image cards with stable IDs and no compatibility iframes.
 - [x] Real vertical mouse-wheel input moved Horizontal View from `scrollLeft 0` to `676` and selected the next media without snap.
 - [x] Creator filtering reduces the demo session to the expected five `@quietframes` media items.
-- [x] Browser QA confirms next media advances within a multi-frame source.
+- [x] Browser QA confirms button and keyboard next-photo actions advance every known frame before the next post.
 - [x] Browser QA confirms no document overflow at `1280 × 720` or `390 × 844`.
-- [x] Browser QA confirms slideshow controls and media remain inside both viewports.
+- [x] Browser QA confirms slideshow controls, contained images, and the interactive iframe frame remain inside their viewports.
 - [x] Browser QA confirms slideshow uses the full viewport, writes `?slideshow=1`, and browser Back restores the photo field without leaving the app.
 - [x] Real public-embed QA visually hides Instagram's profile header, social actions, counts, comment field, and footer while retaining the photo surface.
 - [x] Same-viewport PhotoYoshi/implementation comparison is stored at `artifacts/photoyoshi-mobile-comparison.png`.

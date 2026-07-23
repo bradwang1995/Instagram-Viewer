@@ -80,10 +80,9 @@ export function ArchiveLanding({
       }}
     >
       <header className="landing-header">
-        <a href={import.meta.env.BASE_URL} className="archive-logo">
+        <div className="archive-logo">
           <strong>Instagram Viewer</strong>
-          <span>Local-first photo viewer</span>
-        </a>
+        </div>
         <span className="landing-step">01 — Import</span>
       </header>
 
