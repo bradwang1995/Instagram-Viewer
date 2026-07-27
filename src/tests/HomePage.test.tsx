@@ -205,7 +205,7 @@ describe("Photo archive preview", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps a dense desktop grid to three bounded four-card rows", async () => {
+  it("keeps a dense desktop grid to four bounded four-card rows", async () => {
     const source = createPost("LONG", "@long.library", "Reference");
     testState.posts = [source];
     testState.queue = Array.from({ length: 100 }, (_, index) =>
@@ -216,7 +216,7 @@ describe("Photo archive preview", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
     await waitFor(() =>
-      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(12),
+      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(16),
     );
 
     const scroller = screen.getByTestId("archive-scroller");
@@ -229,7 +229,7 @@ describe("Photo archive preview", () => {
     );
     expect(
       screen.getAllByTestId("archive-media-card").length,
-    ).toBeLessThanOrEqual(12);
+    ).toBeLessThanOrEqual(16);
   });
 
   it("preloads three posts beyond the visible Grid rows with bounded requests", async () => {
@@ -246,7 +246,7 @@ describe("Photo archive preview", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
     await waitFor(() =>
-      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(12),
+      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(16),
     );
     expect(view.container.querySelectorAll("iframe")).toHaveLength(3);
 

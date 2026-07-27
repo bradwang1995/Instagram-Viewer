@@ -50,6 +50,17 @@ Approved product principles:
 - Keep local-first privacy as the default and make every network/cache boundary explicit.
 - Do not implement carousel extraction, thumbnails, or GPU media transitions by scraping Instagram or reading a cross-origin iframe.
 
+## Revision 24: Edge-Cropped Embeds And Smoother Return Loading
+
+- [x] Preserve the accepted Grid spacing and hover lift while enlarging and center-cropping compatibility embeds beyond every card edge, moving Instagram's iframe-internal carousel arrow outside both Horizontal and Grid masks.
+- [x] Make Horizontal resolved photos cover their full frame so vertical or horizontal letterboxing no longer leaves large empty bands; keep Grid resolved photos contained.
+- [x] Replace the iframe's hard loader-to-content swap with a loader/content crossfade.
+- [x] Change bounded, permitted compatibility frames from browser-lazy to eager loading so the existing three-item ahead window actually begins network work before the card enters the viewport.
+- [x] Retain one previous desktop Grid row alongside visible and ahead content. The desktop window remains bounded at four rows / sixteen cards; mobile remains bounded at three cards.
+- [x] Keep the iframe boundary explicit: Instagram's cross-origin document cannot be placed in the app's own cache, and returning after a frame leaves the bounded retained window can still reload it.
+- [x] Defer automatic person-aware focal cropping. The parent cannot read iframe pixels, and the project has no reliable lightweight focal metadata or face-detection path for direct images.
+- [x] Add focused regressions for eager compatibility loading, loader/content readiness, and the revised bounded Grid window.
+
 ## Revision 23: Unified Typography And Recognizable Controls
 
 - [x] Self-host the Google Fonts Lobster typeface and its OFL license so production typography does not depend on a third-party font request.

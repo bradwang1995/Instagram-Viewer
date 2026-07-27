@@ -239,15 +239,20 @@ function CroppedInstagramPreview({
   if (hasFailed) return null;
 
   return (
-    <div className="archive-embed-crop">
-      {isLoading ? (
-        <MediaLoadingState className="archive-embed-loading" />
-      ) : null}
+    <div
+      className="archive-embed-crop"
+      data-load-state={isLoading ? "loading" : "ready"}
+    >
+      <MediaLoadingState
+        className="archive-embed-loading"
+        isVisible={isLoading}
+      />
       {granted && isValidated ? (
         <iframe
+          className={isLoading ? undefined : "is-ready"}
           src={embedUrl}
           title={`Instagram photo preview ${item.post.shortcode ?? item.post.id}`}
-          loading="lazy"
+          loading="eager"
           scrolling="no"
           tabIndex={-1}
           allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
@@ -320,9 +325,20 @@ function drainEmbedRequests() {
   }
 }
 
-function MediaLoadingState({ className }: { className: string }) {
+function MediaLoadingState({
+  className,
+  isVisible = true,
+}: {
+  className: string;
+  isVisible?: boolean;
+}) {
   return (
-    <span className={className} role="status" aria-label="Loading photo">
+    <span
+      className={`${className}${isVisible ? "" : " is-hidden"}`}
+      role={isVisible ? "status" : undefined}
+      aria-label={isVisible ? "Loading photo" : undefined}
+      aria-hidden={isVisible ? undefined : true}
+    >
       <LoaderCircle size={22} className="spin" aria-hidden="true" />
     </span>
   );

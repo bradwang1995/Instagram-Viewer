@@ -1,5 +1,54 @@
 # PhotoYoshi Archive Field Design QA
 
+## 2026-07-24 Core Viewer Refinement
+
+- Source visual truth:
+  - `C:\Users\bradw\.codex\attachments\88f000f7-6558-46b9-910e-dfe456b4612c\image-1.png` (`460 × 450`, Grid/Horizontal compatibility arrow detail).
+  - `C:\Users\bradw\.codex\attachments\88f000f7-6558-46b9-910e-dfe456b4612c\image-2.png` (`886 × 1134`, compatibility media square letterboxed inside a portrait Horizontal frame).
+  - `C:\Users\bradw\.codex\attachments\88f000f7-6558-46b9-910e-dfe456b4612c\image-3.png` (`2528 × 878`, Grid compatibility arrows, loader, spacing, and hover baseline).
+- Browser-rendered implementation:
+  - `C:\Users\bradw\.codex\visualizations\2026\07\24\019f942d-8bdd-7841-8ed9-d6af9945cf01\instagram-viewer-horizontal-implementation.png` (`1920 × 1080` pixels at `1920 × 1080` CSS px and device scale `1`).
+  - `C:\Users\bradw\.codex\visualizations\2026\07\24\019f942d-8bdd-7841-8ed9-d6af9945cf01\instagram-viewer-grid-implementation.png` (`1920 × 1080` pixels at `1920 × 1080` CSS px and device scale `1`).
+- Full-view comparison evidence:
+  - `C:\Users\bradw\.codex\visualizations\2026\07\24\019f942d-8bdd-7841-8ed9-d6af9945cf01\instagram-viewer-horizontal-comparison.jpg`.
+  - `C:\Users\bradw\.codex\visualizations\2026\07\24\019f942d-8bdd-7841-8ed9-d6af9945cf01\instagram-viewer-grid-comparison.jpg`.
+- Focused comparison evidence: `C:\Users\bradw\.codex\visualizations\2026\07\24\019f942d-8bdd-7841-8ed9-d6af9945cf01\instagram-viewer-arrow-crop-comparison.jpg` places the supplied arrow screenshot beside the implemented `36px` centered edge-crop geometry. The arrow falls outside the masked region while the central person remains the focal subject.
+- State: bundled non-personal direct-image demo in desktop Horizontal/Grid and mobile Horizontal/Grid; supplied real-embed screenshots ground the compatibility crop. The ignored 6 MB personal export was deliberately not re-imported during QA.
+
+### Findings And Comparison History
+
+- [P1 resolved] Horizontal media left large top/bottom empty bands.
+  - Fix: direct images use `object-fit: cover` only in Horizontal View; compatibility media now fills the entire card before its centered edge crop is applied.
+  - Post-fix evidence: desktop computed `object-fit: cover`; the image and inner surface measured `1301.36 × 866.23` and `1305.36 × 870.23`. Mobile measured `315.80 × 634.95` inside `319.80 × 638.95`, with zero document horizontal overflow.
+- [P1 resolved] Instagram's right-side carousel arrow remained visible in both browsing modes.
+  - Fix: the cross-origin iframe is enlarged by `36px` on every edge and centered behind the existing rounded mask. This moves the iframe-internal right arrow outside the visible card without trying to inspect or restyle Instagram's DOM.
+  - Post-fix evidence: the focused comparison applies the same crop to the supplied arrow pixels; the arrow is outside the result and the subject remains centered.
+- [P1 resolved] Permitted ahead-of-viewport iframes still asked the browser to lazy-load.
+  - Fix: bounded permitted frames now use eager loading. Desktop Grid retains one previous row while keeping visible and ahead content in a four-row / sixteen-card maximum; mobile remains at three cards.
+  - Post-fix evidence: after a `520px` Grid scroll, the browser kept indexes `0–15`; after `1020px`, the end-limited demo kept indexes `4–18`. Component coverage confirms `loading="eager"`.
+- [P2 resolved] Loader completion exposed the iframe through a hard black swap.
+  - Fix: iframe opacity now transitions for `480ms` while the loader fades for `320ms`; the ready state removes the stale live-region announcement.
+  - Post-fix evidence: component coverage verifies `loading → ready`, `iframe.is-ready`, and `.archive-embed-loading.is-hidden`.
+
+### Required Fidelity Surfaces
+
+- Fonts and typography: unchanged and passed. The existing self-hosted Lobster hierarchy and readable control sizes remain intact.
+- Spacing and layout rhythm: passed. Grid spacing, square cards, rounded edges, dock placement, and hover structure are unchanged; Horizontal media now occupies the frame instead of a centered square island.
+- Colors and visual tokens: unchanged and passed. The black/plum canvas, dark card edges, shadows, and Instagram-gradient controls remain consistent.
+- Image quality and asset fidelity: passed for the requested behavior. Horizontal cover intentionally crops edges; Grid direct media remains contained. Compatibility frames use a small centered crop instead of a guessed subject-detection transform.
+- Copy and content: unchanged and passed. `Instagram Viewer`, `Horizontal View`, and `Grid View` remain exact.
+- Responsiveness: passed at `1920 × 1080` and `390 × 844`. Mobile Grid rendered three bounded cards with zero page overflow; mobile Horizontal filled its portrait card with zero page overflow.
+- Accessibility and motion: passed. The loading status is removed from the accessibility tree after readiness, and reduced-motion rules still suppress decorative transforms/transitions.
+
+### Browser Verification
+
+- Primary interactions tested: switch Horizontal → Grid, scroll the bounded Grid window, switch back to Horizontal, and verify responsive Grid/Horizontal states.
+- Browser console errors/warnings checked: none.
+- Automated validation: `npm test` (`14` files / `53` tests), `npm run lint`, `npm run build`, Prettier check, and `git diff --check` passed.
+- Residual P3 validation gap: a live Instagram iframe was not reloaded from the ignored personal export during this pass. Cross-origin layout can change independently; the supplied real-embed pixels and implemented crop geometry were used for the focused arrow comparison.
+
+final result: passed
+
 - Product reference: `https://photoyoshi.com/`
 - Reference captures: `artifacts/photoyoshi-reference-desktop.png`, `artifacts/photoyoshi-reference-scroll-1.png`, `artifacts/photoyoshi-reference-scroll-2.png`, and `artifacts/photoyoshi-reference-mobile.png`
 - Previous product state: `artifacts/before-photoyoshi-redesign.png`
@@ -23,9 +72,9 @@ The visual language follows the supplied PhotoYoshi reference: oversized express
 ## Required Fidelity Surfaces
 
 - Typography: passed. One self-hosted Lobster family is computed across visible title, control, panel, form, and status text. Forced uppercase is absent; the 150% root scale remains, and the preview no longer spends image space on an oversized archive watermark or compact per-card metadata.
-- Layout and spacing: passed in current browser captures. Desktop Horizontal media occupies `870px` of a `1080px` viewport. Desktop Grid shows two four-card rows while retaining one bounded four-card overscan row; mobile Grid shows two cards while retaining one bounded overscan card.
+- Layout and spacing: passed in current browser captures. Desktop Horizontal media occupies `870px` of a `1080px` viewport. Desktop Grid shows two four-card rows while retaining one previous and one ahead bounded row; mobile Grid shows two cards while retaining one bounded overscan card.
 - Color and surfaces: passed. Deep black/plum backgrounds, warm off-white display text, muted gray metadata, and an Instagram-inspired orange/magenta/violet gradient replace the earlier acid-lime accent. Selected photos have no border.
-- Image quality: passed. The demo uses bundled WebP photography at native aspect ratio and `object-fit: contain`. Imported unresolved Instagram sources use a square media crop that visually excludes the profile header, View more on Instagram, social actions, counts, comments, and footer. Visible cards plus the next three items may preload within a three-request concurrency gate.
+- Image quality: passed. The demo uses bundled WebP photography with `object-fit: cover` in Horizontal and `contain` in Grid. Imported unresolved Instagram sources fill the card through a centered edge crop that visually excludes the profile header, carousel arrow, View more on Instagram, social actions, counts, comments, and footer. Visible cards plus the next three items may preload within a three-request concurrency gate.
 - Icons and controls: passed. Lucide icons share one stroke family and remain paired with readable labels. Filter, Settings, and Slideshow use the same recognizable button construction; slideshow Previous, Play/Pause, and Next now expose visible text and equal computed dimensions.
 - Copy and content: passed. The product name is `Instagram Viewer`; source/media totals, creator/collection captions, frame labels, and rejected per-card action copy are absent from the browsing surfaces.
 - Responsiveness: passed in implementation, tests, and current captures. Desktop uses exactly four Grid columns; tablet uses two and mobile uses one. Both browsing modes use bounded render windows and visually hidden scrollbars. The revised dock is visible in the current `390 × 844` capture.
@@ -40,7 +89,7 @@ The visual language follows the supplied PhotoYoshi reference: oversized express
 - Slideshow navigation advanced inside a multi-frame source before moving to the next source.
 - The current slideshow frame and direct image both measured exactly `2576 × 1408` in a `2576 × 1408` viewport; controls overlay the lower edge instead of reducing the media stage.
 - Opening slideshow wrote `?slideshow=1`; browser Back removed the slideshow region and restored the photo preview at the prior app URL.
-- A real public compatibility embed displayed only the photo surface in Grid and slideshow captures; Instagram's header and social footer were outside the crop. Carousel arrows drawn on top of the photo can remain because the iframe is cross-origin.
+- A real public compatibility embed displayed only the photo surface in Grid and slideshow captures; Instagram's header and social footer were outside the crop. The current browsing-card crop also moves the supplied iframe-internal carousel arrow outside the rounded mask, while the cross-origin control itself remains owned by Instagram.
 - The empty-library route rendered the JSON upload composition with document dimensions matching the viewport.
 - The real local-library route correctly returned the upload screen when IndexedDB contained no imported records.
 - A V1 resolved-media file containing three embedded WebP images imported through the real browser file input as three ordered direct-image cards with distinct stable IDs and no iframes.
@@ -153,10 +202,10 @@ Instagram `saved_posts.json` does not contain carousel-child media, original ima
 ## Verification
 
 - `npm run lint`: passed.
-- `npm test`: 14 files and 52 tests passed, including official oEmbed availability handling, silent source omission, triple-ahead preload, per-child slideshow button/keyboard order and history, interactive iframe pausing, resolved-manifest parser regressions, transaction rollback, Grid/Horizontal end reachability, mixed-aspect viewport coverage, direct-image fallback, responsive dense Grid behavior, and iframe timeout queue draining.
+- `npm test`: 14 files and 53 tests passed, including official oEmbed availability handling, silent source omission, eager triple-ahead preload and crossfade readiness, per-child slideshow button/keyboard order and history, interactive iframe pausing, resolved-manifest parser regressions, transaction rollback, Grid/Horizontal end reachability, mixed-aspect viewport coverage, direct-image fallback, responsive dense Grid behavior, and iframe timeout queue draining.
 - `npm run build`: passed.
 - Fresh local Chrome evidence confirms `24px` root text, a single Lobster family, no forced uppercase, equal per-viewport control metrics, hidden scrollbars, two visible desktop Grid rows, bounded DOM windows, an `870px` Horizontal surface, current mobile dock layout, rounded dark edges, and last-media reachability.
-- Current Grid evidence mounted twelve cards: eight visible and four in the next bounded row. Horizontal kept its visible window plus three-photo side overscan. Compatibility navigation permission is limited to visible cards plus the next three, and active iframe navigation remains capped at three.
+- Current desktop Grid evidence mounted sixteen cards: visible content plus bounded previous/ahead retention. Horizontal kept its visible window plus three-photo side overscan. Compatibility navigation permission is limited to visible cards plus the next three, and active iframe navigation remains capped at three.
 - Slideshow evidence advanced a resolved three-photo post to `03 / 03` by button then keyboard, retained the exact `5s` default, and kept the image inside `0–1080px`. Mock compatibility evidence measured an interactive focusable iframe at y=`92–988px`; focus paused playback. Cross-origin iframe child state remains intentionally unobservable.
 - A controlled browser import containing two available posts and one oEmbed-rejected post retained exactly two cards/two iframes, removed the rejected card, and exposed no failure copy.
 - Browser-uploaded three-photo internal fixture evidence confirms three ordered direct-image cards, stable IDs, and zero iframes at `artifacts/audit-04-manifest-grid.png`; the equal-size labeled transport is recorded at `artifacts/audit-05-slideshow-controls.png`.

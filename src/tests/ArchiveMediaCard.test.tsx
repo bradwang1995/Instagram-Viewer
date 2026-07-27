@@ -140,6 +140,45 @@ describe("ArchiveMediaCard", () => {
     );
   });
 
+  it("eagerly preloads a permitted embed and crossfades it over the loader", async () => {
+    const item = createItem("eager-fade");
+    item.media.sourceKind = "embed";
+    item.media.assetUrl = undefined;
+    item.media.previewUrl = undefined;
+    const view = render(
+      <ArchiveMediaCard
+        item={item}
+        index={0}
+        selected
+        allowCompatibilityPreview
+        layoutStyle={{ width: 400, height: 500 }}
+        onSelect={vi.fn()}
+        onUnavailable={vi.fn()}
+      />,
+    );
+
+    await waitFor(() =>
+      expect(view.container.querySelector("iframe")).toBeInTheDocument(),
+    );
+    const frame = view.container.querySelector("iframe") as HTMLIFrameElement;
+    expect(frame).toHaveAttribute("loading", "eager");
+    expect(view.container.querySelector(".archive-embed-crop")).toHaveAttribute(
+      "data-load-state",
+      "loading",
+    );
+
+    fireEvent.load(frame);
+
+    expect(view.container.querySelector(".archive-embed-crop")).toHaveAttribute(
+      "data-load-state",
+      "ready",
+    );
+    expect(frame).toHaveClass("is-ready");
+    expect(view.container.querySelector(".archive-embed-loading")).toHaveClass(
+      "is-hidden",
+    );
+  });
+
   it("silently omits timed-out embeds, keeps the request window bounded, and remembers failures", async () => {
     vi.useFakeTimers();
     const onUnavailable = vi.fn();

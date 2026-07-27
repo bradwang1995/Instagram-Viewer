@@ -23,7 +23,8 @@ export type RibbonMetrics = {
   totalWidth: number;
 };
 
-const GRID_RENDERED_ROWS = 3;
+const DESKTOP_GRID_RENDERED_ROWS = 4;
+const MOBILE_GRID_RENDERED_ROWS = 3;
 const RIBBON_OVERSCAN_ITEMS = 3;
 
 export function getGridMetrics(
@@ -41,8 +42,9 @@ export function getGridMetrics(
   const itemWidth =
     (safeWidth - paddingX * 2 - columnGap * (columns - 1)) / columns;
   // A square card matches the unresolved Instagram preview surface and avoids
-  // stretching each Grid row to nearly a full viewport. Three rendered rows
-  // keep visible content plus a bounded ahead-of-scroll preload window.
+  // stretching each Grid row to nearly a full viewport. Four rendered rows
+  // retain one recently viewed row while keeping visible and ahead-of-scroll
+  // content inside a bounded window.
   const itemHeight = itemWidth;
   const rowStride = itemHeight + rowGap;
   const rowCount = Math.ceil(itemCount / columns);
@@ -71,12 +73,21 @@ export function getGridWindow(
   if (itemCount === 0) return [];
 
   const rowCount = Math.ceil(itemCount / metrics.columns);
-  const firstRow = clamp(
+  const renderedRows =
+    metrics.columns === 1
+      ? MOBILE_GRID_RENDERED_ROWS
+      : DESKTOP_GRID_RENDERED_ROWS;
+  const visibleRow = clamp(
     Math.floor(Math.max(0, scrollTop - metrics.paddingY) / metrics.rowStride),
     0,
     Math.max(0, rowCount - 1),
   );
-  const lastRow = Math.min(rowCount, firstRow + GRID_RENDERED_ROWS);
+  const firstRow = clamp(
+    visibleRow - 1,
+    0,
+    Math.max(0, rowCount - renderedRows),
+  );
+  const lastRow = Math.min(rowCount, firstRow + renderedRows);
   const layouts: VirtualMediaLayout[] = [];
 
   for (let row = firstRow; row < lastRow; row += 1) {

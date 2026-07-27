@@ -19,12 +19,13 @@ describe("virtual media layout", () => {
 
     expect(metrics.columns).toBe(4);
     expect(firstWindow[8].top).toBeGreaterThanOrEqual(850);
-    expect(firstWindow).toHaveLength(12);
+    expect(firstWindow).toHaveLength(16);
     expect(firstWindow.map((item) => item.index)).toEqual(
-      Array.from({ length: 12 }, (_, index) => index),
+      Array.from({ length: 16 }, (_, index) => index),
     );
-    expect(laterWindow).toHaveLength(12);
-    expect(laterWindow[0].index).toBe(480);
+    expect(laterWindow).toHaveLength(16);
+    expect(laterWindow[0].index).toBe(476);
+    expect(laterWindow.some((item) => item.index === 480)).toBe(true);
     expect(metrics.totalHeight).toBeGreaterThan(900);
     const finalWindow = getGridWindow(
       1_800,
@@ -55,9 +56,7 @@ describe("virtual media layout", () => {
     const maxScroll = metrics.totalWidth - 1920;
     const finalWindow = getRibbonWindow(metrics.layouts, maxScroll, 1920);
     expect(finalWindow[finalWindow.length - 1]?.index).toBe(1_799);
-    expect(getClosestRibbonIndex(metrics.layouts, maxScroll + 960)).toBe(
-      1_799,
-    );
+    expect(getClosestRibbonIndex(metrics.layouts, maxScroll + 960)).toBe(1_799);
   });
 
   it.each([
