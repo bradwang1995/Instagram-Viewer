@@ -1,12 +1,21 @@
 # PhotoYoshi Archive Field Design QA
 
+## 2026-07-26 Pacifico Correction And Settings Rebalance
+
+- Authoritative font evidence: the supplied computed-style capture reports `.main-title h1 { font-family: "Pacifico", Arial; }`; the visual reference matches that computed family.
+- Font source: `Pacifico-Regular.ttf` and `Pacifico-OFL.txt` come from the official Google Fonts Pacifico directory.
+- Scope: Pacifico replaces Lobster in the shared application font tokens. The title layout remains unchanged.
+- Settings correction: the heading is capped at `38.4px`; labels, outputs, selects, hidden-media details, and empty-state copy use a tighter `17.28–20.16px` readable range with stronger empty-state contrast.
+- Browser evidence: `document.fonts.check("24px Pacifico")` passed and all inspected text computed to `Pacifico, Arial, sans-serif`. At `2560 × 940`, Settings measured `38.4px` heading, `19.2px` labels/outputs, `20.16px` selects, `18.24px` empty-state copy, and `20.64px` buttons. Mobile retained a `34.8px` heading and the same readable body range.
+- Visual evidence: `C:\Users\bradw\.codex\visualizations\2026\07\27\019fa139-512c-7710-994b-f29c7a4bcbf7\settings-pacifico-desktop.png` and `settings-pacifico-mobile.png`.
+
 ## 2026-07-26 Readability And Cursor Reset
 
-- Source visual truth: `C:\Users\bradw\.codex\attachments\cf68ec9f-0611-4fcd-96fd-90205e57708b\image-1.png` confirms Lobster as the requested application typeface.
+- Source visual truth: the earlier visual-only identification was superseded by the supplied computed `Pacifico` evidence above.
 - Typography scope: the title remains unchanged. Shared button labels are larger, while Settings raises undersized labels/metadata and reduces its oversized heading/count to a centered hierarchy.
 - Cursor scope: non-interactive surfaces use the browser default; enabled controls, selectors, and all Horizontal/Grid photo cards use the native pointer; disabled controls remain default.
 - Keyboard scope: custom card Enter/Space handling and the parent Arrow/Space/H/Escape listener are removed. Visible controls remain the supported navigation path.
-- Browser evidence: desktop Settings renders a `49.92px` heading, `17.28px` labels, `19.2px` form values, and `20.64px` buttons; mobile renders a `43.2px` heading and `17.76px` buttons. Computed cursors are `auto` on the body and `pointer` on cards and controls.
+- Browser evidence: the original type-size evidence is superseded by the Pacifico correction above. Computed cursors remain `auto` on the body and `pointer` on cards and controls.
 - Visual evidence: `C:\Users\bradw\.codex\visualizations\2026\07\27\019fa139-512c-7710-994b-f29c7a4bcbf7\settings-desktop.png` and `settings-mobile.png`.
 - Validation: `npm test` (`14` files / `53` tests), `npm run lint`, `npm run build`, responsive browser QA, and `git diff --check` passed.
 
@@ -81,7 +90,7 @@ The visual language follows the supplied PhotoYoshi reference: oversized express
 
 ## Required Fidelity Surfaces
 
-- Typography: passed. One self-hosted Lobster family is computed across visible title, control, panel, form, and status text. Forced uppercase is absent; the 150% root scale remains, and the preview no longer spends image space on an oversized archive watermark or compact per-card metadata.
+- Typography: passed. One self-hosted Pacifico family is computed across visible title, control, panel, form, and status text. Forced uppercase is absent; the 150% root scale remains, and the preview no longer spends image space on an oversized archive watermark or compact per-card metadata.
 - Layout and spacing: passed in current browser captures. Desktop Horizontal media occupies `870px` of a `1080px` viewport. Desktop Grid shows two four-card rows while retaining one previous and one ahead bounded row; mobile Grid shows two cards while retaining one bounded overscan card.
 - Color and surfaces: passed. Deep black/plum backgrounds, warm off-white display text, muted gray metadata, and an Instagram-inspired orange/magenta/violet gradient replace the earlier acid-lime accent. Selected photos have no border.
 - Image quality: passed. The demo uses bundled WebP photography with `object-fit: cover` in Horizontal and `contain` in Grid. Imported unresolved Instagram sources fill the card through a centered edge crop that visually excludes the profile header, carousel arrow, View more on Instagram, social actions, counts, comments, and footer. Visible cards plus the next three items may preload within a three-request concurrency gate.
@@ -103,7 +112,7 @@ The visual language follows the supplied PhotoYoshi reference: oversized express
 - The empty-library route rendered the JSON upload composition with document dimensions matching the viewport.
 - The real local-library route correctly returned the upload screen when IndexedDB contained no imported records.
 - A V1 resolved-media file containing three embedded WebP images imported through the real browser file input as three ordered direct-image cards with distinct stable IDs and no iframes.
-- Computed desktop controls share `19.2px` text, `52px` height, and `16px` radius; mobile controls share `16.32px`, `46px`, and `14px`. Every inspected control reports `Lobster, cursive` and `text-transform: none`.
+- Computed desktop controls share `20.64px` text, `52px` height, and `16px` radius; mobile controls share `17.76px`, `46px`, and `14px`. Every inspected control reports `Pacifico, Arial, sans-serif` and `text-transform: none`.
 
 ## Iteration History
 
@@ -214,7 +223,7 @@ Instagram `saved_posts.json` does not contain carousel-child media, original ima
 - `npm run lint`: passed.
 - `npm test`: 14 files and 53 tests passed, including official oEmbed availability handling, silent source omission, eager triple-ahead preload and crossfade readiness, visible-control slideshow order and history, custom-keyboard absence, interactive iframe pausing, resolved-manifest parser regressions, transaction rollback, Grid/Horizontal end reachability, mixed-aspect viewport coverage, direct-image fallback, responsive dense Grid behavior, and iframe timeout queue draining.
 - `npm run build`: passed.
-- Fresh local Chrome evidence confirms `24px` root text, a single Lobster family, no forced uppercase, equal per-viewport control metrics, hidden scrollbars, two visible desktop Grid rows, bounded DOM windows, an `870px` Horizontal surface, current mobile dock layout, rounded dark edges, and last-media reachability.
+- Fresh local Chrome evidence confirms `24px` root text, a single Pacifico family, no forced uppercase, equal per-viewport control metrics, hidden scrollbars, two visible desktop Grid rows, bounded DOM windows, an `870px` Horizontal surface, current mobile dock layout, rounded dark edges, and last-media reachability.
 - Current desktop Grid evidence mounted sixteen cards: visible content plus bounded previous/ahead retention. Horizontal kept its visible window plus three-photo side overscan. Compatibility navigation permission is limited to visible cards plus the next three, and active iframe navigation remains capped at three.
 - Slideshow evidence advanced a resolved three-photo post to `03 / 03` through visible Next buttons, retained the exact `5s` default, and kept the image inside `0–1080px`. ArrowRight no longer advances the parent slideshow. Mock compatibility evidence measured an interactive focusable iframe at y=`92–988px`; focus paused playback. Cross-origin iframe child state remains intentionally unobservable.
 - A controlled browser import containing two available posts and one oEmbed-rejected post retained exactly two cards/two iframes, removed the rejected card, and exposed no failure copy.

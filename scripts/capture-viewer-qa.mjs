@@ -333,7 +333,7 @@ async function captureManifestImport({
       JSON.stringify(slideshowControlEvidence.labels) !==
         JSON.stringify(["Previous", "Pause", "Next"]) ||
       slideshowControlEvidence.fontFamilies.length !== 1 ||
-      !slideshowControlEvidence.fontFamilies[0]?.startsWith("Lobster") ||
+      !slideshowControlEvidence.fontFamilies[0]?.startsWith("Pacifico") ||
       slideshowControlEvidence.fontSizes.length !== 1 ||
       slideshowControlEvidence.heights.length !== 1 ||
       slideshowControlEvidence.borderRadii.length !== 1 ||
@@ -574,10 +574,10 @@ async function captureState({
     }
     if (
       initial.fontFamilies.length !== 1 ||
-      !initial.fontFamilies[0]?.startsWith("Lobster")
+      !initial.fontFamilies[0]?.startsWith("Pacifico")
     ) {
       throw new Error(
-        `${name}: viewer text does not use one Lobster font family: ${JSON.stringify(initial.fontFamilies)}`,
+        `${name}: viewer text does not use one Pacifico font family: ${JSON.stringify(initial.fontFamilies)}`,
       );
     }
     if (
