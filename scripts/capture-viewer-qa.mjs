@@ -351,7 +351,7 @@ async function captureManifestImport({
           .querySelector(".slideshow-progress span")
           ?.textContent?.trim() === "02 / 03",
     );
-    await page.keyboard.press("ArrowRight");
+    await page.getByRole("button", { name: "Next photo" }).click();
     await page.waitForFunction(
       () =>
         document
@@ -529,6 +529,11 @@ async function captureState({
             (control) => getComputedStyle(control).textTransform,
           ),
         ),
+        bodyCursor: getComputedStyle(document.body).cursor,
+        cardCursor: getComputedStyle(
+          document.querySelector(".archive-card-hit"),
+        ).cursor,
+        controlCursor: getComputedStyle(viewerControls[0]).cursor,
         userSelect: getComputedStyle(document.body).userSelect,
         scrollbarWidth: style.scrollbarWidth,
         scrollSnapType: style.scrollSnapType,
@@ -588,6 +593,15 @@ async function captureState({
     if (initial.scrollbarWidth !== "none") {
       throw new Error(`${name}: visible scrollbar styling detected`);
     }
+    if (
+      initial.bodyCursor !== "auto" ||
+      initial.cardCursor !== "pointer" ||
+      initial.controlCursor !== "pointer"
+    ) {
+      throw new Error(
+        `${name}: cursor semantics are incorrect: ${JSON.stringify({ body: initial.bodyCursor, card: initial.cardCursor, control: initial.controlCursor })}`,
+      );
+    }
     if (initial.userSelect !== "none") {
       throw new Error(`${name}: selectable gallery content detected`);
     }
@@ -611,7 +625,7 @@ async function captureState({
         ? 3
         : viewport.width <= 1100
           ? 4
-          : 12
+          : 16
       : 9;
     if (initial.cardCount > maximumMountedCards) {
       throw new Error(`${name}: mounted ${initial.cardCount} cards`);

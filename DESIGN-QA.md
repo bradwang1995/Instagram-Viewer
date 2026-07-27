@@ -1,5 +1,15 @@
 # PhotoYoshi Archive Field Design QA
 
+## 2026-07-26 Readability And Cursor Reset
+
+- Source visual truth: `C:\Users\bradw\.codex\attachments\cf68ec9f-0611-4fcd-96fd-90205e57708b\image-1.png` confirms Lobster as the requested application typeface.
+- Typography scope: the title remains unchanged. Shared button labels are larger, while Settings raises undersized labels/metadata and reduces its oversized heading/count to a centered hierarchy.
+- Cursor scope: non-interactive surfaces use the browser default; enabled controls, selectors, and all Horizontal/Grid photo cards use the native pointer; disabled controls remain default.
+- Keyboard scope: custom card Enter/Space handling and the parent Arrow/Space/H/Escape listener are removed. Visible controls remain the supported navigation path.
+- Browser evidence: desktop Settings renders a `49.92px` heading, `17.28px` labels, `19.2px` form values, and `20.64px` buttons; mobile renders a `43.2px` heading and `17.76px` buttons. Computed cursors are `auto` on the body and `pointer` on cards and controls.
+- Visual evidence: `C:\Users\bradw\.codex\visualizations\2026\07\27\019fa139-512c-7710-994b-f29c7a4bcbf7\settings-desktop.png` and `settings-mobile.png`.
+- Validation: `npm test` (`14` files / `53` tests), `npm run lint`, `npm run build`, responsive browser QA, and `git diff --check` passed.
+
 ## 2026-07-24 Core Viewer Refinement
 
 - Source visual truth:
@@ -202,11 +212,11 @@ Instagram `saved_posts.json` does not contain carousel-child media, original ima
 ## Verification
 
 - `npm run lint`: passed.
-- `npm test`: 14 files and 53 tests passed, including official oEmbed availability handling, silent source omission, eager triple-ahead preload and crossfade readiness, per-child slideshow button/keyboard order and history, interactive iframe pausing, resolved-manifest parser regressions, transaction rollback, Grid/Horizontal end reachability, mixed-aspect viewport coverage, direct-image fallback, responsive dense Grid behavior, and iframe timeout queue draining.
+- `npm test`: 14 files and 53 tests passed, including official oEmbed availability handling, silent source omission, eager triple-ahead preload and crossfade readiness, visible-control slideshow order and history, custom-keyboard absence, interactive iframe pausing, resolved-manifest parser regressions, transaction rollback, Grid/Horizontal end reachability, mixed-aspect viewport coverage, direct-image fallback, responsive dense Grid behavior, and iframe timeout queue draining.
 - `npm run build`: passed.
 - Fresh local Chrome evidence confirms `24px` root text, a single Lobster family, no forced uppercase, equal per-viewport control metrics, hidden scrollbars, two visible desktop Grid rows, bounded DOM windows, an `870px` Horizontal surface, current mobile dock layout, rounded dark edges, and last-media reachability.
 - Current desktop Grid evidence mounted sixteen cards: visible content plus bounded previous/ahead retention. Horizontal kept its visible window plus three-photo side overscan. Compatibility navigation permission is limited to visible cards plus the next three, and active iframe navigation remains capped at three.
-- Slideshow evidence advanced a resolved three-photo post to `03 / 03` by button then keyboard, retained the exact `5s` default, and kept the image inside `0–1080px`. Mock compatibility evidence measured an interactive focusable iframe at y=`92–988px`; focus paused playback. Cross-origin iframe child state remains intentionally unobservable.
+- Slideshow evidence advanced a resolved three-photo post to `03 / 03` through visible Next buttons, retained the exact `5s` default, and kept the image inside `0–1080px`. ArrowRight no longer advances the parent slideshow. Mock compatibility evidence measured an interactive focusable iframe at y=`92–988px`; focus paused playback. Cross-origin iframe child state remains intentionally unobservable.
 - A controlled browser import containing two available posts and one oEmbed-rejected post retained exactly two cards/two iframes, removed the rejected card, and exposed no failure copy.
 - Browser-uploaded three-photo internal fixture evidence confirms three ordered direct-image cards, stable IDs, and zero iframes at `artifacts/audit-04-manifest-grid.png`; the equal-size labeled transport is recorded at `artifacts/audit-05-slideshow-controls.png`.
 - Known independent child-media records advance one frame at a time before the next post. Ordinary saved JSON still contains no carousel-child URLs; the cross-origin compatibility iframe cannot be auto-clicked or flattened by the parent viewer.

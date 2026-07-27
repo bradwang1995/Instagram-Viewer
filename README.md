@@ -37,11 +37,12 @@ The active UI is branded `Instagram Viewer`. The app self-hosts the open-source 
 - Compatibility frames crossfade over the loading surface after their document load event instead of replacing the spinner with a hard black flash.
 - The full media list remains reachable through the virtual track, and both scrollbars stay visually hidden.
 - Horizontal View and Grid View are represented by `?view=horizontal` and `?view=grid`. Switching modes adds an in-app history entry, so browser Back and Forward restore the matching URL, active tab, and rendered layout; direct view-specific URLs also restore on refresh.
-- The page prevents text/image selection and keeps one native-size default cursor across application-controlled hover, click, and drag surfaces. A cross-origin Instagram iframe may still choose its own cursor internally because parent-page CSS cannot style the embedded document.
-- Tabs, Import, Filter, Settings, Slideshow, sheet actions, and slideshow transport share one recognizable rounded dark-button treatment with a gradient edge. Desktop controls use the same `19.2px` font, `52px` height, and `16px` radius; the responsive mobile set uses the same `16.32px` font, `46px` height, and `14px` radius.
+- The page prevents text/image selection and uses standard cursor semantics: buttons, links, form selectors, and every photo card show the native `pointer`; non-interactive application surfaces keep the browser default cursor. A cross-origin Instagram iframe may still choose its own cursor internally because parent-page CSS cannot style the embedded document.
+- Tabs, Import, Filter, Settings, Slideshow, sheet actions, and slideshow transport share one recognizable rounded dark-button treatment with a gradient edge. Their Lobster labels use a more legible `20.64px` desktop size and `17.76px` mobile size while retaining the existing `52px` / `46px` control heights.
+- Custom keyboard navigation is intentionally absent from Horizontal View, Grid View, and the parent slideshow surface. Photo selection and slideshow navigation use the visible pointer controls; standard browser behavior for native form controls is unchanged.
 - Slideshow defaults to five seconds, fills the viewport behind overlaid controls, uses visible Previous/Play-or-Pause/Next labels, and pushes `?slideshow=1` so browser Back returns to the photo field. Known resolved children advance in source order before the next post; after the last known child, manual or timed navigation advances to the next post under the selected loop mode.
 
-Ordinary `saved_posts.json` imports use one bounded compatibility preview per post because the export contains no child URLs. In Slideshow, that iframe is focusable, playable, scrollable, and left free of a blocking application overlay; focusing or pointing into it pauses autoplay. Users can operate Instagram's native carousel controls, but the parent cannot read or command the cross-origin carousel. Parent-page arrow keys therefore do not skip an unresolved interactive post, while explicit Previous/Next post buttons remain available. The app does not scrape Instagram or fabricate children from a cross-origin iframe.
+Ordinary `saved_posts.json` imports use one bounded compatibility preview per post because the export contains no child URLs. In Slideshow, that iframe is focusable, playable, scrollable, and left free of a blocking application overlay; focusing or pointing into it pauses autoplay. Users can operate Instagram's native carousel controls, but the parent cannot read or command the cross-origin carousel. The parent page exposes no keyboard shortcuts; explicit Previous/Next post buttons remain available. The app does not scrape Instagram or fabricate children from a cross-origin iframe.
 
 ## PhotoYoshi-Inspired Archive Field
 
@@ -66,7 +67,7 @@ The bottom dock owns the session: Horizontal/Grid mode, filtering, playback sett
 - Added creator, collection, local-tag/text, and advanced saved-date session filtering.
 - Added independent dwell time, transition duration, transition preset, shuffle, and loop behavior.
 - Added Crossfade, Directional Wipe, Depth Zoom, Film Burn, RGB Split, and Ken Burns stage treatments.
-- Added keyboard navigation and curation shortcuts, document-hidden playback pause, fullscreen, and reduced-motion fallbacks.
+- Keeps document-hidden playback pause, fullscreen, and reduced-motion fallbacks; custom keyboard navigation was subsequently removed in favor of visible controls.
 - Added an explicit `?demo=1` fixture with eight non-personal source posts and nineteen resolved media items to prove multi-photo source playback.
 - Added responsive `1280 × 720` and `390 × 844` layouts, interaction tests, same-viewport comparison evidence, and a passing [`DESIGN-QA.md`](DESIGN-QA.md) report.
 
@@ -139,16 +140,7 @@ Every resolved media item should support three distinct actions:
 
 The hide preference must be lightweight metadata stored separately from thumbnail or media blobs. Browser cache eviction must never silently restore disliked media to the slideshow.
 
-Suggested keyboard interactions:
-
-- `Left` / `Right`: previous or next media item.
-- `Space`: play or pause when focus is not inside a form control.
-- `H`: hide the current media item.
-- `U`: undo the most recent hide.
-- `S`: skip the remaining media in the current source post.
-- `Escape`: stop playback or close the active overlay.
-
-All shortcuts need visible discovery, focus-safe behavior, and a reduced-motion path.
+Keyboard shortcuts are deliberately not part of the active viewer. Horizontal View, Grid View, and the parent slideshow surface use visible pointer controls so navigation behavior stays predictable.
 
 ### Search And Session Filters
 

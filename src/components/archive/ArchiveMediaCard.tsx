@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type KeyboardEvent,
 } from "react";
 import { getInstagramEmbedUrl } from "../../features/embed/instagramEmbedUrl";
 import { getInstagramEmbedAvailability } from "../../features/embed/instagramOEmbed";
@@ -106,13 +105,6 @@ export function ArchiveMediaCard({
     reportUnavailable();
   }
 
-  function selectFromKeyboard(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      onSelect();
-    }
-  }
-
   if (hasFailed) return null;
 
   return (
@@ -131,14 +123,7 @@ export function ArchiveMediaCard({
       }}
       whileHover={{ y: -10, scale: 1.015 }}
     >
-      <div
-        className="archive-card-hit"
-        role="button"
-        tabIndex={0}
-        aria-label={`View photo from ${creator}`}
-        onClick={onSelect}
-        onKeyDown={selectFromKeyboard}
-      >
+      <div className="archive-card-hit" onClick={onSelect}>
         <div className="archive-media-surface">
           {resolvedUrl && !hasFailed ? (
             <>

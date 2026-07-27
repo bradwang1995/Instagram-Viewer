@@ -78,9 +78,13 @@ describe("Photo archive preview", () => {
     await act(async () => undefined);
 
     expect(screen.getAllByTestId("archive-media-card")).toHaveLength(3);
-    const secondFrame = screen.getAllByRole("button", {
-      name: "View photo from @north.archive",
-    })[1];
+    const secondFrame = screen
+      .getAllByTestId("archive-media-card")[1]
+      .querySelector(".archive-card-hit") as HTMLElement;
+    expect(secondFrame).not.toHaveAttribute("role");
+    expect(secondFrame).not.toHaveAttribute("tabindex");
+    fireEvent.keyDown(secondFrame, { key: "Enter" });
+    expect(secondFrame.closest("article")).not.toHaveClass("is-selected");
     fireEvent.click(secondFrame);
 
     const selectedCard = secondFrame.closest("article");
@@ -270,7 +274,7 @@ describe("Photo archive preview", () => {
     );
   });
 
-  it("adds slideshow history and advances each known frame before the next post", async () => {
+  it("adds slideshow history and advances only from visible controls", async () => {
     render(<HomePage />);
     await act(async () => undefined);
 
@@ -312,6 +316,13 @@ describe("Photo archive preview", () => {
     );
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(
+      within(slideshow).getByRole("img", {
+        name: "@north.archive frame 2 of 2",
+      }),
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
     await waitFor(() =>
       expect(
         within(slideshow).getByRole("img", {

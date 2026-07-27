@@ -50,6 +50,15 @@ Approved product principles:
 - Keep local-first privacy as the default and make every network/cache boundary explicit.
 - Do not implement carousel extraction, thumbnails, or GPU media transitions by scraping Instagram or reading a cross-origin iframe.
 
+## Revision 25: Readable Type And Standard Cursor Behavior
+
+- [x] Keep the supplied Lobster face as the single application font while increasing shared button labels from `19.2px` to `20.64px` on desktop and from `16.32px` to `17.76px` on mobile.
+- [x] Rebalance Settings typography: increase tiny labels and hidden-item metadata, reduce the oversized sheet heading and hidden count, and keep form values at a readable middle size.
+- [x] Remove the forced global cursor override. Enabled controls, selectors, and every Horizontal/Grid photo card now use the native `pointer`; non-interactive surfaces use the browser default and disabled controls remain default.
+- [x] Remove the parent-page Arrow/Space/H/Escape listener and the card-level Enter/Space handler so Horizontal View, Grid View, and slideshow navigation no longer expose custom keyboard behavior.
+- [x] Keep visible Previous, Play/Pause, Next, Close, Settings, Filter, and view controls as the supported interaction path.
+- [x] Add focused regressions proving photo cards are not keyboard-focusable and ArrowRight no longer advances the slideshow.
+
 ## Revision 24: Edge-Cropped Embeds And Smoother Return Loading
 
 - [x] Preserve the accepted Grid spacing and hover lift while enlarging and center-cropping compatibility embeds beyond every card edge, moving Instagram's iframe-internal carousel arrow outside both Horizontal and Grid masks.

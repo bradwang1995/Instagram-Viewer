@@ -281,45 +281,6 @@ export function HomePage() {
     visibleItems.length,
   ]);
 
-  useEffect(() => {
-    function handleKeyboard(event: KeyboardEvent) {
-      const target = event.target as HTMLElement | null;
-      if (
-        target?.tagName === "INPUT" ||
-        target?.tagName === "SELECT" ||
-        target?.tagName === "TEXTAREA" ||
-        target?.isContentEditable
-      ) {
-        if (event.key !== "Escape") return;
-      }
-
-      if (event.key === "Escape") {
-        if (isSettingsOpen) setIsSettingsOpen(false);
-        else if (isFilterOpen) setIsFilterOpen(false);
-        else if (isSlideshowOpen) {
-          closeSlideshow();
-        }
-      }
-      const hasInteractiveSlideshowEmbed = Boolean(
-        isSlideshowOpen &&
-          selectedItem &&
-          !selectedItem.media.assetUrl &&
-          !selectedItem.media.previewUrl,
-      );
-      if (event.key === "ArrowRight" && !hasInteractiveSlideshowEmbed) move(1);
-      if (event.key === "ArrowLeft" && !hasInteractiveSlideshowEmbed) move(-1);
-      if (event.key === " " && isSlideshowOpen) {
-        event.preventDefault();
-        setIsPlaying((value) => !value);
-      }
-      if (event.key.toLowerCase() === "h" && selectedItem) {
-        void hideMedia(selectedItem);
-      }
-    }
-    window.addEventListener("keydown", handleKeyboard);
-    return () => window.removeEventListener("keydown", handleKeyboard);
-  });
-
   async function handleImport(file?: File) {
     if (!file) return;
     setIsImporting(true);
