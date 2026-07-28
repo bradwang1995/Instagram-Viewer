@@ -146,8 +146,7 @@ export function ArchivePreview({
       viewport.width,
     ],
   );
-  const compatibilityPreviewMediaIds = useMemo(() => {
-    if (isScrolling) return new Set<string>();
+  const requestedMediaIds = useMemo(() => {
     const visibleIndexes = visibleLayouts
       .filter((layout) =>
         viewMode === "grid"
@@ -171,7 +170,6 @@ export function ArchivePreview({
         .filter((id): id is string => Boolean(id)),
     );
   }, [
-    isScrolling,
     orderedItems,
     scrollOffset,
     selectedIndex,
@@ -180,6 +178,9 @@ export function ArchivePreview({
     viewport.width,
     visibleLayouts,
   ]);
+  const [loadableMediaIds, setLoadableMediaIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const trackStyle = useMemo<CSSProperties>(
     () =>
       viewMode === "grid"
@@ -190,12 +191,17 @@ export function ArchivePreview({
 
   useEffect(() => {
     if (isScrolling) return;
+    setLoadableMediaIds((currentIds) =>
+      haveSameIds(currentIds, requestedMediaIds)
+        ? currentIds
+        : requestedMediaIds,
+    );
     preloadMediaItems(
       visibleLayouts
         .map((layout) => orderedItems[layout.index])
         .filter((item): item is MediaQueueItem => Boolean(item)),
     );
-  }, [isScrolling, orderedItems, visibleLayouts]);
+  }, [isScrolling, orderedItems, requestedMediaIds, visibleLayouts]);
 
   useEffect(
     () => () => {
@@ -468,8 +474,8 @@ export function ArchivePreview({
                   item={item}
                   index={layout.index}
                   selected={item.media.id === selectedId}
-                  loadMedia={!isScrolling}
-                  allowCompatibilityPreview={compatibilityPreviewMediaIds.has(
+                  loadMedia={loadableMediaIds.has(item.media.id)}
+                  allowCompatibilityPreview={loadableMediaIds.has(
                     item.media.id,
                   )}
                   layoutStyle={{
@@ -531,4 +537,12 @@ export function ArchivePreview({
       </motion.div>
     </section>
   );
+}
+
+function haveSameIds(left: Set<string>, right: Set<string>): boolean {
+  if (left.size !== right.size) return false;
+  for (const id of left) {
+    if (!right.has(id)) return false;
+  }
+  return true;
 }

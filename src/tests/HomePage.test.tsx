@@ -78,9 +78,12 @@ describe("Photo archive preview", () => {
     await act(async () => undefined);
 
     expect(screen.getAllByTestId("archive-media-card")).toHaveLength(3);
-    const secondFrame = screen
-      .getAllByTestId("archive-media-card")[1]
-      .querySelector(".archive-card-hit") as HTMLElement;
+    const unselectedCard = screen
+      .getAllByTestId("archive-media-card")
+      .find((card) => !card.classList.contains("is-selected"));
+    const secondFrame = unselectedCard?.querySelector(
+      ".archive-card-hit",
+    ) as HTMLElement;
     expect(secondFrame).not.toHaveAttribute("role");
     expect(secondFrame).not.toHaveAttribute("tabindex");
     fireEvent.keyDown(secondFrame, { key: "Enter" });
@@ -236,7 +239,7 @@ describe("Photo archive preview", () => {
     ).toBeLessThanOrEqual(16);
   });
 
-  it("pauses media work while scrolling and restores each view position", async () => {
+  it("keeps loaded media mounted while scrolling and restores each view position", async () => {
     const source = createPost("SCROLL", "@stable.scroll", "Reference");
     testState.posts = [source];
     testState.queue = Array.from({ length: 100 }, (_, index) =>
@@ -246,13 +249,12 @@ describe("Photo archive preview", () => {
     await act(async () => undefined);
 
     const scroller = screen.getByTestId("archive-scroller");
+    const loadedImage = view.container.querySelector("img");
+    expect(loadedImage).toBeInTheDocument();
     scroller.scrollLeft = 720;
     fireEvent.scroll(scroller);
     expect(scroller).toHaveAttribute("data-scroll-state", "moving");
-    expect(
-      view.container.querySelectorAll('[data-media-load="paused"]').length,
-    ).toBeGreaterThan(0);
-    expect(view.container.querySelector("img")).not.toBeInTheDocument();
+    expect(loadedImage).toBeInTheDocument();
     await waitFor(() =>
       expect(scroller).toHaveAttribute("data-scroll-state", "settled"),
     );
@@ -270,6 +272,31 @@ describe("Photo archive preview", () => {
     fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
     expect(scroller.scrollTop).toBe(1440);
     expect(view.container.querySelector("img")).toBeInTheDocument();
+  });
+
+  it("does not remount loaded iframes during a small scroll", async () => {
+    const source = createPost("IFRAME-STABLE", "@stable.frame", "Saved");
+    testState.posts = [source];
+    testState.queue = Array.from({ length: 20 }, (_, index) =>
+      createUnresolvedQueueItem(source, index),
+    );
+    const view = render(<HomePage />);
+    await act(async () => undefined);
+
+    await waitFor(() =>
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(3),
+    );
+    const mountedFrames = Array.from(view.container.querySelectorAll("iframe"));
+    const scroller = screen.getByTestId("archive-scroller");
+    scroller.scrollLeft = 24;
+    fireEvent.scroll(scroller);
+
+    expect(scroller).toHaveAttribute("data-scroll-state", "moving");
+    mountedFrames.forEach((frame) => expect(frame).toBeInTheDocument());
+    await waitFor(() =>
+      expect(scroller).toHaveAttribute("data-scroll-state", "settled"),
+    );
+    mountedFrames.forEach((frame) => expect(frame).toBeInTheDocument());
   });
 
   it("preloads three posts beyond the visible Grid rows with bounded requests", async () => {
