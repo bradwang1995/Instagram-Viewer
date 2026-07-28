@@ -108,6 +108,27 @@ export function getGridWindow(
   return layouts;
 }
 
+export function getGridLayouts(
+  itemCount: number,
+  metrics: GridMetrics,
+): VirtualMediaLayout[] {
+  const layouts: VirtualMediaLayout[] = [];
+
+  for (let index = 0; index < itemCount; index += 1) {
+    const row = Math.floor(index / metrics.columns);
+    const column = index % metrics.columns;
+    layouts.push({
+      index,
+      left: metrics.paddingX + column * (metrics.itemWidth + metrics.columnGap),
+      top: metrics.paddingY + row * metrics.rowStride,
+      width: metrics.itemWidth,
+      height: metrics.itemHeight,
+    });
+  }
+
+  return layouts;
+}
+
 export function getRibbonMetrics(
   aspects: number[],
   viewportWidth: number,

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { motion } from "motion/react";
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -20,19 +21,19 @@ import {
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
 import {
   getClosestRibbonIndex,
+  getGridLayouts,
   getGridMetrics,
-  getGridWindow,
   getRibbonMetrics,
-  getRibbonWindow,
 } from "../../features/media/virtualMediaLayout";
 import { preloadMediaItems } from "../../features/media/mediaPreload";
 import { extendSessionMediaOrder } from "../../features/media/sessionMediaOrder";
-import { ArchiveMediaCard } from "./ArchiveMediaCard";
+import { ArchiveMediaCard, type IframeStatus } from "./ArchiveMediaCard";
 
 export type ArchiveViewMode = "ribbon" | "grid";
 
 type ArchivePreviewProps = {
   items: MediaQueueItem[];
+  visibleItemIds: ReadonlySet<string>;
   selectedId?: string;
   hiddenCount: number;
   viewMode: ArchiveViewMode;
@@ -53,9 +54,11 @@ type ViewportSize = {
 };
 
 const SCROLL_SETTLE_DELAY_MS = 180;
+export const MAX_RETAINED_INSTAGRAM_IFRAMES = Infinity;
 
 export function ArchivePreview({
   items,
+  visibleItemIds,
   selectedId,
   hiddenCount,
   viewMode,
@@ -74,6 +77,10 @@ export function ArchivePreview({
   const scrollRestoreFrame = useRef<number>();
   const wheelFrame = useRef<number>();
   const scrollSettleTimer = useRef<number>();
+  const iframeObserverRef = useRef<IntersectionObserver>();
+  const cardShellsRef = useRef(new Map<string, HTMLElement>());
+  const activatedIframeIdsRef = useRef(new Set<string>());
+  const iframeStatusByIdRef = useRef(new Map<string, IframeStatus>());
   const wheelTarget = useRef(0);
   const wheelDeadline = useRef(0);
   const activeViewMode = useRef(viewMode);
@@ -88,6 +95,7 @@ export function ArchivePreview({
   });
   const [scrollOffset, setScrollOffset] = useState(0);
   const [isScrolling, setIsScrolling] = useState(false);
+  const [, setIframeStateRevision] = useState(0);
   if (activeViewMode.current !== viewMode) {
     pendingViewMode.current = viewMode;
   }
@@ -113,42 +121,45 @@ export function ArchivePreview({
       .map((id) => itemById.get(id))
       .filter((item): item is MediaQueueItem => Boolean(item));
   }, [items, viewMode]);
-  const selectedIndex = Math.max(
-    0,
-    orderedItems.findIndex((item) => item.media.id === selectedId),
+  const visibleOrderedItems = useMemo(
+    () => orderedItems.filter((item) => visibleItemIds.has(item.media.id)),
+    [orderedItems, visibleItemIds],
+  );
+  const visibleIndexById = useMemo(
+    () =>
+      new Map(visibleOrderedItems.map((item, index) => [item.media.id, index])),
+    [visibleOrderedItems],
   );
   const aspects = useMemo(
     () =>
-      orderedItems.map(({ media }) =>
+      visibleOrderedItems.map(({ media }) =>
         media.width && media.height ? media.width / media.height : 0.78,
       ),
-    [orderedItems],
+    [visibleOrderedItems],
   );
   const ribbonMetrics = useMemo(
     () => getRibbonMetrics(aspects, viewport.width, viewport.height),
     [aspects, viewport],
   );
   const gridMetrics = useMemo(
-    () => getGridMetrics(orderedItems.length, viewport.width, viewport.height),
-    [orderedItems.length, viewport],
+    () =>
+      getGridMetrics(
+        visibleOrderedItems.length,
+        viewport.width,
+        viewport.height,
+      ),
+    [visibleOrderedItems.length, viewport],
   );
-  const visibleLayouts = useMemo(
+  const allLayouts = useMemo(
     () =>
       viewMode === "grid"
-        ? getGridWindow(orderedItems.length, scrollOffset, gridMetrics)
-        : getRibbonWindow(ribbonMetrics.layouts, scrollOffset, viewport.width),
-    [
-      gridMetrics,
-      orderedItems.length,
-      ribbonMetrics.layouts,
-      scrollOffset,
-      viewMode,
-      viewport.width,
-    ],
+        ? getGridLayouts(visibleOrderedItems.length, gridMetrics)
+        : ribbonMetrics.layouts,
+    [gridMetrics, ribbonMetrics.layouts, viewMode, visibleOrderedItems.length],
   );
   const visibleIndexes = useMemo(
     () =>
-      visibleLayouts
+      allLayouts
         .filter((layout) =>
           viewMode === "grid"
             ? layout.top + layout.height > scrollOffset &&
@@ -157,34 +168,18 @@ export function ArchivePreview({
               layout.left < scrollOffset + viewport.width,
         )
         .map((layout) => layout.index),
-    [scrollOffset, viewMode, viewport.height, viewport.width, visibleLayouts],
+    [allLayouts, scrollOffset, viewMode, viewport.height, viewport.width],
   );
-  const visibleMediaIds = useMemo(
+  const preloadLayouts = useMemo(
     () =>
-      new Set(
-        visibleIndexes
-          .map((index) => orderedItems[index]?.media.id)
-          .filter((id): id is string => Boolean(id)),
+      allLayouts.filter((layout) =>
+        viewMode === "grid"
+          ? layout.top + layout.height > scrollOffset &&
+            layout.top < scrollOffset + viewport.height * 3
+          : layout.left + layout.width > scrollOffset &&
+            layout.left < scrollOffset + viewport.width * 3,
       ),
-    [orderedItems, visibleIndexes],
-  );
-  const requestedMediaIds = useMemo(() => {
-    const lastVisibleIndex = visibleIndexes.length
-      ? Math.max(...visibleIndexes)
-      : selectedIndex;
-    const indexes = new Set(visibleIndexes);
-    for (let offset = 1; offset <= 3; offset += 1) {
-      const index = lastVisibleIndex + offset;
-      if (index < orderedItems.length) indexes.add(index);
-    }
-    return new Set(
-      Array.from(indexes)
-        .map((index) => orderedItems[index]?.media.id)
-        .filter((id): id is string => Boolean(id)),
-    );
-  }, [orderedItems, selectedIndex, visibleIndexes]);
-  const [loadableMediaIds, setLoadableMediaIds] = useState<Set<string>>(
-    () => new Set(),
+    [allLayouts, scrollOffset, viewMode, viewport.height, viewport.width],
   );
   const trackStyle = useMemo<CSSProperties>(
     () =>
@@ -194,27 +189,88 @@ export function ArchivePreview({
     [gridMetrics.totalHeight, ribbonMetrics.totalWidth, viewMode],
   );
 
+  const activateIframe = useCallback((itemId: string) => {
+    if (activatedIframeIdsRef.current.has(itemId)) return;
+    activatedIframeIdsRef.current.add(itemId);
+    iframeStatusByIdRef.current.set(itemId, "loading");
+    setIframeStateRevision((revision) => revision + 1);
+  }, []);
+
+  const registerShell = useCallback(
+    (itemId: string, node: HTMLElement | null) => {
+      const previous = cardShellsRef.current.get(itemId);
+      if (previous && previous !== node) {
+        iframeObserverRef.current?.unobserve(previous);
+      }
+      if (!node) {
+        cardShellsRef.current.delete(itemId);
+        return;
+      }
+      cardShellsRef.current.set(itemId, node);
+      iframeObserverRef.current?.observe(node);
+    },
+    [],
+  );
+
+  const setIframeStatus = useCallback(
+    (itemId: string, status: "loaded" | "error") => {
+      const current = iframeStatusByIdRef.current.get(itemId);
+      if (current === status || current === "loaded") return;
+      iframeStatusByIdRef.current.set(itemId, status);
+      setIframeStateRevision((revision) => revision + 1);
+    },
+    [],
+  );
+  const handleIframeLoad = useCallback(
+    (itemId: string) => setIframeStatus(itemId, "loaded"),
+    [setIframeStatus],
+  );
+  const handleIframeError = useCallback(
+    (itemId: string) => setIframeStatus(itemId, "error"),
+    [setIframeStatus],
+  );
+
   useEffect(() => {
-    setLoadableMediaIds((currentIds) =>
-      isScrolling
-        ? addIds(currentIds, visibleMediaIds)
-        : haveSameIds(currentIds, requestedMediaIds)
-          ? currentIds
-          : requestedMediaIds,
+    const scroller = scrollerRef.current;
+    if (!scroller || typeof IntersectionObserver === "undefined") {
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (!entry.isIntersecting) return;
+          const itemId = (entry.target as HTMLElement).dataset.mediaId;
+          if (itemId) activateIframe(itemId);
+        });
+      },
+      {
+        root: scroller,
+        rootMargin:
+          viewMode === "grid" ? "0px 0px 200% 0px" : "0px 200% 0px 0px",
+        threshold: 0,
+      },
     );
-    if (isScrolling) return;
+    iframeObserverRef.current = observer;
+    cardShellsRef.current.forEach((node) => observer.observe(node));
+    return () => {
+      observer.disconnect();
+      if (iframeObserverRef.current === observer) {
+        iframeObserverRef.current = undefined;
+      }
+    };
+  }, [activateIframe, viewMode]);
+
+  useEffect(() => {
+    preloadLayouts.forEach((layout) => {
+      const item = visibleOrderedItems[layout.index];
+      if (item) activateIframe(item.media.id);
+    });
     preloadMediaItems(
-      visibleLayouts
-        .map((layout) => orderedItems[layout.index])
+      preloadLayouts
+        .map((layout) => visibleOrderedItems[layout.index])
         .filter((item): item is MediaQueueItem => Boolean(item)),
     );
-  }, [
-    isScrolling,
-    orderedItems,
-    requestedMediaIds,
-    visibleLayouts,
-    visibleMediaIds,
-  ]);
+  }, [activateIframe, preloadLayouts, visibleOrderedItems]);
 
   useEffect(
     () => () => {
@@ -341,7 +397,7 @@ export function ArchivePreview({
         !scroller ||
         viewMode !== "ribbon" ||
         activeViewMode.current !== viewMode ||
-        !orderedItems.length
+        !visibleOrderedItems.length
       ) {
         return;
       }
@@ -350,7 +406,7 @@ export function ArchivePreview({
         ribbonMetrics.layouts,
         scroller.scrollLeft + scroller.clientWidth / 2,
       );
-      const nextItem = orderedItems[nextIndex];
+      const nextItem = visibleOrderedItems[nextIndex];
       if (nextItem && nextItem.media.id !== selectedId) {
         onSelect(nextItem.media.id);
       }
@@ -472,39 +528,52 @@ export function ArchivePreview({
         ref={scrollerRef}
         className="archive-scroller"
         data-testid="archive-scroller"
-        data-rendered-count={visibleLayouts.length}
+        data-rendered-count={orderedItems.length}
+        data-visible-count={visibleOrderedItems.length}
         data-scroll-state={isScrolling ? "moving" : "settled"}
         onWheel={handleWheel}
         onScroll={handleScroll}
       >
         <div className="archive-track" style={trackStyle}>
-          {orderedItems.length ? (
-            visibleLayouts.map((layout) => {
-              const item = orderedItems[layout.index];
-              const shouldLoadMedia =
-                loadableMediaIds.has(item.media.id) ||
-                visibleMediaIds.has(item.media.id);
-              return (
-                <ArchiveMediaCard
-                  key={item.media.id}
-                  item={item}
-                  index={layout.index}
-                  selected={item.media.id === selectedId}
-                  loadMedia={shouldLoadMedia}
-                  allowCompatibilityPreview={shouldLoadMedia}
-                  layoutStyle={{
-                    position: "absolute",
-                    left: layout.left,
-                    top: layout.top,
-                    width: layout.width,
-                    height: layout.height,
-                  }}
-                  onSelect={() => onSelect(item.media.id)}
-                  onUnavailable={() => onMediaUnavailable(item.media.id)}
-                />
-              );
-            })
-          ) : hasFilters ? (
+          {orderedItems.map((item, sessionIndex) => {
+            const visibleIndex = visibleIndexById.get(item.media.id);
+            const layout =
+              visibleIndex === undefined ? undefined : allLayouts[visibleIndex];
+            const isActivated = activatedIframeIdsRef.current.has(
+              item.media.id,
+            );
+            const iframeStatus =
+              iframeStatusByIdRef.current.get(item.media.id) ?? "not-activated";
+            return (
+              <ArchiveMediaCard
+                key={item.media.id}
+                item={item}
+                index={visibleIndex ?? sessionIndex}
+                selected={item.media.id === selectedId}
+                loadMedia={isActivated}
+                allowCompatibilityPreview={isActivated}
+                visuallyHidden={!layout}
+                iframeStatus={iframeStatus}
+                registerShell={registerShell}
+                onIframeLoad={handleIframeLoad}
+                onIframeError={handleIframeError}
+                layoutStyle={
+                  layout
+                    ? {
+                        position: "absolute",
+                        left: layout.left,
+                        top: layout.top,
+                        width: layout.width,
+                        height: layout.height,
+                      }
+                    : { display: "none" }
+                }
+                onSelect={() => onSelect(item.media.id)}
+                onUnavailable={() => onMediaUnavailable(item.media.id)}
+              />
+            );
+          })}
+          {!visibleOrderedItems.length && hasFilters ? (
             <div className="archive-empty-field">
               <strong>No photos match.</strong>
               <span>Open Filter and clear the current search.</span>
@@ -542,7 +611,7 @@ export function ArchivePreview({
           <button
             className="viewer-control dock-play"
             type="button"
-            disabled={items.length === 0}
+            disabled={visibleOrderedItems.length === 0}
             onClick={onStartSlideshow}
           >
             Slideshow <Play size={16} fill="currentColor" aria-hidden="true" />
@@ -551,22 +620,4 @@ export function ArchivePreview({
       </motion.div>
     </section>
   );
-}
-
-function haveSameIds(left: Set<string>, right: Set<string>): boolean {
-  if (left.size !== right.size) return false;
-  for (const id of left) {
-    if (!right.has(id)) return false;
-  }
-  return true;
-}
-
-function addIds(currentIds: Set<string>, addedIds: Set<string>): Set<string> {
-  let nextIds: Set<string> | undefined;
-  for (const id of addedIds) {
-    if (currentIds.has(id)) continue;
-    nextIds ??= new Set(currentIds);
-    nextIds.add(id);
-  }
-  return nextIds ?? currentIds;
 }

@@ -82,20 +82,17 @@ export function HomePage() {
     setViewMode(mode);
   }, []);
 
-  const setSlideshowRoute = useCallback(
-    (open: boolean, replace = false) => {
-      const url = new URL(window.location.href);
-      if (open) url.searchParams.set("slideshow", "1");
-      else url.searchParams.delete("slideshow");
-      window.history[replace ? "replaceState" : "pushState"](
-        {},
-        "",
-        `${url.pathname}${url.search}${url.hash}`,
-      );
-      setIsSlideshowOpen(open);
-    },
-    [],
-  );
+  const setSlideshowRoute = useCallback((open: boolean, replace = false) => {
+    const url = new URL(window.location.href);
+    if (open) url.searchParams.set("slideshow", "1");
+    else url.searchParams.delete("slideshow");
+    window.history[replace ? "replaceState" : "pushState"](
+      {},
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+    setIsSlideshowOpen(open);
+  }, []);
 
   useEffect(() => {
     const url = new URL(window.location.href);
@@ -111,9 +108,7 @@ export function HomePage() {
     }
 
     const handleHistoryChange = () => {
-      const open = new URLSearchParams(window.location.search).has(
-        "slideshow",
-      );
+      const open = new URLSearchParams(window.location.search).has("slideshow");
       setViewMode(getViewModeFromUrl());
       setIsSlideshowOpen(open);
       setIsPlaying(open);
@@ -174,6 +169,14 @@ export function HomePage() {
         includeHidden: false,
       }).filter((item) => !unavailableMediaIds.has(item.media.id)),
     [collection, creator, query, queue, unavailableMediaIds],
+  );
+  const sessionItems = useMemo(
+    () => queue.filter((item) => !unavailableMediaIds.has(item.media.id)),
+    [queue, unavailableMediaIds],
+  );
+  const visibleItemIds = useMemo(
+    () => new Set(visibleItems.map((item) => item.media.id)),
+    [visibleItems],
   );
   const selectedIndex = Math.max(
     0,
@@ -357,7 +360,10 @@ export function HomePage() {
     setSlideshowRoute(true);
     setIsPlaying(true);
     setElapsedMs(0);
-    if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+    if (
+      !document.fullscreenElement &&
+      document.documentElement.requestFullscreen
+    ) {
       void document.documentElement.requestFullscreen().catch(() => undefined);
     }
   }
@@ -401,7 +407,8 @@ export function HomePage() {
 
       {!isLoading && !showLanding ? (
         <ArchivePreview
-          items={visibleItems}
+          items={sessionItems}
+          visibleItemIds={visibleItemIds}
           selectedId={selectedItem?.media.id}
           hiddenCount={hiddenItems.length}
           viewMode={viewMode}

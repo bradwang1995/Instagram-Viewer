@@ -110,7 +110,7 @@ describe("ArchiveMediaCard", () => {
     );
   });
 
-  it("starts no more than three compatibility iframe requests at once", async () => {
+  it("mounts every activated compatibility iframe without a request queue", async () => {
     const items = Array.from({ length: 5 }, (_, index) => {
       const item = createItem(`embed-${index}`);
       item.media.sourceKind = "embed";
@@ -136,7 +136,7 @@ describe("ArchiveMediaCard", () => {
     );
 
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(3),
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(5),
     );
   });
 
@@ -171,7 +171,7 @@ describe("ArchiveMediaCard", () => {
 
     expect(view.container.querySelector(".archive-embed-crop")).toHaveAttribute(
       "data-load-state",
-      "ready",
+      "loaded",
     );
     expect(frame).toHaveClass("is-ready");
     expect(view.container.querySelector(".archive-embed-loading")).toHaveClass(
@@ -179,7 +179,7 @@ describe("ArchiveMediaCard", () => {
     );
   });
 
-  it("silently omits timed-out embeds, keeps the request window bounded, and remembers failures", async () => {
+  it("keeps slow and errored iframes mounted instead of evicting them", async () => {
     vi.useFakeTimers();
     const onUnavailable = vi.fn();
     const items = Array.from({ length: 5 }, (_, index) => {
@@ -189,7 +189,7 @@ describe("ArchiveMediaCard", () => {
       item.media.previewUrl = undefined;
       return item;
     });
-    const view = render(
+    const renderCards = (firstStatus: "loading" | "error") => (
       <div>
         {items.map((item, index) => (
           <ArchiveMediaCard
@@ -198,42 +198,33 @@ describe("ArchiveMediaCard", () => {
             index={index}
             selected={index === 0}
             allowCompatibilityPreview
+            iframeStatus={index === 0 ? firstStatus : "loading"}
             layoutStyle={{ width: 400, height: 500 }}
             onSelect={vi.fn()}
             onUnavailable={onUnavailable}
           />
         ))}
-      </div>,
+      </div>
     );
+    const view = render(renderCards("loading"));
 
     await act(async () => undefined);
-    expect(view.container.querySelectorAll("iframe")).toHaveLength(3);
+    expect(view.container.querySelectorAll("iframe")).toHaveLength(5);
     await act(async () => vi.advanceTimersByTime(12_000));
-    expect(view.container.querySelectorAll("iframe")).toHaveLength(2);
-    expect(onUnavailable).toHaveBeenCalledTimes(3);
-    expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
+    expect(view.container.querySelectorAll("iframe")).toHaveLength(5);
+    expect(onUnavailable).not.toHaveBeenCalled();
 
-    await act(async () => vi.advanceTimersByTime(12_000));
-    expect(view.container.querySelectorAll("iframe")).toHaveLength(0);
-    expect(onUnavailable).toHaveBeenCalledTimes(5);
-
-    view.unmount();
-    const remounted = render(
-      <ArchiveMediaCard
-        item={items[0]}
-        index={0}
-        selected={false}
-        allowCompatibilityPreview
-        layoutStyle={{ width: 400, height: 500 }}
-        onSelect={vi.fn()}
-        onUnavailable={onUnavailable}
-      />,
+    const firstFrame = view.container.querySelector("iframe");
+    view.rerender(renderCards("error"));
+    expect(firstFrame).toBeInTheDocument();
+    expect(firstFrame?.closest(".archive-embed-crop")).toHaveAttribute(
+      "data-load-state",
+      "error",
     );
-    expect(remounted.container.querySelector("iframe")).not.toBeInTheDocument();
-    expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
+    expect(onUnavailable).not.toHaveBeenCalled();
   });
 
-  it("does not request a deferred compatibility preview until it is enabled", async () => {
+  it("does not request a deferred preview and preserves it after activation", async () => {
     const item = createItem("deferred-embed");
     item.media.sourceKind = "embed";
     item.media.assetUrl = undefined;
@@ -265,19 +256,21 @@ describe("ArchiveMediaCard", () => {
     await waitFor(() =>
       expect(view.container.querySelector("iframe")).toBeInTheDocument(),
     );
+    const activatedFrame = view.container.querySelector("iframe");
 
     view.rerender(
       <ArchiveMediaCard
         item={item}
         index={0}
         selected={false}
-        allowCompatibilityPreview={false}
+        loadMedia
+        allowCompatibilityPreview
         layoutStyle={{ width: 400, height: 500 }}
         onSelect={vi.fn()}
         onUnavailable={vi.fn()}
       />,
     );
-    expect(view.container.querySelector("iframe")).not.toBeInTheDocument();
+    expect(view.container.querySelector("iframe")).toBe(activatedFrame);
   });
 
   it("silently rejects a post that the official oEmbed endpoint marks unavailable", async () => {

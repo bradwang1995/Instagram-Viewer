@@ -20,9 +20,24 @@ Filter + hide + configure + slideshow
 
 The product remains one page with URL-backed Horizontal/Grid states, bottom sheets, and a full-viewport slideshow overlay. Browser Back and Forward restore the previous `?view=horizontal` / `?view=grid` state, while `?slideshow=1` keeps slideshow navigation in the same history model.
 
+## 2026-07-28 Persistent Iframe Preload Milestone
+
+Status: **implemented; automated validation and fresh built-in-browser QA passed**.
+
+- Removed scroll-window control over Instagram iframe lifetime. Every archive item now owns a lightweight card shell that stays mounted for the page session.
+- Added one-way page-level activation keyed by stable media ID. Grid activates the current viewport plus two viewport heights below; Horizontal activates the current viewport plus two viewport widths to the right.
+- Added `IntersectionObserver` with `200%` forward root margins plus an equivalent geometry fallback, so current cards activate immediately and farther cards stay request-free placeholders.
+- Added page-level `not-activated` / `loading` / `loaded` / `error` iframe status. `onLoad` survives scrolling and parent rerenders; errors no longer remove a mounted iframe.
+- Replaced the three-navigation queue and twelve-second iframe eviction with persistent eager iframe mounting. Official oEmbed `400` / `404` / `410` rejection remains the only compatibility-frame removal gate.
+- Filtering now changes visual visibility without removing an activated card or iframe. Stable ID keys preserve iframe DOM identity across input reordering and layout changes.
+- Added browser containment (`content-visibility`, intrinsic size, and layout/paint/style containment), Instagram/CDN preconnect hints, and an explicit infinite retention policy ready for a future evidence-backed high LRU limit.
+- Focused regressions cover two-screen activation, out-of-range placeholders, ten-screen reverse scrolling, loader persistence, filtering, stable-ID reorder, rapid back-and-forth scrolling, no duplicate iframes, slow/error retention, and observer margins.
+- Fresh built-in-browser QA imported twelve public, non-personal Instagram references. Three known-unavailable posts were silently removed; Horizontal initially loaded eight real iframes and kept the ninth as a request-free placeholder. Scrolling to `scrollLeft=3454` activated the ninth; returning to `0` kept the original ID at exactly one iframe with the same `src`, `loaded` state, and hidden spinner. Grid switching retained all nine iframe IDs, and the console reported zero errors/warnings.
+- Browser sample size limited the live reverse-scroll pass to about 2.7 viewport widths; the ten-viewport and rapid-repeat criteria are covered by deterministic DOM-identity regression tests. Instagram's cross-origin embed chrome can still vary by post; this milestone deliberately leaves the existing crop geometry unchanged.
+
 ## Selected Direction: PhotoYoshi Archive Field
 
-Status: **accepted MVP complete and browser-tested: one ordinary saved post maps to one default Instagram preview, with bounded ahead-of-viewport loading, persistent direct-image caching, smooth Horizontal View, and routed full-viewport slideshow**.
+Status: **accepted MVP complete: one ordinary saved post maps to one default Instagram preview, with persistent two-screen-ahead iframe activation, persistent direct-image caching, smooth Horizontal View, and routed full-viewport slideshow**.
 
 The accepted saved-JSON workflow intentionally produces one compatibility item per post. Instagram's default first preview is sufficient for this MVP; native carousel-child extraction is not a release requirement.
 
@@ -40,7 +55,7 @@ Approved product principles:
 - Use `photoyoshi.com` as the visual reference: clipped display typography, deep black/plum canvas, centered imagery, sparse editorial metadata, and scroll-driven spatial motion.
 - Make the empty state an upload-only composition rather than an application dashboard.
 - After import, make the media field the product center and keep per-card metadata out of the visual surface.
-- Replace the shortcode/date library list with a virtual Horizontal View and four-column desktop Grid View.
+- Replace the shortcode/date library list with a persistent-shell Horizontal View and four-column desktop Grid View.
 - Represent each ordinary saved post once and show Instagram's default first preview.
 - Persist hide/downvote state per media item and keep it reversible.
 - Search primarily by creator, collection, and local tags when those fields are available.

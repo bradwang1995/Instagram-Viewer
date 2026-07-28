@@ -483,6 +483,9 @@ p {
 .archive-card {
   position: relative;
   color: var(--paper);
+  contain: layout paint style;
+  contain-intrinsic-size: auto 780px;
+  content-visibility: auto;
   transition: box-shadow 350ms ease;
   will-change: transform;
 }

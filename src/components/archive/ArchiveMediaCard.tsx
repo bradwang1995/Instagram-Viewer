@@ -1,6 +1,7 @@
 import { LoaderCircle } from "lucide-react";
 import { motion } from "motion/react";
 import {
+  memo,
   useCallback,
   useEffect,
   useMemo,
@@ -15,16 +16,8 @@ import type { MediaQueueItem } from "../../features/media/mediaQueue";
 const resolvedCandidateByRevision = new Map<string, string>();
 const failedDirectMediaRevisions = new Set<string>();
 const failedEmbedMediaRevisions = new Set<string>();
-const MAX_CONCURRENT_EMBED_REQUESTS = 3;
-const EMBED_REQUEST_TIMEOUT_MS = 12_000;
-let activeEmbedRequests = 0;
-const pendingEmbedRequests: EmbedRequest[] = [];
 
-type EmbedRequest = {
-  cancelled: boolean;
-  granted: boolean;
-  onGrant: () => void;
-};
+export type IframeStatus = "not-activated" | "loading" | "loaded" | "error";
 
 type ArchiveMediaCardProps = {
   item: MediaQueueItem;
@@ -33,6 +26,11 @@ type ArchiveMediaCardProps = {
   loadMedia?: boolean;
   allowCompatibilityPreview: boolean;
   layoutStyle: CSSProperties;
+  visuallyHidden?: boolean;
+  iframeStatus?: IframeStatus;
+  registerShell?: (itemId: string, node: HTMLElement | null) => void;
+  onIframeLoad?: (itemId: string) => void;
+  onIframeError?: (itemId: string) => void;
   onSelect: () => void;
   onUnavailable: () => void;
 };
@@ -44,6 +42,11 @@ export function ArchiveMediaCard({
   loadMedia = true,
   allowCompatibilityPreview,
   layoutStyle,
+  visuallyHidden = false,
+  iframeStatus,
+  registerShell,
+  onIframeLoad,
+  onIframeError,
   onSelect,
   onUnavailable,
 }: ArchiveMediaCardProps) {
@@ -72,8 +75,23 @@ export function ArchiveMediaCard({
   const [hasFailed, setHasFailed] = useState(() =>
     failedDirectMediaRevisions.has(mediaRevision),
   );
+  const [internalIframeStatus, setInternalIframeStatus] =
+    useState<IframeStatus>("loading");
   const unavailableReportedRef = useRef(false);
   const resolvedUrl = candidateUrls[candidateIndex];
+  const effectiveIframeStatus = iframeStatus ?? internalIframeStatus;
+  const shellRef = useCallback(
+    (node: HTMLElement | null) => registerShell?.(media.id, node),
+    [media.id, registerShell],
+  );
+  const handleIframeLoad = useCallback(() => {
+    if (onIframeLoad) onIframeLoad(media.id);
+    else setInternalIframeStatus("loaded");
+  }, [media.id, onIframeLoad]);
+  const handleIframeError = useCallback(() => {
+    if (onIframeError) onIframeError(media.id);
+    else setInternalIframeStatus("error");
+  }, [media.id, onIframeError]);
 
   useEffect(() => {
     const cached = resolvedCandidateByRevision.get(mediaRevision);
@@ -111,11 +129,14 @@ export function ArchiveMediaCard({
 
   return (
     <motion.article
+      ref={shellRef}
       className={`archive-card${selected ? " is-selected" : ""}`}
       data-media-id={media.id}
       data-media-index={index}
       data-media-load={loadMedia ? "enabled" : "paused"}
+      data-media-visibility={visuallyHidden ? "filtered" : "visible"}
       data-testid="archive-media-card"
+      hidden={visuallyHidden}
       style={layoutStyle}
       initial={{ opacity: 0, y: 55, scale: 0.985 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -152,6 +173,9 @@ export function ArchiveMediaCard({
           ) : loadMedia && allowCompatibilityPreview ? (
             <CroppedInstagramPreview
               item={item}
+              status={effectiveIframeStatus}
+              onLoad={handleIframeLoad}
+              onError={handleIframeError}
               onUnavailable={reportUnavailable}
             />
           ) : null}
@@ -163,20 +187,24 @@ export function ArchiveMediaCard({
 
 function CroppedInstagramPreview({
   item,
+  status,
+  onLoad,
+  onError,
   onUnavailable,
 }: {
   item: MediaQueueItem;
+  status: IframeStatus;
+  onLoad: () => void;
+  onError: () => void;
   onUnavailable: () => void;
 }) {
   const embedUrl = getInstagramEmbedUrl(item.post);
   const embedRevision = `${item.media.id}\u0000${embedUrl}`;
-  const [isLoading, setIsLoading] = useState(true);
   const [hasFailed, setHasFailed] = useState(() =>
     failedEmbedMediaRevisions.has(embedRevision),
   );
   const [isValidated, setIsValidated] = useState(false);
   const onUnavailableRef = useRef(onUnavailable);
-  const { granted, release } = useEmbedRequestPermit(embedUrl, !hasFailed);
 
   useEffect(() => {
     onUnavailableRef.current = onUnavailable;
@@ -185,7 +213,6 @@ function CroppedInstagramPreview({
   useEffect(() => {
     const failed = failedEmbedMediaRevisions.has(embedRevision);
     setHasFailed(failed);
-    setIsLoading(!failed);
     setIsValidated(false);
     if (failed) onUnavailableRef.current();
   }, [embedRevision]);
@@ -193,14 +220,12 @@ function CroppedInstagramPreview({
   const markUnavailable = useCallback(() => {
     failedEmbedMediaRevisions.add(embedRevision);
     setHasFailed(true);
-    setIsLoading(false);
     setIsValidated(false);
-    release();
     onUnavailableRef.current();
-  }, [embedRevision, release]);
+  }, [embedRevision]);
 
   useEffect(() => {
-    if (!granted || hasFailed) return undefined;
+    if (hasFailed) return undefined;
     let active = true;
     void getInstagramEmbedAvailability(item.post.canonicalUrl).then(
       (availability) => {
@@ -215,103 +240,62 @@ function CroppedInstagramPreview({
     return () => {
       active = false;
     };
-  }, [granted, hasFailed, item.post.canonicalUrl, markUnavailable]);
-  useEffect(() => {
-    if (!granted || !isLoading || hasFailed) return undefined;
-    const timeout = window.setTimeout(() => {
-      markUnavailable();
-    }, EMBED_REQUEST_TIMEOUT_MS);
-    return () => window.clearTimeout(timeout);
-  }, [granted, hasFailed, isLoading, markUnavailable]);
+  }, [hasFailed, item.post.canonicalUrl, markUnavailable]);
 
   if (hasFailed) return null;
 
   return (
-    <div
-      className="archive-embed-crop"
-      data-load-state={isLoading ? "loading" : "ready"}
-    >
+    <div className="archive-embed-crop" data-load-state={status}>
       <MediaLoadingState
         className="archive-embed-loading"
-        isVisible={isLoading}
+        isVisible={status === "loading"}
       />
-      {granted && isValidated ? (
-        <iframe
-          className={isLoading ? undefined : "is-ready"}
-          src={embedUrl}
+      {isValidated ? (
+        <PersistentInstagramIframe
+          key={item.media.id}
+          itemId={item.media.id}
+          embedUrl={embedUrl}
           title={`Instagram photo preview ${item.post.shortcode ?? item.post.id}`}
-          loading="eager"
-          scrolling="no"
-          tabIndex={-1}
-          allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-          referrerPolicy="strict-origin-when-cross-origin"
-          onLoad={() => {
-            setIsLoading(false);
-            release();
-          }}
-          onError={() => {
-            markUnavailable();
-          }}
+          ready={status === "loaded" || status === "error"}
+          onLoad={onLoad}
+          onError={onError}
         />
       ) : null}
     </div>
   );
 }
 
-function useEmbedRequestPermit(key: string, enabled: boolean) {
-  const [granted, setGranted] = useState(false);
-  const releaseRef = useRef<() => void>(() => undefined);
-
-  useEffect(() => {
-    setGranted(false);
-    if (!enabled) {
-      releaseRef.current = () => undefined;
-      return undefined;
-    }
-    releaseRef.current = acquireEmbedRequest(() => setGranted(true));
-    return () => releaseRef.current();
-  }, [enabled, key]);
-
-  const release = useCallback(() => {
-    releaseRef.current();
-    releaseRef.current = () => undefined;
-  }, []);
-
-  return { granted, release };
-}
-
-function acquireEmbedRequest(onGrant: () => void): () => void {
-  const request: EmbedRequest = {
-    cancelled: false,
-    granted: false,
-    onGrant,
-  };
-  pendingEmbedRequests.push(request);
-  drainEmbedRequests();
-
-  return () => {
-    if (request.cancelled) return;
-    request.cancelled = true;
-    if (request.granted) {
-      request.granted = false;
-      activeEmbedRequests = Math.max(0, activeEmbedRequests - 1);
-      drainEmbedRequests();
-    }
-  };
-}
-
-function drainEmbedRequests() {
-  while (
-    activeEmbedRequests < MAX_CONCURRENT_EMBED_REQUESTS &&
-    pendingEmbedRequests.length > 0
-  ) {
-    const request = pendingEmbedRequests.shift();
-    if (!request || request.cancelled) continue;
-    request.granted = true;
-    activeEmbedRequests += 1;
-    request.onGrant();
-  }
-}
+const PersistentInstagramIframe = memo(function PersistentInstagramIframe({
+  itemId,
+  embedUrl,
+  title,
+  ready,
+  onLoad,
+  onError,
+}: {
+  itemId: string;
+  embedUrl: string;
+  title: string;
+  ready: boolean;
+  onLoad: () => void;
+  onError: () => void;
+}) {
+  return (
+    <iframe
+      className={ready ? "is-ready" : undefined}
+      data-instagram-id={itemId}
+      src={embedUrl}
+      title={title}
+      loading="eager"
+      scrolling="no"
+      tabIndex={-1}
+      allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
+      referrerPolicy="strict-origin-when-cross-origin"
+      onLoad={onLoad}
+      onError={onError}
+    />
+  );
+});
 
 function MediaLoadingState({
   className,
