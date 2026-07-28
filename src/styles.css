@@ -464,6 +464,7 @@ p {
   z-index: 4;
   overflow-x: auto;
   overflow-y: hidden;
+  overflow-anchor: none;
   overscroll-behavior: contain;
   scroll-behavior: auto;
   scrollbar-width: none;
@@ -506,21 +507,7 @@ p {
   border: 2px solid #2a202b;
   border-radius: inherit;
   background: #0f0d10;
-  box-shadow:
-    inset 0 0 0 1px rgb(0 0 0 / 55%),
-    0 28px 85px rgb(0 0 0 / 42%);
-  transition: box-shadow 420ms ease;
-}
-
-.archive-card:hover .archive-media-surface,
-.archive-card:focus-within .archive-media-surface {
-  box-shadow: 0 36px 105px rgb(0 0 0 / 58%);
-}
-
-.archive-card.is-selected .archive-media-surface {
-  box-shadow:
-    0 38px 120px rgb(0 0 0 / 62%),
-    0 0 54px rgb(255 77 154 / 10%);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 55%);
 }
 
 .archive-media-surface > img {

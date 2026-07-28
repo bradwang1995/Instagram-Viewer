@@ -30,6 +30,7 @@ type ArchiveMediaCardProps = {
   item: MediaQueueItem;
   index: number;
   selected: boolean;
+  loadMedia?: boolean;
   allowCompatibilityPreview: boolean;
   layoutStyle: CSSProperties;
   onSelect: () => void;
@@ -40,6 +41,7 @@ export function ArchiveMediaCard({
   item,
   index,
   selected,
+  loadMedia = true,
   allowCompatibilityPreview,
   layoutStyle,
   onSelect,
@@ -112,6 +114,7 @@ export function ArchiveMediaCard({
       className={`archive-card${selected ? " is-selected" : ""}`}
       data-media-id={media.id}
       data-media-index={index}
+      data-media-load={loadMedia ? "enabled" : "paused"}
       data-testid="archive-media-card"
       style={layoutStyle}
       initial={{ opacity: 0, y: 55, scale: 0.985 }}
@@ -125,7 +128,7 @@ export function ArchiveMediaCard({
     >
       <div className="archive-card-hit" onClick={onSelect}>
         <div className="archive-media-surface">
-          {resolvedUrl && !hasFailed ? (
+          {loadMedia && resolvedUrl && !hasFailed ? (
             <>
               <img
                 key={resolvedUrl}
@@ -146,7 +149,7 @@ export function ArchiveMediaCard({
                 <MediaLoadingState className="archive-image-loading" />
               ) : null}
             </>
-          ) : allowCompatibilityPreview ? (
+          ) : loadMedia && allowCompatibilityPreview ? (
             <CroppedInstagramPreview
               item={item}
               onUnavailable={reportUnavailable}

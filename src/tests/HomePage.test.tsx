@@ -228,12 +228,48 @@ describe("Photo archive preview", () => {
     fireEvent.scroll(scroller);
     await waitFor(() =>
       expect(
-        document.querySelector('[data-media-id="post:LONG:media:99"]'),
+        document.querySelector('[data-media-index="99"]'),
       ).toBeInTheDocument(),
     );
     expect(
       screen.getAllByTestId("archive-media-card").length,
     ).toBeLessThanOrEqual(16);
+  });
+
+  it("pauses media work while scrolling and restores each view position", async () => {
+    const source = createPost("SCROLL", "@stable.scroll", "Reference");
+    testState.posts = [source];
+    testState.queue = Array.from({ length: 100 }, (_, index) =>
+      createQueueItem(source, index, 100),
+    );
+    const view = render(<HomePage />);
+    await act(async () => undefined);
+
+    const scroller = screen.getByTestId("archive-scroller");
+    scroller.scrollLeft = 720;
+    fireEvent.scroll(scroller);
+    expect(scroller).toHaveAttribute("data-scroll-state", "moving");
+    expect(
+      view.container.querySelectorAll('[data-media-load="paused"]').length,
+    ).toBeGreaterThan(0);
+    expect(view.container.querySelector("img")).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(scroller).toHaveAttribute("data-scroll-state", "settled"),
+    );
+    expect(view.container.querySelector("img")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
+    scroller.scrollTop = 1440;
+    fireEvent.scroll(scroller);
+    await waitFor(() =>
+      expect(scroller).toHaveAttribute("data-scroll-state", "settled"),
+    );
+    fireEvent.click(screen.getByRole("button", { name: /Horizontal View/ }));
+    expect(scroller.scrollLeft).toBe(720);
+
+    fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
+    expect(scroller.scrollTop).toBe(1440);
+    expect(view.container.querySelector("img")).toBeInTheDocument();
   });
 
   it("preloads three posts beyond the visible Grid rows with bounded requests", async () => {

@@ -1,6 +1,6 @@
 import type { MediaQueueItem } from "./mediaQueue";
 
-const MAX_RETAINED_IMAGES = 96;
+const MAX_RETAINED_IMAGES = 24;
 const retainedImages = new Map<string, HTMLImageElement>();
 
 export function preloadMediaItems(items: MediaQueueItem[]): void {
