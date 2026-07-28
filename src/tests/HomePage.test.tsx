@@ -299,6 +299,40 @@ describe("Photo archive preview", () => {
     mountedFrames.forEach((frame) => expect(frame).toBeInTheDocument());
   });
 
+  it("shows loaders immediately for newly visible iframe cards while scrolling", async () => {
+    const source = createPost("IFRAME-AHEAD", "@fast.frame", "Saved");
+    testState.posts = [source];
+    testState.queue = Array.from({ length: 100 }, (_, index) =>
+      createUnresolvedQueueItem(source, index),
+    );
+    const view = render(<HomePage />);
+    await act(async () => undefined);
+
+    await waitFor(() =>
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(3),
+    );
+    const initialCardIds = Array.from(
+      view.container.querySelectorAll('[data-testid="archive-media-card"]'),
+    ).map((card) => card.getAttribute("data-media-id"));
+    const scroller = screen.getByTestId("archive-scroller");
+    scroller.scrollLeft = 10_000;
+    fireEvent.scroll(scroller);
+
+    await waitFor(() => {
+      const currentCardIds = Array.from(
+        view.container.querySelectorAll('[data-testid="archive-media-card"]'),
+      ).map((card) => card.getAttribute("data-media-id"));
+      expect(currentCardIds).not.toEqual(initialCardIds);
+    });
+    expect(scroller).toHaveAttribute("data-scroll-state", "moving");
+    expect(
+      view.container.querySelectorAll(".archive-embed-loading").length,
+    ).toBeGreaterThan(0);
+    expect(
+      view.container.querySelectorAll('[data-media-load="enabled"]').length,
+    ).toBeGreaterThan(0);
+  });
+
   it("preloads three posts beyond the visible Grid rows with bounded requests", async () => {
     const source = createPost("NETWORKBOUND", "@network.bound", "Saved");
     testState.posts = [source];

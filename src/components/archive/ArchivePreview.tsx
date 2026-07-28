@@ -146,16 +146,29 @@ export function ArchivePreview({
       viewport.width,
     ],
   );
+  const visibleIndexes = useMemo(
+    () =>
+      visibleLayouts
+        .filter((layout) =>
+          viewMode === "grid"
+            ? layout.top + layout.height > scrollOffset &&
+              layout.top < scrollOffset + viewport.height
+            : layout.left + layout.width > scrollOffset &&
+              layout.left < scrollOffset + viewport.width,
+        )
+        .map((layout) => layout.index),
+    [scrollOffset, viewMode, viewport.height, viewport.width, visibleLayouts],
+  );
+  const visibleMediaIds = useMemo(
+    () =>
+      new Set(
+        visibleIndexes
+          .map((index) => orderedItems[index]?.media.id)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    [orderedItems, visibleIndexes],
+  );
   const requestedMediaIds = useMemo(() => {
-    const visibleIndexes = visibleLayouts
-      .filter((layout) =>
-        viewMode === "grid"
-          ? layout.top + layout.height > scrollOffset &&
-            layout.top < scrollOffset + viewport.height
-          : layout.left + layout.width > scrollOffset &&
-            layout.left < scrollOffset + viewport.width,
-      )
-      .map((layout) => layout.index);
     const lastVisibleIndex = visibleIndexes.length
       ? Math.max(...visibleIndexes)
       : selectedIndex;
@@ -169,15 +182,7 @@ export function ArchivePreview({
         .map((index) => orderedItems[index]?.media.id)
         .filter((id): id is string => Boolean(id)),
     );
-  }, [
-    orderedItems,
-    scrollOffset,
-    selectedIndex,
-    viewMode,
-    viewport.height,
-    viewport.width,
-    visibleLayouts,
-  ]);
+  }, [orderedItems, selectedIndex, visibleIndexes]);
   const [loadableMediaIds, setLoadableMediaIds] = useState<Set<string>>(
     () => new Set(),
   );
@@ -190,18 +195,26 @@ export function ArchivePreview({
   );
 
   useEffect(() => {
-    if (isScrolling) return;
     setLoadableMediaIds((currentIds) =>
-      haveSameIds(currentIds, requestedMediaIds)
-        ? currentIds
-        : requestedMediaIds,
+      isScrolling
+        ? addIds(currentIds, visibleMediaIds)
+        : haveSameIds(currentIds, requestedMediaIds)
+          ? currentIds
+          : requestedMediaIds,
     );
+    if (isScrolling) return;
     preloadMediaItems(
       visibleLayouts
         .map((layout) => orderedItems[layout.index])
         .filter((item): item is MediaQueueItem => Boolean(item)),
     );
-  }, [isScrolling, orderedItems, requestedMediaIds, visibleLayouts]);
+  }, [
+    isScrolling,
+    orderedItems,
+    requestedMediaIds,
+    visibleLayouts,
+    visibleMediaIds,
+  ]);
 
   useEffect(
     () => () => {
@@ -468,16 +481,17 @@ export function ArchivePreview({
           {orderedItems.length ? (
             visibleLayouts.map((layout) => {
               const item = orderedItems[layout.index];
+              const shouldLoadMedia =
+                loadableMediaIds.has(item.media.id) ||
+                visibleMediaIds.has(item.media.id);
               return (
                 <ArchiveMediaCard
                   key={item.media.id}
                   item={item}
                   index={layout.index}
                   selected={item.media.id === selectedId}
-                  loadMedia={loadableMediaIds.has(item.media.id)}
-                  allowCompatibilityPreview={loadableMediaIds.has(
-                    item.media.id,
-                  )}
+                  loadMedia={shouldLoadMedia}
+                  allowCompatibilityPreview={shouldLoadMedia}
                   layoutStyle={{
                     position: "absolute",
                     left: layout.left,
@@ -545,4 +559,14 @@ function haveSameIds(left: Set<string>, right: Set<string>): boolean {
     if (!right.has(id)) return false;
   }
   return true;
+}
+
+function addIds(currentIds: Set<string>, addedIds: Set<string>): Set<string> {
+  let nextIds: Set<string> | undefined;
+  for (const id of addedIds) {
+    if (currentIds.has(id)) continue;
+    nextIds ??= new Set(currentIds);
+    nextIds.add(id);
+  }
+  return nextIds ?? currentIds;
 }
