@@ -1,21 +1,14 @@
-import {
-  EyeOff,
-  Grid2X2,
-  MoveHorizontal,
-  Play,
-  Search,
-  Settings2,
-  Upload,
-} from "lucide-react";
 import { motion } from "motion/react";
 import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  memo,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent,
   type WheelEvent,
 } from "react";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
@@ -26,7 +19,16 @@ import {
   getRibbonMetrics,
 } from "../../features/media/virtualMediaLayout";
 import { preloadMediaItems } from "../../features/media/mediaPreload";
+import {
+  addWheelImpulse,
+  advanceMomentum,
+} from "../../features/media/scrollMomentum";
 import { extendSessionMediaOrder } from "../../features/media/sessionMediaOrder";
+import {
+  ArchiveControlBar,
+  type ArchiveDateRange,
+  ArchiveHeader,
+} from "./ArchiveChrome";
 import { ArchiveMediaCard, type IframeStatus } from "./ArchiveMediaCard";
 
 export type ArchiveViewMode = "ribbon" | "grid";
@@ -35,15 +37,13 @@ type ArchivePreviewProps = {
   items: MediaQueueItem[];
   visibleItemIds: ReadonlySet<string>;
   selectedId?: string;
-  hiddenCount: number;
   viewMode: ArchiveViewMode;
   hasFilters: boolean;
+  dateRange: ArchiveDateRange;
   isImporting: boolean;
   onSelect: (mediaId: string) => void;
   onMediaUnavailable: (mediaId: string) => void;
   onImport: () => void;
-  onOpenFilters: () => void;
-  onOpenSettings: () => void;
   onViewModeChange: (mode: ArchiveViewMode) => void;
   onStartSlideshow: () => void;
 };
@@ -54,21 +54,22 @@ type ViewportSize = {
 };
 
 const SCROLL_SETTLE_DELAY_MS = 180;
+const PRELOAD_AHEAD_VIEWPORTS = 1;
+const HIDDEN_CARD_STYLE: CSSProperties = { display: "none" };
+const ARROW_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
 export const MAX_RETAINED_INSTAGRAM_IFRAMES = Infinity;
 
-export function ArchivePreview({
+export const ArchivePreview = memo(function ArchivePreview({
   items,
   visibleItemIds,
   selectedId,
-  hiddenCount,
   viewMode,
   hasFilters,
+  dateRange,
   isImporting,
   onSelect,
   onMediaUnavailable,
   onImport,
-  onOpenFilters,
-  onOpenSettings,
   onViewModeChange,
   onStartSlideshow,
 }: ArchivePreviewProps) {
@@ -81,8 +82,8 @@ export function ArchivePreview({
   const cardShellsRef = useRef(new Map<string, HTMLElement>());
   const activatedIframeIdsRef = useRef(new Set<string>());
   const iframeStatusByIdRef = useRef(new Map<string, IframeStatus>());
-  const wheelTarget = useRef(0);
-  const wheelDeadline = useRef(0);
+  const wheelVelocity = useRef(0);
+  const wheelLastFrameTime = useRef<number>();
   const activeViewMode = useRef(viewMode);
   const pendingViewMode = useRef<ArchiveViewMode>();
   const scrollPositions = useRef<Record<ArchiveViewMode, number>>({
@@ -93,8 +94,6 @@ export function ArchivePreview({
     ribbon: [],
     grid: [],
   });
-  const [scrollOffset, setScrollOffset] = useState(0);
-  const [isScrolling, setIsScrolling] = useState(false);
   const [, setIframeStateRevision] = useState(0);
   if (activeViewMode.current !== viewMode) {
     pendingViewMode.current = viewMode;
@@ -157,30 +156,21 @@ export function ArchivePreview({
         : ribbonMetrics.layouts,
     [gridMetrics, ribbonMetrics.layouts, viewMode, visibleOrderedItems.length],
   );
-  const visibleIndexes = useMemo(
-    () =>
-      allLayouts
-        .filter((layout) =>
-          viewMode === "grid"
-            ? layout.top + layout.height > scrollOffset &&
-              layout.top < scrollOffset + viewport.height
-            : layout.left + layout.width > scrollOffset &&
-              layout.left < scrollOffset + viewport.width,
-        )
-        .map((layout) => layout.index),
-    [allLayouts, scrollOffset, viewMode, viewport.height, viewport.width],
-  );
-  const preloadLayouts = useMemo(
-    () =>
-      allLayouts.filter((layout) =>
-        viewMode === "grid"
-          ? layout.top + layout.height > scrollOffset &&
-            layout.top < scrollOffset + viewport.height * 3
-          : layout.left + layout.width > scrollOffset &&
-            layout.left < scrollOffset + viewport.width * 3,
-      ),
-    [allLayouts, scrollOffset, viewMode, viewport.height, viewport.width],
-  );
+  const layoutStyleById = useMemo(() => {
+    const styles = new Map<string, CSSProperties>();
+    allLayouts.forEach((layout) => {
+      const item = visibleOrderedItems[layout.index];
+      if (!item) return;
+      styles.set(item.media.id, {
+        position: "absolute",
+        left: layout.left,
+        top: layout.top,
+        width: layout.width,
+        height: layout.height,
+      });
+    });
+    return styles;
+  }, [allLayouts, visibleOrderedItems]);
   const trackStyle = useMemo<CSSProperties>(
     () =>
       viewMode === "grid"
@@ -229,6 +219,35 @@ export function ArchivePreview({
     (itemId: string) => setIframeStatus(itemId, "error"),
     [setIframeStatus],
   );
+  const activatePreloadZone = useCallback(
+    (offset: number) => {
+      const viewportLength =
+        viewMode === "grid" ? viewport.height : viewport.width;
+      const preloadEnd =
+        offset + viewportLength * (1 + PRELOAD_AHEAD_VIEWPORTS);
+      const preloadItems: MediaQueueItem[] = [];
+
+      allLayouts.forEach((layout) => {
+        const start = viewMode === "grid" ? layout.top : layout.left;
+        const size = viewMode === "grid" ? layout.height : layout.width;
+        if (start + size <= offset || start >= preloadEnd) return;
+        const item = visibleOrderedItems[layout.index];
+        if (!item) return;
+        activateIframe(item.media.id);
+        preloadItems.push(item);
+      });
+
+      preloadMediaItems(preloadItems);
+    },
+    [
+      activateIframe,
+      allLayouts,
+      viewMode,
+      viewport.height,
+      viewport.width,
+      visibleOrderedItems,
+    ],
+  );
 
   useEffect(() => {
     const scroller = scrollerRef.current;
@@ -246,7 +265,7 @@ export function ArchivePreview({
       {
         root: scroller,
         rootMargin:
-          viewMode === "grid" ? "0px 0px 200% 0px" : "0px 200% 0px 0px",
+          viewMode === "grid" ? "0px 0px 100% 0px" : "0px 100% 0px 0px",
         threshold: 0,
       },
     );
@@ -261,16 +280,8 @@ export function ArchivePreview({
   }, [activateIframe, viewMode]);
 
   useEffect(() => {
-    preloadLayouts.forEach((layout) => {
-      const item = visibleOrderedItems[layout.index];
-      if (item) activateIframe(item.media.id);
-    });
-    preloadMediaItems(
-      preloadLayouts
-        .map((layout) => visibleOrderedItems[layout.index])
-        .filter((item): item is MediaQueueItem => Boolean(item)),
-    );
-  }, [activateIframe, preloadLayouts, visibleOrderedItems]);
+    activatePreloadZone(scrollPositions.current[viewMode]);
+  }, [activatePreloadZone, viewMode]);
 
   useEffect(
     () => () => {
@@ -327,9 +338,9 @@ export function ArchivePreview({
     scroller.scrollLeft = viewMode === "ribbon" ? restoredOffset : 0;
     scroller.scrollTop = viewMode === "grid" ? restoredOffset : 0;
     scrollPositions.current[viewMode] = restoredOffset;
-    setScrollOffset(restoredOffset);
-    setIsScrolling(false);
-    wheelTarget.current = viewMode === "ribbon" ? restoredOffset : 0;
+    scroller.dataset.scrollState = "settled";
+    wheelVelocity.current = 0;
+    wheelLastFrameTime.current = undefined;
     if (scrollSettleTimer.current) {
       window.clearTimeout(scrollSettleTimer.current);
       scrollSettleTimer.current = undefined;
@@ -366,32 +377,21 @@ export function ArchivePreview({
     }
     scrollPositions.current[currentViewMode] = nextOffset;
     if (currentViewMode === "ribbon" && !wheelFrame.current) {
-      wheelTarget.current = nextOffset;
+      wheelVelocity.current = 0;
+      wheelLastFrameTime.current = undefined;
     }
 
-    setIsScrolling(true);
+    scroller.dataset.scrollState = "moving";
     if (scrollSettleTimer.current) {
       window.clearTimeout(scrollSettleTimer.current);
     }
     const settleScroll = () => {
-      if (
-        wheelFrame.current &&
-        window.performance.now() < wheelDeadline.current
-      ) {
+      if (wheelFrame.current) {
         scrollSettleTimer.current = window.setTimeout(settleScroll, 40);
         return;
       }
       const scroller = scrollerRef.current;
-      if (wheelFrame.current) {
-        window.cancelAnimationFrame(wheelFrame.current);
-        wheelFrame.current = undefined;
-        if (scroller && viewMode === "ribbon") {
-          scroller.scrollLeft = wheelTarget.current;
-          scrollPositions.current.ribbon = wheelTarget.current;
-          setScrollOffset(wheelTarget.current);
-        }
-      }
-      setIsScrolling(false);
+      if (scroller) scroller.dataset.scrollState = "settled";
       scrollSettleTimer.current = undefined;
       if (
         !scroller ||
@@ -418,7 +418,8 @@ export function ArchivePreview({
 
     if (scrollFrame.current) window.cancelAnimationFrame(scrollFrame.current);
     scrollFrame.current = window.requestAnimationFrame(() => {
-      setScrollOffset(nextOffset);
+      scrollFrame.current = undefined;
+      activatePreloadZone(nextOffset);
     });
   }
 
@@ -439,31 +440,46 @@ export function ArchivePreview({
           ? Math.max(320, scroller.clientWidth)
           : 1;
     const maximum = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-    const currentTarget = wheelFrame.current
-      ? wheelTarget.current
-      : scroller.scrollLeft;
-    wheelTarget.current = Math.min(
-      maximum,
-      Math.max(0, currentTarget + dominantDelta * unit * 1.05),
-    );
-    wheelDeadline.current = window.performance.now() + 1_500;
+    const deltaPixels = dominantDelta * unit;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      scroller.scrollLeft = Math.min(
+        maximum,
+        Math.max(0, scroller.scrollLeft + deltaPixels),
+      );
+      return;
+    }
+    wheelVelocity.current = addWheelImpulse(wheelVelocity.current, deltaPixels);
 
     if (wheelFrame.current) return;
-    const animate = () => {
+    const animate = (timestamp: number) => {
       const currentScroller = scrollerRef.current;
       if (!currentScroller || viewMode !== "ribbon") {
         wheelFrame.current = undefined;
+        wheelVelocity.current = 0;
+        wheelLastFrameTime.current = undefined;
         return;
       }
 
-      const distance = wheelTarget.current - currentScroller.scrollLeft;
-      if (Math.abs(distance) < 0.5) {
-        currentScroller.scrollLeft = wheelTarget.current;
+      const elapsedMs = wheelLastFrameTime.current
+        ? timestamp - wheelLastFrameTime.current
+        : 1000 / 60;
+      wheelLastFrameTime.current = timestamp;
+      const frame = advanceMomentum(
+        currentScroller.scrollLeft,
+        wheelVelocity.current,
+        elapsedMs,
+        0,
+        Math.max(0, currentScroller.scrollWidth - currentScroller.clientWidth),
+      );
+      currentScroller.scrollLeft = frame.position;
+      wheelVelocity.current = frame.velocity;
+      if (frame.settled) {
         wheelFrame.current = undefined;
+        wheelVelocity.current = 0;
+        wheelLastFrameTime.current = undefined;
         return;
       }
 
-      currentScroller.scrollLeft += distance * 0.2;
       wheelFrame.current = window.requestAnimationFrame(animate);
     };
     wheelFrame.current = window.requestAnimationFrame(animate);
@@ -477,12 +493,13 @@ export function ArchivePreview({
       const currentOffset =
         viewMode === "grid" ? scroller.scrollTop : scroller.scrollLeft;
       scrollPositions.current[viewMode] = currentOffset;
-      if (viewMode === "ribbon") wheelTarget.current = currentOffset;
     }
     if (wheelFrame.current) {
       window.cancelAnimationFrame(wheelFrame.current);
       wheelFrame.current = undefined;
     }
+    wheelVelocity.current = 0;
+    wheelLastFrameTime.current = undefined;
     if (scrollSettleTimer.current) {
       window.clearTimeout(scrollSettleTimer.current);
       scrollSettleTimer.current = undefined;
@@ -490,39 +507,30 @@ export function ArchivePreview({
     onViewModeChange(nextViewMode);
   }
 
+  function handleArchiveKeyDown(event: KeyboardEvent<HTMLElement>) {
+    if (!ARROW_KEYS.has(event.key)) return;
+    const target = event.target as HTMLElement;
+    if (target.matches("input, select, textarea") || target.isContentEditable) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   return (
-    <section className={`archive-preview is-${viewMode}`}>
-      <header className="archive-header">
-        <div className="archive-logo">
-          <strong>Instagram Viewer</strong>
-        </div>
-        <div className="archive-view-tabs" aria-label="Photo layout">
-          <button
-            className={`viewer-control${viewMode === "ribbon" ? " is-active" : ""}`}
-            type="button"
-            aria-pressed={viewMode === "ribbon"}
-            onClick={() => handleViewModeChange("ribbon")}
-          >
-            <MoveHorizontal size={22} aria-hidden="true" /> Horizontal View
-          </button>
-          <button
-            className={`viewer-control${viewMode === "grid" ? " is-active" : ""}`}
-            type="button"
-            aria-pressed={viewMode === "grid"}
-            onClick={() => handleViewModeChange("grid")}
-          >
-            <Grid2X2 size={21} aria-hidden="true" /> Grid View
-          </button>
-        </div>
-        <button
-          className="viewer-control archive-import-link"
-          type="button"
-          onClick={onImport}
-        >
-          <Upload size={18} aria-hidden="true" />
-          {isImporting ? "Importing…" : "Import JSON"}
-        </button>
-      </header>
+    <section
+      className={`archive-preview is-${viewMode}`}
+      onKeyDownCapture={handleArchiveKeyDown}
+    >
+      <ArchiveHeader
+        activeTab={viewMode}
+        isImporting={isImporting}
+        onImport={onImport}
+        onTabChange={(tab) => {
+          if (tab === "slideshow") onStartSlideshow();
+          else handleViewModeChange(tab);
+        }}
+      />
 
       <div
         ref={scrollerRef}
@@ -530,15 +538,14 @@ export function ArchivePreview({
         data-testid="archive-scroller"
         data-rendered-count={orderedItems.length}
         data-visible-count={visibleOrderedItems.length}
-        data-scroll-state={isScrolling ? "moving" : "settled"}
+        data-scroll-state="settled"
         onWheel={handleWheel}
         onScroll={handleScroll}
       >
         <div className="archive-track" style={trackStyle}>
           {orderedItems.map((item, sessionIndex) => {
             const visibleIndex = visibleIndexById.get(item.media.id);
-            const layout =
-              visibleIndex === undefined ? undefined : allLayouts[visibleIndex];
+            const layoutStyle = layoutStyleById.get(item.media.id);
             const isActivated = activatedIframeIdsRef.current.has(
               item.media.id,
             );
@@ -552,72 +559,34 @@ export function ArchivePreview({
                 selected={item.media.id === selectedId}
                 loadMedia={isActivated}
                 allowCompatibilityPreview={isActivated}
-                visuallyHidden={!layout}
+                visuallyHidden={!layoutStyle}
                 iframeStatus={iframeStatus}
                 registerShell={registerShell}
                 onIframeLoad={handleIframeLoad}
                 onIframeError={handleIframeError}
-                layoutStyle={
-                  layout
-                    ? {
-                        position: "absolute",
-                        left: layout.left,
-                        top: layout.top,
-                        width: layout.width,
-                        height: layout.height,
-                      }
-                    : { display: "none" }
-                }
-                onSelect={() => onSelect(item.media.id)}
-                onUnavailable={() => onMediaUnavailable(item.media.id)}
+                layoutStyle={layoutStyle ?? HIDDEN_CARD_STYLE}
+                onSelect={onSelect}
+                onUnavailable={onMediaUnavailable}
               />
             );
           })}
           {!visibleOrderedItems.length && hasFilters ? (
             <div className="archive-empty-field">
               <strong>No photos match.</strong>
-              <span>Open Filter and clear the current search.</span>
+              <span>Widen the date range to bring photos back.</span>
             </div>
           ) : null}
         </div>
       </div>
 
       <motion.div
-        className="archive-dock"
+        className="archive-dock-motion"
         initial={{ y: "110%" }}
         animate={{ y: 0 }}
         transition={{ duration: 0.7, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="dock-actions">
-          <button
-            className={`viewer-control${hasFilters ? " is-active" : ""}`}
-            type="button"
-            onClick={onOpenFilters}
-          >
-            <Search size={18} aria-hidden="true" /> Filter
-          </button>
-          <button
-            className="viewer-control"
-            type="button"
-            onClick={onOpenSettings}
-          >
-            {hiddenCount ? (
-              <EyeOff size={18} aria-hidden="true" />
-            ) : (
-              <Settings2 size={18} aria-hidden="true" />
-            )}
-            Settings
-          </button>
-          <button
-            className="viewer-control dock-play"
-            type="button"
-            disabled={visibleOrderedItems.length === 0}
-            onClick={onStartSlideshow}
-          >
-            Slideshow <Play size={16} fill="currentColor" aria-hidden="true" />
-          </button>
-        </div>
+        <ArchiveControlBar dateRange={dateRange} />
       </motion.div>
     </section>
   );
-}
+});

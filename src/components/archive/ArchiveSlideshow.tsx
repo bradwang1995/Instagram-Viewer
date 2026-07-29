@@ -1,63 +1,78 @@
-import {
-  ChevronLeft,
-  ChevronRight,
-  EyeOff,
-  Pause,
-  Play,
-  Settings2,
-  X,
-} from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import type { TransitionPreset } from "../../db/schema";
 import { getInstagramEmbedUrl } from "../../features/embed/instagramEmbedUrl";
 import { getInstagramEmbedAvailability } from "../../features/embed/instagramOEmbed";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
+import {
+  ArchiveControlBar,
+  type ArchiveDateRange,
+  ArchiveHeader,
+  type ArchiveTab,
+} from "./ArchiveChrome";
 
 type ArchiveSlideshowProps = {
   open: boolean;
   item?: MediaQueueItem;
-  index: number;
-  total: number;
-  isPlaying: boolean;
-  elapsedMs: number;
   dwellMs: number;
-  transitionDurationMs: number;
   transitionPreset: TransitionPreset;
+  dateRange: ArchiveDateRange;
+  isImporting: boolean;
   onPrevious: () => void;
   onNext: () => void;
-  onTogglePlaying: () => void;
-  onPause: () => void;
-  onOpenSettings: () => void;
-  onHide: () => void;
+  onTabChange: (tab: ArchiveTab) => void;
+  onImport: () => void;
+  onDwellChange: (value: number) => void;
+  onTransitionPresetChange: (value: TransitionPreset) => void;
   onUnavailable: () => void;
-  onClose: () => void;
 };
+
+const TRANSITION_DURATION_SECONDS = 0.18;
 
 export function ArchiveSlideshow({
   open,
   item,
-  index,
-  total,
-  isPlaying,
-  elapsedMs,
   dwellMs,
-  transitionDurationMs,
   transitionPreset,
+  dateRange,
+  isImporting,
   onPrevious,
   onNext,
-  onTogglePlaying,
-  onPause,
-  onOpenSettings,
-  onHide,
+  onTabChange,
+  onImport,
+  onDwellChange,
+  onTransitionPresetChange,
   onUnavailable,
-  onClose,
 }: ArchiveSlideshowProps) {
-  if (!open || !item) return null;
+  useEffect(() => {
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      const target =
+        event.target instanceof HTMLElement ? event.target : undefined;
+      if (
+        target?.matches("input, select, textarea, button") ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        onPrevious();
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        onNext();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onNext, onPrevious]);
+
+  if (!open) return null;
+
   const creator =
-    item.media.creatorHandle ?? item.post.embedAuthorName ?? "Saved photo";
-  const resolvedUrl = item.media.assetUrl ?? item.media.previewUrl;
-  const isInteractiveEmbed = !resolvedUrl;
+    item?.media.creatorHandle ?? item?.post.embedAuthorName ?? "Saved photo";
+  const resolvedUrl = item
+    ? (item.media.assetUrl ?? item.media.previewUrl)
+    : undefined;
   const motionState = getMotionState(transitionPreset);
 
   return (
@@ -66,136 +81,103 @@ export function ArchiveSlideshow({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
-      transition={{ duration: 0.35 }}
+      transition={{ duration: TRANSITION_DURATION_SECONDS }}
       aria-label="Slideshow viewer"
     >
-      <header className="slideshow-header">
-        <div className="slideshow-header-actions">
-          <button
-            className="viewer-control"
-            type="button"
-            onClick={onOpenSettings}
-          >
-            <Settings2 size={18} aria-hidden="true" />
-            <span>Settings</span>
-          </button>
-          <button
-            className="viewer-control"
-            type="button"
-            onClick={onHide}
-            aria-label="Hide this media"
-          >
-            <EyeOff size={17} aria-hidden="true" />
-            <span>Hide</span>
-          </button>
-          <button
-            className="viewer-control"
-            type="button"
-            onClick={onClose}
-            aria-label="Close slideshow"
-          >
-            <X size={20} aria-hidden="true" />
-            <span>Close</span>
-          </button>
-        </div>
-      </header>
+      <ArchiveHeader
+        activeTab="slideshow"
+        isImporting={isImporting}
+        onImport={onImport}
+        onTabChange={onTabChange}
+      />
 
       <div className="slideshow-stage">
+        {resolvedUrl ? (
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.img
+              key={`backdrop:${item?.media.id}`}
+              className="slideshow-backdrop"
+              src={resolvedUrl}
+              alt=""
+              aria-hidden="true"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.72 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: TRANSITION_DURATION_SECONDS }}
+            />
+          </AnimatePresence>
+        ) : null}
+
         <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={item.media.id}
-            className="slideshow-frame"
-            initial={motionState.initial}
-            animate={motionState.animate}
-            exit={motionState.exit}
-            transition={{
-              duration: transitionDurationMs / 1000,
-              ease: [0.22, 1, 0.36, 1],
-            }}
-          >
-            {resolvedUrl ? (
-              <img
-                src={resolvedUrl}
-                alt={item.media.caption ?? creator}
-                onError={onUnavailable}
-              />
-            ) : (
-              <InteractiveInstagramSlideshowEmbed
-                item={item}
-                onInteraction={onPause}
-                onUnavailable={onUnavailable}
-              />
-            )}
-          </motion.div>
+          {item ? (
+            <motion.div
+              key={item.media.id}
+              className="slideshow-frame"
+              initial={motionState.initial}
+              animate={motionState.animate}
+              exit={motionState.exit}
+              transition={{
+                duration: TRANSITION_DURATION_SECONDS,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+            >
+              {resolvedUrl ? (
+                <img
+                  className="slideshow-photo"
+                  src={resolvedUrl}
+                  alt={item.media.caption ?? creator}
+                  onError={onUnavailable}
+                />
+              ) : (
+                <InstagramSlideshowEmbed
+                  item={item}
+                  onUnavailable={onUnavailable}
+                />
+              )}
+            </motion.div>
+          ) : (
+            <motion.div
+              key="empty"
+              className="slideshow-empty"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
+              <strong>No photos in this date range.</strong>
+              <span>Widen the range below to continue the slideshow.</span>
+            </motion.div>
+          )}
         </AnimatePresence>
-        {transitionPreset === "film-burn" ? (
+
+        {item && transitionPreset === "film-burn" ? (
           <motion.span
             key={item.media.id}
             className="slideshow-film-flash"
-            initial={{ opacity: 0.52 }}
+            initial={{ opacity: 0.42 }}
             animate={{ opacity: 0 }}
-            transition={{
-              duration: Math.min(0.7, transitionDurationMs / 1000),
-            }}
+            transition={{ duration: TRANSITION_DURATION_SECONDS }}
             aria-hidden="true"
           />
         ) : null}
       </div>
 
-      <footer className="slideshow-controls">
-        <div className="slideshow-progress">
-          <span>
-            {String(index + 1).padStart(2, "0")} /{" "}
-            {String(total).padStart(2, "0")}
-          </span>
-          <progress max={dwellMs} value={Math.min(elapsedMs, dwellMs)} />
-          <span>{Math.round(dwellMs / 100) / 10}s</span>
-        </div>
-        <div className="slideshow-transport">
-          <button
-            className="viewer-control"
-            type="button"
-            onClick={onPrevious}
-            aria-label={isInteractiveEmbed ? "Previous post" : "Previous photo"}
-          >
-            <ChevronLeft size={22} aria-hidden="true" />
-            <span>Previous</span>
-          </button>
-          <button
-            className="viewer-control slideshow-play"
-            type="button"
-            onClick={onTogglePlaying}
-            aria-label={isPlaying ? "Pause slideshow" : "Play slideshow"}
-          >
-            {isPlaying ? (
-              <Pause size={19} fill="currentColor" aria-hidden="true" />
-            ) : (
-              <Play size={19} fill="currentColor" aria-hidden="true" />
-            )}
-            <span>{isPlaying ? "Pause" : "Play"}</span>
-          </button>
-          <button
-            className="viewer-control"
-            type="button"
-            onClick={onNext}
-            aria-label={isInteractiveEmbed ? "Next post" : "Next photo"}
-          >
-            <span>Next</span>
-            <ChevronRight size={22} aria-hidden="true" />
-          </button>
-        </div>
-      </footer>
+      <ArchiveControlBar
+        dateRange={dateRange}
+        slideshow={{
+          dwellMs,
+          transitionPreset,
+          onDwellChange,
+          onTransitionPresetChange,
+        }}
+      />
     </motion.section>
   );
 }
 
-function InteractiveInstagramSlideshowEmbed({
+function InstagramSlideshowEmbed({
   item,
-  onInteraction,
   onUnavailable,
 }: {
   item: MediaQueueItem;
-  onInteraction: () => void;
   onUnavailable: () => void;
 }) {
   const [isValidated, setIsValidated] = useState(false);
@@ -207,6 +189,7 @@ function InteractiveInstagramSlideshowEmbed({
 
   useEffect(() => {
     let active = true;
+    setIsValidated(false);
     void getInstagramEmbedAvailability(item.post.canonicalUrl).then(
       (availability) => {
         if (!active) return;
@@ -222,19 +205,19 @@ function InteractiveInstagramSlideshowEmbed({
     };
   }, [item.post.canonicalUrl]);
 
-  if (!isValidated) return null;
+  if (!isValidated) {
+    return <span className="slideshow-loading">Loading photo…</span>;
+  }
 
   return (
     <div className="slideshow-embed">
       <iframe
         src={getInstagramEmbedUrl(item.post)}
         title={`Instagram preview ${item.post.shortcode ?? item.post.id}`}
-        allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"
-        allowFullScreen
+        allow="autoplay; encrypted-media; picture-in-picture"
         referrerPolicy="strict-origin-when-cross-origin"
-        tabIndex={0}
-        onFocus={onInteraction}
-        onPointerEnter={onInteraction}
+        scrolling="no"
+        tabIndex={-1}
         onError={onUnavailable}
       />
     </div>
@@ -251,9 +234,9 @@ function getMotionState(preset: TransitionPreset) {
       };
     case "depth-zoom":
       return {
-        initial: { opacity: 0, scale: 1.14, filter: "blur(10px)" },
+        initial: { opacity: 0, scale: 1.08, filter: "blur(8px)" },
         animate: { opacity: 1, scale: 1, filter: "blur(0px)" },
-        exit: { opacity: 0, scale: 0.92, filter: "blur(8px)" },
+        exit: { opacity: 0, scale: 0.95, filter: "blur(6px)" },
       };
     case "rgb-split":
       return {
@@ -263,19 +246,19 @@ function getMotionState(preset: TransitionPreset) {
       };
     case "ken-burns":
       return {
-        initial: { opacity: 0, scale: 1.05 },
+        initial: { opacity: 0, scale: 1.035 },
         animate: { opacity: 1, scale: 1 },
-        exit: { opacity: 0, scale: 1.025 },
+        exit: { opacity: 0, scale: 1.02 },
       };
     case "film-burn":
       return {
         initial: {
           opacity: 0,
-          scale: 1.025,
-          filter: "sepia(0.7) contrast(1.2)",
+          scale: 1.02,
+          filter: "sepia(0.55) contrast(1.12)",
         },
         animate: { opacity: 1, scale: 1, filter: "sepia(0) contrast(1)" },
-        exit: { opacity: 0, scale: 0.99, filter: "sepia(0.6) contrast(1.2)" },
+        exit: { opacity: 0, scale: 0.99, filter: "sepia(0.45) contrast(1.1)" },
       };
     default:
       return {

@@ -1,5 +1,4 @@
 import { LoaderCircle } from "lucide-react";
-import { motion } from "motion/react";
 import {
   memo,
   useCallback,
@@ -31,11 +30,11 @@ type ArchiveMediaCardProps = {
   registerShell?: (itemId: string, node: HTMLElement | null) => void;
   onIframeLoad?: (itemId: string) => void;
   onIframeError?: (itemId: string) => void;
-  onSelect: () => void;
-  onUnavailable: () => void;
+  onSelect: (mediaId: string) => void;
+  onUnavailable: (mediaId: string) => void;
 };
 
-export function ArchiveMediaCard({
+export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   item,
   index,
   selected,
@@ -106,8 +105,8 @@ export function ArchiveMediaCard({
   const reportUnavailable = useCallback(() => {
     if (unavailableReportedRef.current) return;
     unavailableReportedRef.current = true;
-    onUnavailable();
-  }, [onUnavailable]);
+    onUnavailable(media.id);
+  }, [media.id, onUnavailable]);
 
   useEffect(() => {
     if (hasFailed) reportUnavailable();
@@ -128,7 +127,7 @@ export function ArchiveMediaCard({
   if (hasFailed) return null;
 
   return (
-    <motion.article
+    <article
       ref={shellRef}
       className={`archive-card${selected ? " is-selected" : ""}`}
       data-media-id={media.id}
@@ -138,16 +137,8 @@ export function ArchiveMediaCard({
       data-testid="archive-media-card"
       hidden={visuallyHidden}
       style={layoutStyle}
-      initial={{ opacity: 0, y: 55, scale: 0.985 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      transition={{
-        duration: 0.62,
-        delay: Math.min((index % 12) * 0.025, 0.22),
-        ease: [0.22, 1, 0.36, 1],
-      }}
-      whileHover={{ y: -10, scale: 1.015 }}
     >
-      <div className="archive-card-hit" onClick={onSelect}>
+      <div className="archive-card-hit" onClick={() => onSelect(media.id)}>
         <div className="archive-media-surface">
           {loadMedia && resolvedUrl && !hasFailed ? (
             <>
@@ -181,9 +172,9 @@ export function ArchiveMediaCard({
           ) : null}
         </div>
       </div>
-    </motion.article>
+    </article>
   );
-}
+});
 
 function CroppedInstagramPreview({
   item,

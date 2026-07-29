@@ -122,11 +122,10 @@ describe("Photo archive preview", () => {
     ).not.toBeInTheDocument();
     expect(screen.getByText("Instagram Viewer")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /Horizontal View/ }),
+      screen.getByRole("tab", { name: /Horizontal View/ }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: /Grid View/ }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /Grid View/ })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Slideshow" })).toBeInTheDocument();
     expect(
       screen.queryByText(/local-first photo viewer/i),
     ).not.toBeInTheDocument();
@@ -135,13 +134,23 @@ describe("Photo archive preview", () => {
       document.querySelector(".archive-header .archive-view-tabs"),
     ).toBeInTheDocument();
     [
-      screen.getByRole("button", { name: /Horizontal View/ }),
-      screen.getByRole("button", { name: /Grid View/ }),
+      screen.getByRole("tab", { name: /Horizontal View/ }),
+      screen.getByRole("tab", { name: /Grid View/ }),
+      screen.getByRole("tab", { name: "Slideshow" }),
       screen.getByRole("button", { name: "Import JSON" }),
-      screen.getByRole("button", { name: "Filter" }),
-      screen.getByRole("button", { name: "Settings" }),
-      screen.getByRole("button", { name: "Slideshow" }),
     ].forEach((control) => expect(control).toHaveClass("viewer-control"));
+    expect(
+      screen.queryByRole("button", { name: "Filter" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Settings" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("slider", { name: "Start time" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("slider", { name: "End time" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /reload|refresh/i }),
     ).not.toBeInTheDocument();
@@ -154,10 +163,10 @@ describe("Photo archive preview", () => {
     render(<HomePage />);
     await act(async () => undefined);
 
-    const horizontalTab = screen.getByRole("button", {
+    const horizontalTab = screen.getByRole("tab", {
       name: /Horizontal View/,
     });
-    const gridTab = screen.getByRole("button", { name: /Grid View/ });
+    const gridTab = screen.getByRole("tab", { name: /Grid View/ });
     expect(gridTab).toHaveClass("is-active");
     expect(horizontalTab).not.toHaveClass("is-active");
 
@@ -204,24 +213,33 @@ describe("Photo archive preview", () => {
     expect(gridTab).toHaveClass("is-active");
   });
 
-  it("uses a two-screen IntersectionObserver margin in both layouts", async () => {
+  it("uses a one-screen IntersectionObserver margin in both layouts", async () => {
     render(<HomePage />);
     await waitFor(() =>
-      expect(observedRootMargins).toContain("0px 200% 0px 0px"),
+      expect(observedRootMargins).toContain("0px 100% 0px 0px"),
     );
 
-    fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
     await waitFor(() =>
-      expect(observedRootMargins).toContain("0px 0px 200% 0px"),
+      expect(observedRootMargins).toContain("0px 0px 100% 0px"),
     );
   });
 
-  it("filters the visual field by creator", async () => {
+  it("shares the date range across Horizontal, Grid, and Slideshow", async () => {
+    const laterDate = "2026-03-20T12:00:00.000Z";
+    testState.posts[1] = {
+      ...testState.posts[1],
+      savedAt: laterDate,
+      importedAt: laterDate,
+      updatedAt: laterDate,
+    };
+    testState.queue[2] = createQueueItem(testState.posts[1], 0, 1);
+
     render(<HomePage />);
     await act(async () => undefined);
-    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
-    fireEvent.change(screen.getByLabelText("Creator"), {
-      target: { value: "@quietframes" },
+
+    fireEvent.change(screen.getByRole("slider", { name: "Start time" }), {
+      target: { value: "1" },
     });
     expect(screen.getAllByTestId("archive-media-card")).toHaveLength(3);
     expect(
@@ -230,12 +248,35 @@ describe("Photo archive preview", () => {
     expect(
       document.querySelectorAll('[data-media-visibility="filtered"]'),
     ).toHaveLength(2);
-    expect(screen.queryByText(/media · .*sources/)).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
+    expect(
+      document.querySelectorAll('[data-media-visibility="visible"]'),
+    ).toHaveLength(1);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Slideshow" }));
+    const slideshow = screen.getByRole("region", {
+      name: "Slideshow viewer",
+    });
+    expect(
+      within(slideshow).getByRole("slider", { name: "Start time" }),
+    ).toHaveValue("1");
+    expect(
+      within(slideshow).getByRole("img", {
+        name: "@quietframes frame 1 of 1",
+      }),
+    ).toBeInTheDocument();
   });
 
-  it("visually filters an activated iframe without destroying it", async () => {
+  it("visually date-filters an activated iframe without destroying it", async () => {
     const first = createPost("FILTER-A", "@keep.frame", "Saved");
-    const second = createPost("FILTER-B", "@other.frame", "Saved");
+    const laterDate = "2026-03-20T12:00:00.000Z";
+    const second = {
+      ...createPost("FILTER-B", "@other.frame", "Saved"),
+      savedAt: laterDate,
+      importedAt: laterDate,
+      updatedAt: laterDate,
+    };
     testState.posts = [first, second];
     testState.queue = [
       createUnresolvedQueueItem(first, 0),
@@ -249,9 +290,8 @@ describe("Photo archive preview", () => {
       'iframe[data-instagram-id="post:FILTER-A:unresolved:0"]',
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
-    fireEvent.change(screen.getByLabelText("Creator"), {
-      target: { value: "@other.frame" },
+    fireEvent.change(screen.getByRole("slider", { name: "Start time" }), {
+      target: { value: "1" },
     });
 
     expect(retainedFrame).toBeInTheDocument();
@@ -259,8 +299,8 @@ describe("Photo archive preview", () => {
       retainedFrame?.closest('[data-media-visibility="filtered"]'),
     ).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("Creator"), {
-      target: { value: "" },
+    fireEvent.change(screen.getByRole("slider", { name: "Start time" }), {
+      target: { value: "0" },
     });
     expect(
       view.container.querySelector(
@@ -326,7 +366,7 @@ describe("Photo archive preview", () => {
     render(<HomePage />);
     await act(async () => undefined);
 
-    fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
     await waitFor(() =>
       expect(screen.getAllByTestId("archive-media-card")).toHaveLength(100),
     );
@@ -370,16 +410,16 @@ describe("Photo archive preview", () => {
     );
     expect(view.container.querySelector("img")).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
     scroller.scrollTop = 1440;
     fireEvent.scroll(scroller);
     await waitFor(() =>
       expect(scroller).toHaveAttribute("data-scroll-state", "settled"),
     );
-    fireEvent.click(screen.getByRole("button", { name: /Horizontal View/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Horizontal View/ }));
     expect(scroller.scrollLeft).toBe(720);
 
-    fireEvent.click(screen.getByRole("button", { name: /Grid View/ }));
+    fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
     expect(scroller.scrollTop).toBe(1440);
     expect(view.container.querySelector("img")).toBeInTheDocument();
   });
@@ -394,7 +434,7 @@ describe("Photo archive preview", () => {
     await act(async () => undefined);
 
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(8),
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(5),
     );
     const mountedFrame = view.container.querySelector(
       "iframe",
@@ -437,7 +477,7 @@ describe("Photo archive preview", () => {
     ).toHaveClass("is-hidden");
   });
 
-  it("activates two screens ahead and leaves farther cards as placeholders", async () => {
+  it("activates one screen ahead and leaves farther cards as placeholders", async () => {
     const source = createPost("IFRAME-AHEAD", "@fast.frame", "Saved");
     testState.posts = [source];
     testState.queue = Array.from({ length: 100 }, (_, index) =>
@@ -447,7 +487,7 @@ describe("Photo archive preview", () => {
     await act(async () => undefined);
 
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(8),
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(5),
     );
     expect(
       view.container.querySelectorAll('[data-media-load="paused"]').length,
@@ -466,14 +506,14 @@ describe("Photo archive preview", () => {
     expect(farCard.querySelector("iframe")).not.toBeInTheDocument();
     expect(
       view.container.querySelectorAll(".archive-embed-loading"),
-    ).toHaveLength(8);
+    ).toHaveLength(5);
     const scroller = screen.getByTestId("archive-scroller");
     scroller.scrollLeft = 10_000;
     fireEvent.scroll(scroller);
 
     await waitFor(() =>
       expect(view.container.querySelectorAll("iframe").length).toBeGreaterThan(
-        8,
+        5,
       ),
     );
     expect(scroller).toHaveAttribute("data-scroll-state", "moving");
@@ -495,7 +535,7 @@ describe("Photo archive preview", () => {
     await act(async () => undefined);
 
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(8),
+      expect(view.container.querySelectorAll("iframe")).toHaveLength(5),
     );
     const initialFrame = view.container.querySelector(
       "iframe",
@@ -506,7 +546,7 @@ describe("Photo archive preview", () => {
     fireEvent.scroll(scroller);
     await waitFor(() =>
       expect(view.container.querySelectorAll("iframe").length).toBeGreaterThan(
-        8,
+        5,
       ),
     );
     scroller.scrollLeft = 0;
@@ -524,39 +564,76 @@ describe("Photo archive preview", () => {
     ).toBe(initialFrame);
   });
 
-  it("adds slideshow history and advances only from visible controls", async () => {
+  it("prevents archive arrow keys from moving the browsing surface", async () => {
+    const laterDate = "2026-03-20T12:00:00.000Z";
+    testState.posts[1] = {
+      ...testState.posts[1],
+      savedAt: laterDate,
+      importedAt: laterDate,
+      updatedAt: laterDate,
+    };
+    testState.queue[2] = createQueueItem(testState.posts[1], 0, 1);
+
     render(<HomePage />);
     await act(async () => undefined);
 
-    fireEvent.click(screen.getByRole("button", { name: "Slideshow" }));
+    const horizontalTab = screen.getByRole("tab", {
+      name: /Horizontal View/,
+    });
+    horizontalTab.focus();
+    expect(
+      fireEvent.keyDown(horizontalTab, {
+        key: "ArrowRight",
+        cancelable: true,
+      }),
+    ).toBe(false);
+
+    const startTime = screen.getByRole("slider", { name: "Start time" });
+    startTime.focus();
+    expect(
+      fireEvent.keyDown(startTime, {
+        key: "ArrowRight",
+        cancelable: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("opens the slideshow tab, auto-loops, and supports keyboard navigation", async () => {
+    render(<HomePage />);
+    await act(async () => undefined);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Slideshow" }));
     expect(window.location.search).toContain("slideshow=1");
     const slideshow = screen.getByRole("region", {
       name: "Slideshow viewer",
     });
     expect(slideshow).toBeInTheDocument();
-    expect(within(slideshow).getByText("5s")).toBeInTheDocument();
     expect(DEFAULT_SETTINGS.slideshowIntervalMs).toBe(5_000);
-    const slideshowControls = [
-      within(slideshow).getByRole("button", { name: "Settings" }),
-      within(slideshow).getByRole("button", { name: "Hide this media" }),
-      within(slideshow).getByRole("button", { name: "Close slideshow" }),
-      within(slideshow).getByRole("button", { name: "Previous photo" }),
-      within(slideshow).getByRole("button", { name: "Pause slideshow" }),
-      within(slideshow).getByRole("button", { name: "Next photo" }),
-    ];
-    slideshowControls.forEach((control) =>
-      expect(control).toHaveClass("viewer-control"),
-    );
-    expect(within(slideshow).getByText("Previous")).toBeInTheDocument();
-    expect(within(slideshow).getByText("Pause")).toBeInTheDocument();
-    expect(within(slideshow).getByText("Next")).toBeInTheDocument();
+    expect(
+      within(slideshow).getByRole("tab", { name: "Slideshow" }),
+    ).toHaveAttribute("aria-selected", "true");
+    expect(
+      within(slideshow).queryByRole("button", { name: "Settings" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(slideshow).queryByRole("button", { name: "Hide this media" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(slideshow).queryByRole("button", { name: /previous|next|pause/i }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(slideshow).getByRole("combobox", { name: "Transition style" }),
+    ).toHaveValue(DEFAULT_SETTINGS.slideshowTransitionPreset);
+    expect(
+      within(slideshow).getByRole("slider", { name: "Frame duration" }),
+    ).toHaveAttribute("max", "10000");
     expect(
       within(slideshow).getByRole("img", {
         name: "@north.archive frame 1 of 2",
       }),
     ).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
+    fireEvent.keyDown(window, { key: "ArrowRight" });
     await waitFor(() =>
       expect(
         within(slideshow).getByRole("img", {
@@ -566,13 +643,6 @@ describe("Photo archive preview", () => {
     );
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
-    expect(
-      within(slideshow).getByRole("img", {
-        name: "@north.archive frame 2 of 2",
-      }),
-    ).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Next photo" }));
     await waitFor(() =>
       expect(
         within(slideshow).getByRole("img", {
@@ -581,38 +651,31 @@ describe("Photo archive preview", () => {
       ).toBeInTheDocument(),
     );
 
-    window.history.replaceState({}, "", "/");
-    fireEvent.popState(window);
+    fireEvent.click(within(slideshow).getByRole("tab", { name: /Grid View/ }));
     await waitFor(() =>
       expect(
         screen.queryByRole("region", { name: "Slideshow viewer" }),
       ).not.toBeInTheDocument(),
     );
+    expect(window.location.search).toBe("?view=grid");
   });
 
-  it("keeps a slideshow iframe interactive and pauses when it is engaged", async () => {
+  it("masks slideshow iframe chrome and keeps it out of the controls", async () => {
     const source = createPost("INTERACTIVE", "@interactive", "Saved");
     testState.posts = [source];
     testState.queue = [createUnresolvedQueueItem(source, 0)];
 
     render(<HomePage />);
     await act(async () => undefined);
-    fireEvent.click(screen.getByRole("button", { name: "Slideshow" }));
+    fireEvent.click(screen.getByRole("tab", { name: "Slideshow" }));
 
     const frame = await screen.findByTitle("Instagram preview INTERACTIVE");
-    expect(frame).toHaveAttribute("tabindex", "0");
-    expect(frame).not.toHaveAttribute("scrolling", "no");
+    expect(frame).toHaveAttribute("tabindex", "-1");
+    expect(frame).toHaveAttribute("scrolling", "no");
+    expect(frame.closest(".slideshow-embed")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Pause slideshow" }),
-    ).toBeInTheDocument();
-
-    fireEvent.pointerEnter(frame);
-    expect(
-      screen.getByRole("button", { name: "Play slideshow" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Next post" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /play|pause|next|previous/i }),
+    ).not.toBeInTheDocument();
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(

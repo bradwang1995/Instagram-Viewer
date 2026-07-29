@@ -21,36 +21,36 @@ The app does not ask for Instagram credentials and does not upload your JSON fil
 
 The export supplies Instagram post URLs and descriptive metadata, not direct image URLs or carousel-child records. Each imported post therefore becomes one card, and Instagram Viewer loads that post's default first preview directly from Instagram through its official embed page. The JSON itself remains in browser-local storage, while the embed necessarily makes a normal request to Instagram.
 
-Every archive item now keeps a lightweight card shell in the document. A card activates when it reaches the current viewport or the next two viewport lengths (`down` in Grid View and `right` in Horizontal View). The real iframe then loads eagerly and remains mounted for the rest of the page session, so scrolling away, reversing direction, filtering, resizing, or switching layouts does not recreate an already activated Instagram document.
+Every archive item now keeps a lightweight card shell in the document. A card activates when it reaches the current viewport or the next viewport length (`down` in Grid View and `right` in Horizontal View). The real iframe then loads eagerly and remains mounted for the rest of the page session, so scrolling away, reversing direction, filtering, resizing, or switching layouts does not recreate an already activated Instagram document.
 
 An Instagram embed is a cross-origin document controlled by Instagram. The viewer clips its header and social footer outside the visible square, but cannot inspect or restyle the internal carousel, extract its child image URLs, or turn those children into separate parent-page cards. Meta's current API requires access tokens and is designed around media owned by authenticated professional accounts; it does not expose a saved-posts endpoint that resolves arbitrary saved URLs. The app does not use undocumented scraping endpoints or ask for Instagram credentials.
 
 ## Current Viewer Refinement
 
-The active UI is branded `Instagram Viewer`. The app self-hosts the open-source Pacifico typeface identified by the supplied computed style and uses it consistently for the non-clickable gradient wordmark, view tabs, buttons, sheets, form controls, and status text. Controls preserve their written capitalization instead of forcing all-caps. The two browsing modes remain large top-center tabs named `Horizontal View` and `Grid View`.
+The active UI is branded `Instagram Viewer`. The app self-hosts the open-source Pacifico typeface identified by the supplied computed style and uses it consistently for the non-clickable gradient wordmark, view tabs, buttons, form controls, and status text. Controls preserve their written capitalization instead of forcing all-caps. `Horizontal View`, `Grid View`, and `Slideshow` now form one top-center segmented tab switcher.
 
-- Horizontal View keeps every card shell mounted and activates media across the visible width plus two widths ahead. At `1920 × 1080`, the media surface is `870px` high, leaving only a small controlled gap between media and the overlaid page chrome.
-- Grid View remains four square columns on desktop and shows two compact rows in the active viewport. Every shell stays mounted; only cards in the visible height plus two heights below create iframe documents.
+- Horizontal View keeps every card shell mounted and activates media across the visible width plus one width ahead. At `1920 × 1080`, the media surface is `870px` high, leaving only a small controlled gap between media and the overlaid page chrome.
+- Grid View remains four square columns on desktop and shows two compact rows in the active viewport. Every shell stays mounted; only cards in the visible height plus one height below create iframe documents.
 - Direct images inside the activation zone load immediately and enter a retained decode window plus a cache-first image service worker where supported. Compatibility previews use the same one-way activation model. Meta's tokenless oEmbed check silently removes posts reported as private, deleted, or non-embeddable; transient validation failures fall back to the iframe, and slow/error iframe documents are retained instead of being evicted by a timeout.
 - Resolved media is shown at normal brightness. Grid View preserves `object-fit: contain`; Horizontal View uses `object-fit: cover` so its frame has no letterbox gap. Hover and selection use lift, scale, and shadow instead of dimming the other photos; selected photos have no colored border.
 - Photo cards use a rounded near-black edge that stays visible against the page without a bright hairline. Per-card source labels, creator/collection captions, ordinal counters, custom next-photo buttons, Hide/Open Source buttons, and the Instagram social footer are absent. Compatibility frames are enlarged and center-cropped beyond the card edges to mask Instagram's native carousel arrow in Horizontal and Grid views; the parent still cannot delete or restyle that cross-origin control if Instagram changes its embed layout.
 - Compatibility frames crossfade over the loading surface after their document load event instead of replacing the spinner with a hard black flash.
-- The full media list remains reachable through the layout track, all card shells stay in the DOM, and browser `content-visibility`/containment skips unnecessary offscreen rendering work while both scrollbars stay visually hidden.
+- The full media list remains reachable through the layout track, all card shells stay in the DOM, and browser `content-visibility`/containment skips unnecessary offscreen rendering work while both scrollbars stay visually hidden. Scroll position no longer enters React state on every animation frame, memoized cards rerender only when their own activation/selection data changes, and card shells no longer allocate a permanent transform layer.
 - Horizontal View and Grid View are represented by `?view=horizontal` and `?view=grid`. Switching modes adds an in-app history entry, so browser Back and Forward restore the matching URL, active tab, and rendered layout; direct view-specific URLs also restore on refresh.
 - The page prevents text/image selection and uses standard cursor semantics: buttons, links, form selectors, and every photo card show the native `pointer`; non-interactive application surfaces keep the browser default cursor. A cross-origin Instagram iframe may still choose its own cursor internally because parent-page CSS cannot style the embedded document.
-- Tabs, Import, Filter, Settings, Slideshow, sheet actions, and slideshow transport share one recognizable rounded dark-button treatment with a gradient edge. Their Pacifico labels use a more legible `20.64px` desktop size and `17.76px` mobile size while retaining the existing `52px` / `46px` control heights.
-- Custom keyboard navigation is intentionally absent from Horizontal View, Grid View, and the parent slideshow surface. Photo selection and slideshow navigation use the visible pointer controls; standard browser behavior for native form controls is unchanged.
-- Slideshow defaults to five seconds, fills the viewport behind overlaid controls, uses visible Previous/Play-or-Pause/Next labels, and pushes `?slideshow=1` so browser Back returns to the photo field. Known resolved children advance in source order before the next post; after the last known child, manual or timed navigation advances to the next post under the selected loop mode.
+- The former Filter and Settings buttons, bottom sheets, hidden-media controls, loop-mode selector, transition-duration selector, and text transport buttons are absent from the active viewer. The only session filter is a shared month-based Start time / End time dual range at the lower left.
+- Arrow keys are suppressed on the Horizontal/Grid browsing surface so a focused page control cannot push the media field. In Slideshow, ArrowLeft and ArrowRight move through the visible filtered queue; native range/select controls retain their standard keyboard behavior.
+- Slideshow starts automatically, loops the complete filtered queue, and defaults to five seconds per frame with an inline `1–10s` duration control. The implemented transition presets remain selectable in a compact dark control. Resolved photos use a same-image blurred full-viewport backdrop with a contained foreground image; compatibility iframes are non-interactive and visually cropped to mask Instagram chrome.
 
-Ordinary `saved_posts.json` imports use one compatibility preview per post because the export contains no child URLs. In Slideshow, that iframe is focusable, playable, scrollable, and left free of a blocking application overlay; focusing or pointing into it pauses autoplay. Users can operate Instagram's native carousel controls, but the parent cannot read or command the cross-origin carousel. The parent page exposes no keyboard shortcuts; explicit Previous/Next post buttons remain available. The app does not scrape Instagram or fabricate children from a cross-origin iframe.
+Ordinary `saved_posts.json` imports use one compatibility preview per post because the export contains no child URLs. In Slideshow, the parent visually masks the cross-origin embed and treats the post as one timed queue item; it cannot read or command Instagram's internal carousel. The app does not scrape Instagram or fabricate children from a cross-origin iframe.
 
 ## PhotoYoshi-Inspired Archive Field
 
-> Implementation status: the full viewport archive-field redesign and persistent two-screen Instagram preload strategy were implemented in July 2026. The standard export remains the only user input; known-unavailable previews disappear silently.
+> Implementation status: the full viewport archive-field redesign and persistent one-screen-ahead Instagram preload strategy were implemented in July 2026. The standard export remains the only user input; known-unavailable previews disappear silently.
 
 The selected direction treats the app as an animated editorial image field instead of a list beside an Instagram viewer. The empty state is deliberately simple: one full-screen composition whose primary action is importing the JSON export. After import, each saved post becomes one persistent card shell in the horizontal field, while Grid View provides a larger four-column contact sheet.
 
-The bottom dock owns the session: Horizontal/Grid mode, filtering, playback settings, hidden-media recovery, and full-screen slideshow launch. Motion for React owns component/interaction motion and GSAP owns authored playback timelines.
+The top segmented switcher owns Horizontal/Grid/Slideshow mode. A shared lower-left date range follows the session across all three tabs; Slideshow adds only transition style and frame duration on the same bottom line.
 
 ### Implemented Checkpoint
 
@@ -59,15 +59,15 @@ The bottom dock owns the session: Horizontal/Grid mode, filtering, playback sett
 - Added a horizontal, wheel-driven media view and a four-column Grid View.
 - Keeps the photo surface free of per-card labels, counters, source links, and curation controls.
 - Keeps the bottom playback dock visible on desktop and mobile.
-- Keeps every card shell mounted, lazily activates media across the current viewport plus two screens ahead, and never deactivates an iframe during the page session.
+- Keeps every card shell mounted, lazily activates media across the current viewport plus one screen ahead, and never deactivates an iframe during the page session.
 - Added IndexedDB `mediaItems` and `mediaPreferences` tables with deterministic media identity.
 - Migrates existing source posts to honest iframe-compatible media records without fabricating carousel children or thumbnails.
 - Added an ordered visual queue that gives every resolved source frame its own card.
-- Added media-level Skip, Hide/Downvote, immediate Undo, Hidden Media, single restore, and restore-all flows.
-- Added creator, collection, local-tag/text, and advanced saved-date session filtering.
-- Added independent dwell time, transition duration, transition preset, shuffle, and loop behavior.
+- Retained media-preference data support while removing Hide/Downvote, Undo, Hidden Media, and restore controls from the active viewer.
+- Replaced creator, collection, and text search UI with one shared month-based Start time / End time dual-range filter.
+- Reduced active slideshow controls to frame duration and implemented transition style; playback always loops the visible queue.
 - Added Crossfade, Directional Wipe, Depth Zoom, Film Burn, RGB Split, and Ken Burns stage treatments.
-- Keeps document-hidden playback pause, fullscreen, and reduced-motion fallbacks; custom keyboard navigation was subsequently removed in favor of visible controls.
+- Keeps reduced-motion fallbacks, viewport-contained playback, and Slideshow-only ArrowLeft/ArrowRight navigation without invoking the browser Fullscreen API.
 - Added an explicit `?demo=1` fixture with eight non-personal source posts and nineteen resolved media items to prove multi-photo source playback.
 - Added responsive `1280 × 720` and `390 × 844` layouts, interaction tests, same-viewport comparison evidence, and a passing [`DESIGN-QA.md`](DESIGN-QA.md) report.
 
@@ -190,7 +190,7 @@ The current project uses React 18, so any React Three Fiber implementation must 
 
 The only user input is Instagram's exported `saved_posts.json`. It supplies post URLs, timestamps, owner usernames, captions/titles, hashtags, and platform record IDs. It does **not** include the original image bytes, carousel-child URLs, reliable thumbnails, or CORS-safe media assets. The importer deduplicates repeated `value`/`href` URLs, preserves the available owner/caption metadata, and avoids treating structural labels such as `URL` as collections.
 
-The selected credential-free path is Instagram's public embed for each eligible post. [Instagram's embed documentation](https://www.facebook.com/help/instagram/620154495870484) states that only public content with embedding enabled can be embedded. The app therefore loads from Instagram at viewing time; it does not ask the user for local image files or a resolved-media manifest. Compatibility embeds activate in the real viewport plus two viewport lengths ahead and remain mounted after activation.
+The selected credential-free path is Instagram's public embed for each eligible post. [Instagram's embed documentation](https://www.facebook.com/help/instagram/620154495870484) states that only public content with embedding enabled can be embedded. The app therefore loads from Instagram at viewing time; it does not ask the user for local image files or a resolved-media manifest. Compatibility embeds activate in the real viewport plus one viewport length ahead and remain mounted after activation.
 
 The embedded Instagram page can present its own carousel controls when Instagram permits it, but it remains cross-origin. The viewer cannot inspect that page, extract each child as an independent native card, remove controls inside it with certainty, or use its pixels for WebGL effects. The [official Meta Instagram API collection](https://www.postman.com/meta/instagram/collection/6yqw8pt/instagram-api) documents an access-token flow for Professional accounts; it is not a resolver for arbitrary URLs in a user's Saved export. Automated scraping, unofficial tokens, credentials pasted into the app, and silent bulk downloading remain outside the product boundary.
 
@@ -258,7 +258,7 @@ Instagram previews are loaded in iframes from `instagram.com`. Opening a preview
 
 On the same browser profile and the same site origin, the gallery loads automatically from IndexedDB on future visits. There is no login because no server owns a copy of the library.
 
-Direct photo assets are preloaded ahead of the current viewport and retained in a decoded-image window. Supported browsers also register a local cache-first service worker for image requests, so revisiting a previously loaded direct photo does not require the viewer to start from zero. Both browsing modes keep all card shells mounted. Grid activates the visible height plus two heights below; Horizontal activates the visible width plus two widths to the right. Activated compatibility frames use eager loading and are not subject to a concurrency queue or scroll-driven eviction.
+Direct photo assets are preloaded ahead of the current viewport and retained in a decoded-image window. Supported browsers also register a local cache-first service worker for image requests, so revisiting a previously loaded direct photo does not require the viewer to start from zero. Both browsing modes keep all card shells mounted. Grid activates the visible height plus one height below; Horizontal activates the visible width plus one width to the right. Activated compatibility frames use eager loading and are not subject to a concurrency queue or scroll-driven eviction.
 
 Instagram compatibility previews are cross-origin iframe documents. Once the viewer creates one, the same iframe DOM node and `src` remain in place for the rest of the page session, including after reverse scrolling, filtering, sorting input changes, layout changes, and resizing. The app still cannot place Instagram's document into its own image cache or control Instagram's cache headers; a full page reload starts a new session.
 
@@ -365,4 +365,4 @@ The ZIP importer and some richer components still exist in the codebase as reusa
 
 ## Current Status
 
-The accepted MVP is a responsive one-page Saved-post viewer with one default compatibility preview per ordinary saved post, persistent two-screen-ahead iframe activation, a four-column desktop grid, smooth wheel-driven Horizontal View, a full-viewport slideshow with browser history, persistent browser-local storage and image caching, and automated GitHub Pages deployment. See [PROGRESS.md](./PROGRESS.md) for the internal tracker.
+The accepted MVP is a responsive one-page Saved-post viewer with one default compatibility preview per ordinary saved post, persistent one-screen-ahead iframe activation, a four-column desktop grid, momentum-based wheel-driven Horizontal View, a full-viewport slideshow with browser history, persistent browser-local storage and image caching, and automated GitHub Pages deployment. See [PROGRESS.md](./PROGRESS.md) for the internal tracker.

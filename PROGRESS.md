@@ -15,14 +15,42 @@ Store local library in IndexedDB
         ↓
 Enter Horizontal View or Grid View
         ↓
-Filter + hide + configure + slideshow
+Choose a shared date range
+        ↓
+Browse or enter the automatic Slideshow tab
 ```
 
-The product remains one page with URL-backed Horizontal/Grid states, bottom sheets, and a full-viewport slideshow overlay. Browser Back and Forward restore the previous `?view=horizontal` / `?view=grid` state, while `?slideshow=1` keeps slideshow navigation in the same history model.
+The product remains one page with URL-backed Horizontal/Grid states, one shared date-range dock, and a full-viewport slideshow overlay. Browser Back and Forward restore the previous `?view=horizontal` / `?view=grid` state, while `?slideshow=1` keeps slideshow navigation in the same history model.
+
+## 2026-07-29 Slideshow And Session-Control Milestone
+
+Status: **implemented; automated validation and built-in-browser desktop/mobile QA passed**.
+
+- Merged `Horizontal View`, `Grid View`, and `Slideshow` into one top-center segmented tab switcher, with each icon placed before its label.
+- Removed the active Filter and Settings sheets, Hide/restore flow, loop choices, transition-duration control, and Previous/Play/Next text transport.
+- Added one Start time / End time month-range dual slider shared by all three views. It filters the existing queue without destroying activated card or iframe identity.
+- Slideshow now starts automatically, wraps the complete filtered queue, and supports ArrowLeft/ArrowRight navigation. Only transition style and a compact `1–10s` frame-duration control remain.
+- Rebuilt resolved-image playback as a viewport-sized stage with the current image blurred across the background and a contained foreground image. Compatibility iframes are non-interactive, oversized, and clipped to mask Instagram's white header/footer chrome.
+- Removed the system Fullscreen API after built-in-browser QA exposed right/bottom black regions at some window sizes; the stage now relies on stable `100dvh` containment.
+- Browser QA passed at `1920 × 1080` and `390 × 844`: no page scrollbars, no white slideshow canvas, tab switching and ArrowRight advancement worked, the dark transition selector applied `ken-burns`, and console error/warning output was empty.
+- Final validation passed `16` test files / `65` tests and a production TypeScript/Vite build. A focused final rerun passed all `16` HomePage tests after the fullscreen correction.
+
+## 2026-07-29 Browsing Smoothness Milestone
+
+Status: **implemented; automated validation and bounded built-in-browser QA passed**.
+
+- Reduced forward activation from two viewport lengths to one in both Horizontal and Grid views. The entire real viewport still activates immediately, while the number of not-yet-visible iframe loads is approximately halved.
+- Replaced the target-and-deadline wheel animation with bounded velocity, frame-time-aware friction, and a natural rolling stop. There is no deadline that jumps the scroller to a final target.
+- Removed per-scroll-frame React state updates. Geometry fallback activation now runs inside the scroll frame without rerendering the archive, and the scrolling/settled diagnostic state is written directly to the scroller.
+- Memoized the archive and individual cards with stable layout styles and archive callbacks, preventing unrelated parent updates and newly activated cards from rerendering the full library.
+- Replaced thousands of card-level Motion instances and permanent `will-change: transform` hints with a lightweight CSS hover transition; the persistent iframe and card-shell model is unchanged.
+- Suppressed ArrowLeft/ArrowRight/ArrowUp/ArrowDown on the archive surface so focus on a page control cannot move the media field. Native form inputs and selectors retain their arrow-key behavior.
+- Added focused regression coverage for one-screen observer margins, one-screen activation boundaries, arrow-key suppression, and the momentum deceleration/boundary model.
+- Short built-in-browser QA imported the repository's real `saved_posts.json`: 1,754 eligible card shells mounted, Horizontal initially activated five iframes and left 1,749 request-free placeholders, and Grid activated 23 iframes across its viewport plus one screen below. One real wheel gesture decelerated through `80 → 465 → 646 → 687 → 689px` before settling; ArrowRight left the settled `689px` position unchanged. The console reported zero errors/warnings.
 
 ## 2026-07-28 Persistent Iframe Preload Milestone
 
-Status: **implemented; automated validation and fresh built-in-browser QA passed**.
+Status: **implemented and released; preload depth superseded by the 2026-07-29 performance milestone**.
 
 - Removed scroll-window control over Instagram iframe lifetime. Every archive item now owns a lightweight card shell that stays mounted for the page session.
 - Added one-way page-level activation keyed by stable media ID. Grid activates the current viewport plus two viewport heights below; Horizontal activates the current viewport plus two viewport widths to the right.
@@ -37,7 +65,7 @@ Status: **implemented; automated validation and fresh built-in-browser QA passed
 
 ## Selected Direction: PhotoYoshi Archive Field
 
-Status: **accepted MVP complete: one ordinary saved post maps to one default Instagram preview, with persistent two-screen-ahead iframe activation, persistent direct-image caching, smooth Horizontal View, and routed full-viewport slideshow**.
+Status: **accepted MVP complete: one ordinary saved post maps to one default Instagram preview, with persistent one-screen-ahead iframe activation, persistent direct-image caching, momentum-based Horizontal View, and routed full-viewport slideshow**.
 
 The accepted saved-JSON workflow intentionally produces one compatibility item per post. Instagram's default first preview is sufficient for this MVP; native carousel-child extraction is not a release requirement.
 
