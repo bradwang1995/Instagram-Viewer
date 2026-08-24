@@ -24,7 +24,7 @@ The product remains one page with URL-backed Horizontal/Grid states, one shared 
 
 ## 2026-08-23 Discrete Wheel And Arrow Navigation
 
-Status: **implemented locally; full automated validation, production build, and fresh built-in-browser validation passed; not committed, pushed, or deployed**.
+Status: **implemented and released; full automated validation, production build, and fresh local/production built-in-browser validation passed**.
 
 - Replaced accumulated wheel momentum with one deterministic navigation step per wheel event.
 - Horizontal maps wheel direction and ArrowLeft/ArrowRight to exactly one previous/next photo, with centered target alignment where the track permits.
@@ -34,6 +34,7 @@ Status: **implemented locally; full automated validation, production build, and 
 - Preserved the accepted card-shell, iframe retention, `180ms` settle, filter, image-cache, and slideshow-preload contracts.
 - The superseded momentum implementation remains documented in the dated milestones below as historical evidence.
 - Validation passed `18` test files / `75` tests, `npm run lint`, `npm run build`, and focused Prettier checks. Fresh built-in-browser QA confirmed one-step forward/reverse navigation in both views, intact Slideshow ArrowRight behavior, settled scrollers, accepted visual composition, and zero console warnings/errors.
+- Released from `main` through the GitHub Pages workflow; the public site returned HTTP `200` and repeated the Horizontal, Grid, and Slideshow interaction checks without console warnings or errors.
 
 ## 2026-07-29 Accepted Experience Baseline
 
