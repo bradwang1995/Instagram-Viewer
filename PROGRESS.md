@@ -24,7 +24,7 @@ The product remains one page with URL-backed Horizontal/Grid states, one shared 
 
 ## 2026-08-23 Smooth Step Transition Refinement
 
-Status: **implemented locally; full automated validation, production build, and fresh local built-in-browser validation passed; not committed, pushed, or deployed**.
+Status: **implemented and released; full automated validation, production build, and fresh local/production built-in-browser validation passed**.
 
 - Preserved the exact one-photo Horizontal and one-row Grid target contract while replacing direct position jumps with a target-constrained requestAnimationFrame spring transition.
 - Consecutive wheel or arrow inputs each append exactly one target step and preserve current transition velocity, producing a continuous flow without restoring variable-distance wheel travel.
@@ -32,6 +32,7 @@ Status: **implemented locally; full automated validation, production build, and 
 - Iframe pruning remains deferred until the transition and existing `180ms` settle window complete.
 - Validation passed `18` test files / `77` tests, `npm run lint`, `npm run build`, and focused Prettier checks.
 - Fresh built-in-browser QA sampled Horizontal at `154px → 767px → 884px` for one ArrowRight step, then confirmed two wheel events selected exactly indices `2` and `3` before settling at the computed `2651px` target. Grid sampled a moving `74px` position before settling the next row at `302px`; wheel forward/reverse selected exactly indices `8`/`4` and settled at `603px`/`302px`. Slideshow retained its own ArrowRight behavior, and the console reported zero warnings/errors.
+- Released as `91bd17a` through GitHub Pages workflow run `32688221842`. Production QA sampled Horizontal at `74px → 744px → 884px` and Grid at `25px → 302px`, with exact one-photo/one-row selection and zero console warnings/errors.
 
 ## 2026-08-23 Discrete Wheel And Arrow Navigation
 
