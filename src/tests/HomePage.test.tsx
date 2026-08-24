@@ -634,21 +634,28 @@ describe("Photo archive preview", () => {
       fireEvent.keyDown(window, { key: "ArrowRight", cancelable: true }),
     ).toBe(false);
     expect(card(1)).toHaveClass("is-selected");
-    expect(scroller.scrollLeft).toBeGreaterThan(0);
+    expect(scroller.scrollLeft).toBe(0);
+    expect(scroller).toHaveAttribute("data-scroll-state", "moving");
+    await waitFor(() => expect(scroller.scrollLeft).toBeGreaterThan(0));
 
     fireEvent.keyDown(window, { key: "ArrowLeft", cancelable: true });
     expect(card(0)).toHaveClass("is-selected");
-    expect(scroller.scrollLeft).toBe(0);
+    await waitFor(() => expect(scroller.scrollLeft).toBe(0), {
+      timeout: 2_000,
+    });
 
     fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
     fireEvent.click(card(0).querySelector(".archive-card-hit") as HTMLElement);
     fireEvent.keyDown(window, { key: "ArrowDown", cancelable: true });
     expect(card(4)).toHaveClass("is-selected");
-    expect(scroller.scrollTop).toBeGreaterThan(0);
+    expect(scroller.scrollTop).toBe(0);
+    await waitFor(() => expect(scroller.scrollTop).toBeGreaterThan(0));
 
     fireEvent.keyDown(window, { key: "ArrowUp", cancelable: true });
     expect(card(0)).toHaveClass("is-selected");
-    expect(scroller.scrollTop).toBe(0);
+    await waitFor(() => expect(scroller.scrollTop).toBe(0), {
+      timeout: 2_000,
+    });
   });
 
   it("maps each wheel event to exactly one discrete Horizontal photo or Grid row", async () => {
@@ -678,10 +685,11 @@ describe("Photo archive preview", () => {
     fireEvent.click(card(0).querySelector(".archive-card-hit") as HTMLElement);
     fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
     expect(card(4)).toHaveClass("is-selected");
+    await waitFor(() => expect(scroller.scrollTop).toBeGreaterThan(0));
     const firstStep = scroller.scrollTop;
     fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
     expect(card(8)).toHaveClass("is-selected");
-    expect(scroller.scrollTop).toBeGreaterThan(firstStep);
+    await waitFor(() => expect(scroller.scrollTop).toBeGreaterThan(firstStep));
     fireEvent.wheel(scroller, { deltaY: -120, cancelable: true });
     expect(card(4)).toHaveClass("is-selected");
   });

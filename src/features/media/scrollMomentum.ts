@@ -4,6 +4,10 @@ const INPUT_VELOCITY_SCALE = 0.032;
 const MAX_VELOCITY_PX_PER_MS = 4.8;
 const FRICTION_PER_FRAME = 0.88;
 const SETTLED_VELOCITY_PX_PER_MS = 0.02;
+const TARGET_SPRING_STIFFNESS = 0.0003;
+const TARGET_SPRING_DAMPING = 0.034641016151377546;
+const TARGET_SETTLE_DISTANCE_PX = 1;
+const TARGET_SETTLE_VELOCITY_PX_PER_MS = 0.01;
 
 export type MomentumFrame = {
   position: number;
@@ -45,6 +49,47 @@ export function advanceMomentum(
     position: nextPosition,
     velocity: nextVelocity,
     settled: Math.abs(nextVelocity) < SETTLED_VELOCITY_PX_PER_MS,
+  };
+}
+
+export function advanceTargetedMomentum(
+  position: number,
+  velocity: number,
+  target: number,
+  elapsedMs: number,
+): MomentumFrame {
+  const distance = target - position;
+  if (
+    Math.abs(distance) < TARGET_SETTLE_DISTANCE_PX &&
+    Math.abs(velocity) < TARGET_SETTLE_VELOCITY_PX_PER_MS
+  ) {
+    return { position: target, velocity: 0, settled: true };
+  }
+
+  const frameTime = clamp(elapsedMs, 1, MAX_FRAME_DURATION_MS);
+  const acceleration =
+    distance * TARGET_SPRING_STIFFNESS - velocity * TARGET_SPRING_DAMPING;
+  const nextVelocity = clamp(
+    velocity + acceleration * frameTime,
+    -MAX_VELOCITY_PX_PER_MS,
+    MAX_VELOCITY_PX_PER_MS,
+  );
+  const nextPosition = position + nextVelocity * frameTime;
+  const crossedTarget =
+    distance !== 0 && (target - nextPosition) * distance <= 0;
+
+  if (
+    crossedTarget ||
+    (Math.abs(target - nextPosition) < TARGET_SETTLE_DISTANCE_PX &&
+      Math.abs(nextVelocity) < TARGET_SETTLE_VELOCITY_PX_PER_MS)
+  ) {
+    return { position: target, velocity: 0, settled: true };
+  }
+
+  return {
+    position: nextPosition,
+    velocity: nextVelocity,
+    settled: false,
   };
 }
 

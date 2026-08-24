@@ -22,6 +22,17 @@ Browse or enter the automatic Slideshow tab
 
 The product remains one page with URL-backed Horizontal/Grid states, one shared date-range dock, and a full-viewport slideshow overlay. Browser Back and Forward restore the previous `?view=horizontal` / `?view=grid` state, while `?slideshow=1` keeps slideshow navigation in the same history model.
 
+## 2026-08-23 Smooth Step Transition Refinement
+
+Status: **implemented locally; full automated validation, production build, and fresh local built-in-browser validation passed; not committed, pushed, or deployed**.
+
+- Preserved the exact one-photo Horizontal and one-row Grid target contract while replacing direct position jumps with a target-constrained requestAnimationFrame spring transition.
+- Consecutive wheel or arrow inputs each append exactly one target step and preserve current transition velocity, producing a continuous flow without restoring variable-distance wheel travel.
+- The transition settles on the exact computed target without overshoot and falls back to direct movement for reduced-motion preference.
+- Iframe pruning remains deferred until the transition and existing `180ms` settle window complete.
+- Validation passed `18` test files / `77` tests, `npm run lint`, `npm run build`, and focused Prettier checks.
+- Fresh built-in-browser QA sampled Horizontal at `154px → 767px → 884px` for one ArrowRight step, then confirmed two wheel events selected exactly indices `2` and `3` before settling at the computed `2651px` target. Grid sampled a moving `74px` position before settling the next row at `302px`; wheel forward/reverse selected exactly indices `8`/`4` and settled at `603px`/`302px`. Slideshow retained its own ArrowRight behavior, and the console reported zero warnings/errors.
+
 ## 2026-08-23 Discrete Wheel And Arrow Navigation
 
 Status: **implemented and released; full automated validation, production build, and fresh local/production built-in-browser validation passed**.

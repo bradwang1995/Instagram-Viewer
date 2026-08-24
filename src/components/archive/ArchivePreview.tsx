@@ -19,6 +19,7 @@ import {
   getRibbonMetrics,
 } from "../../features/media/virtualMediaLayout";
 import { preloadMediaItems } from "../../features/media/mediaPreload";
+import { advanceTargetedMomentum } from "../../features/media/scrollMomentum";
 import { extendSessionMediaOrder } from "../../features/media/sessionMediaOrder";
 import {
   ArchiveControlBar,
@@ -50,6 +51,12 @@ type ViewportSize = {
   height: number;
 };
 
+type NavigationTarget = {
+  viewMode: ArchiveViewMode;
+  index: number;
+  position: number;
+};
+
 const SCROLL_SETTLE_DELAY_MS = 180;
 const HIDDEN_CARD_STYLE: CSSProperties = { display: "none" };
 const ARROW_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
@@ -72,6 +79,11 @@ export const ArchivePreview = memo(function ArchivePreview({
   const scrollerRef = useRef<HTMLDivElement>(null);
   const scrollRestoreFrame = useRef<number>();
   const scrollSettleTimer = useRef<number>();
+  const navigationFrame = useRef<number>();
+  const navigationTarget = useRef<NavigationTarget>();
+  const navigationPosition = useRef<number>();
+  const navigationVelocity = useRef(0);
+  const navigationLastFrameTime = useRef<number>();
   const iframeObserverRef = useRef<IntersectionObserver>();
   const cardShellsRef = useRef(new Map<string, HTMLElement>());
   const activatedIframeIdsRef = useRef(new Set<string>());
@@ -294,6 +306,17 @@ export const ArchivePreview = memo(function ArchivePreview({
     synchronizeMediaWindow(scrollPositions.current[viewMode], true);
   }, [synchronizeMediaWindow, viewMode]);
 
+  const cancelNavigationAnimation = useCallback(() => {
+    if (navigationFrame.current) {
+      window.cancelAnimationFrame(navigationFrame.current);
+    }
+    navigationFrame.current = undefined;
+    navigationTarget.current = undefined;
+    navigationPosition.current = undefined;
+    navigationVelocity.current = 0;
+    navigationLastFrameTime.current = undefined;
+  }, []);
+
   const navigateByStep = useCallback(
     (direction: -1 | 1) => {
       const scroller = scrollerRef.current;
@@ -321,14 +344,21 @@ export const ArchivePreview = memo(function ArchivePreview({
           selectedIndex === undefined
             ? undefined
             : Math.floor(selectedIndex / gridMetrics.columns);
+        const activeTarget = navigationTarget.current;
+        const targetedIndex =
+          activeTarget?.viewMode === viewMode ? activeTarget.index : undefined;
         const currentRow =
-          selectedIsVisible && selectedRow !== undefined
-            ? selectedRow
-            : fallbackRow;
+          targetedIndex !== undefined
+            ? Math.floor(targetedIndex / gridMetrics.columns)
+            : selectedIsVisible && selectedRow !== undefined
+              ? selectedRow
+              : fallbackRow;
         const currentColumn =
-          selectedIndex !== undefined && selectedIsVisible
-            ? selectedIndex % gridMetrics.columns
-            : 0;
+          targetedIndex !== undefined
+            ? targetedIndex % gridMetrics.columns
+            : selectedIndex !== undefined && selectedIsVisible
+              ? selectedIndex % gridMetrics.columns
+              : 0;
         const targetRow = Math.min(
           lastRow,
           Math.max(0, currentRow + direction),
@@ -342,10 +372,14 @@ export const ArchivePreview = memo(function ArchivePreview({
         const targetLayout = allLayouts[targetIndex];
         if (!targetLayout) return;
         const maximum = Math.max(0, gridMetrics.totalHeight - viewport.height);
-        scroller.scrollTop = Math.min(
-          maximum,
-          Math.max(0, targetLayout.top - gridMetrics.paddingY),
-        );
+        navigationTarget.current = {
+          viewMode,
+          index: targetIndex,
+          position: Math.min(
+            maximum,
+            Math.max(0, targetLayout.top - gridMetrics.paddingY),
+          ),
+        };
       } else {
         const viewportWidth = scroller.clientWidth || viewport.width;
         const selectedIndex = selectedId
@@ -360,13 +394,16 @@ export const ArchivePreview = memo(function ArchivePreview({
           selectedLayout.left + selectedLayout.width > scroller.scrollLeft &&
           selectedLayout.left < scroller.scrollLeft + viewportWidth,
         );
+        const activeTarget = navigationTarget.current;
         const currentIndex =
-          selectedIsVisible && selectedIndex !== undefined
-            ? selectedIndex
-            : getClosestRibbonIndex(
-                ribbonMetrics.layouts,
-                scroller.scrollLeft + viewportWidth / 2,
-              );
+          activeTarget?.viewMode === viewMode
+            ? activeTarget.index
+            : selectedIsVisible && selectedIndex !== undefined
+              ? selectedIndex
+              : getClosestRibbonIndex(
+                  ribbonMetrics.layouts,
+                  scroller.scrollLeft + viewportWidth / 2,
+                );
         targetIndex = Math.min(
           visibleOrderedItems.length - 1,
           Math.max(0, currentIndex + direction),
@@ -376,13 +413,79 @@ export const ArchivePreview = memo(function ArchivePreview({
         const targetLayout = ribbonMetrics.layouts[targetIndex];
         if (!targetLayout) return;
         const maximum = Math.max(0, ribbonMetrics.totalWidth - viewportWidth);
-        scroller.scrollLeft = Math.min(
-          maximum,
-          Math.max(
-            0,
-            targetLayout.left + targetLayout.width / 2 - viewportWidth / 2,
+        navigationTarget.current = {
+          viewMode,
+          index: targetIndex,
+          position: Math.min(
+            maximum,
+            Math.max(
+              0,
+              targetLayout.left + targetLayout.width / 2 - viewportWidth / 2,
+            ),
           ),
-        );
+        };
+      }
+
+      const target = navigationTarget.current;
+      if (!target) return;
+
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+        cancelNavigationAnimation();
+        if (viewMode === "grid") {
+          scroller.scrollTop = target.position;
+        } else {
+          scroller.scrollLeft = target.position;
+        }
+        scrollPositions.current[viewMode] = target.position;
+      } else if (!navigationFrame.current) {
+        scroller.dataset.scrollState = "moving";
+        navigationPosition.current =
+          viewMode === "grid" ? scroller.scrollTop : scroller.scrollLeft;
+        const animateNavigation = (timestamp: number) => {
+          const activeTarget = navigationTarget.current;
+          const activeScroller = scrollerRef.current;
+          if (!activeTarget || !activeScroller) {
+            cancelNavigationAnimation();
+            return;
+          }
+
+          const currentPosition =
+            navigationPosition.current ??
+            (activeTarget.viewMode === "grid"
+              ? activeScroller.scrollTop
+              : activeScroller.scrollLeft);
+          const elapsedMs = navigationLastFrameTime.current
+            ? timestamp - navigationLastFrameTime.current
+            : 1000 / 60;
+          const frame = advanceTargetedMomentum(
+            currentPosition,
+            navigationVelocity.current,
+            activeTarget.position,
+            elapsedMs,
+          );
+          navigationLastFrameTime.current = timestamp;
+          navigationPosition.current = frame.position;
+          navigationVelocity.current = frame.velocity;
+          if (activeTarget.viewMode === "grid") {
+            activeScroller.scrollTop = frame.position;
+          } else {
+            activeScroller.scrollLeft = frame.position;
+          }
+          scrollPositions.current[activeTarget.viewMode] = frame.position;
+
+          if (frame.settled) {
+            navigationFrame.current = undefined;
+            navigationTarget.current = undefined;
+            navigationPosition.current = undefined;
+            navigationVelocity.current = 0;
+            navigationLastFrameTime.current = undefined;
+            return;
+          }
+          navigationFrame.current =
+            window.requestAnimationFrame(animateNavigation);
+        };
+        navigationFrame.current =
+          window.requestAnimationFrame(animateNavigation);
       }
 
       const targetItem = visibleOrderedItems[targetIndex];
@@ -392,6 +495,7 @@ export const ArchivePreview = memo(function ArchivePreview({
     },
     [
       allLayouts,
+      cancelNavigationAnimation,
       gridMetrics,
       onSelect,
       ribbonMetrics,
@@ -442,6 +546,7 @@ export const ArchivePreview = memo(function ArchivePreview({
 
   useEffect(
     () => () => {
+      cancelNavigationAnimation();
       if (scrollRestoreFrame.current) {
         window.cancelAnimationFrame(scrollRestoreFrame.current);
       }
@@ -449,7 +554,7 @@ export const ArchivePreview = memo(function ArchivePreview({
         window.clearTimeout(scrollSettleTimer.current);
       }
     },
-    [],
+    [cancelNavigationAnimation],
   );
 
   useEffect(() => {
@@ -479,6 +584,8 @@ export const ArchivePreview = memo(function ArchivePreview({
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
+    cancelNavigationAnimation();
+
     const maximum =
       viewMode === "grid"
         ? Math.max(0, gridMetrics.totalHeight - viewport.height)
@@ -505,6 +612,7 @@ export const ArchivePreview = memo(function ArchivePreview({
       });
     }
   }, [
+    cancelNavigationAnimation,
     gridMetrics.totalHeight,
     ribbonMetrics.totalWidth,
     viewMode,
@@ -529,6 +637,10 @@ export const ArchivePreview = memo(function ArchivePreview({
       window.clearTimeout(scrollSettleTimer.current);
     }
     const settleScroll = () => {
+      if (navigationFrame.current) {
+        scrollSettleTimer.current = window.setTimeout(settleScroll, 40);
+        return;
+      }
       const scroller = scrollerRef.current;
       if (scroller) scroller.dataset.scrollState = "settled";
       scrollSettleTimer.current = undefined;
@@ -569,6 +681,7 @@ export const ArchivePreview = memo(function ArchivePreview({
 
   function handleViewModeChange(nextViewMode: ArchiveViewMode) {
     if (nextViewMode === viewMode) return;
+    cancelNavigationAnimation();
     pendingViewMode.current = nextViewMode;
     const scroller = scrollerRef.current;
     if (scroller) {

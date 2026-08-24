@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   addWheelImpulse,
   advanceMomentum,
+  advanceTargetedMomentum,
 } from "../features/media/scrollMomentum";
 
 describe("scroll momentum", () => {
@@ -53,5 +54,42 @@ describe("scroll momentum", () => {
       velocity: 0,
       settled: true,
     });
+  });
+
+  it("eases toward one exact target without overshooting", () => {
+    let position = 0;
+    let velocity = 0;
+    const positions: number[] = [];
+
+    for (let frameCount = 0; frameCount < 100; frameCount += 1) {
+      const frame = advanceTargetedMomentum(position, velocity, 884, 1000 / 60);
+      position = frame.position;
+      velocity = frame.velocity;
+      positions.push(position);
+      if (frame.settled) break;
+    }
+
+    expect(positions[0]).toBeGreaterThan(0);
+    expect(positions[0]).toBeLessThan(884);
+    expect(positions.every((value) => value >= 0 && value <= 884)).toBe(true);
+    expect(position).toBe(884);
+    expect(velocity).toBe(0);
+    expect(positions.length).toBeGreaterThan(30);
+    expect(positions.length).toBeLessThan(55);
+  });
+
+  it("preserves velocity while retargeting to another exact step", () => {
+    const first = advanceTargetedMomentum(0, 0, 500, 1000 / 60);
+    const second = advanceTargetedMomentum(
+      first.position,
+      first.velocity,
+      1000,
+      1000 / 60,
+    );
+
+    expect(first.position).toBeGreaterThan(0);
+    expect(second.position).toBeGreaterThan(first.position);
+    expect(second.velocity).toBeGreaterThan(first.velocity);
+    expect(second.settled).toBe(false);
   });
 });
