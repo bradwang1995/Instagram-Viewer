@@ -93,10 +93,6 @@ export function ArchiveSlideshow({
 
   if (!open) return null;
 
-  const resolvedUrl = item
-    ? (item.media.assetUrl ?? item.media.previewUrl)
-    : undefined;
-
   return (
     <motion.section
       className={`archive-slideshow preset-${transitionPreset}`}
@@ -114,35 +110,14 @@ export function ArchiveSlideshow({
       />
 
       <div className="slideshow-stage">
-        {resolvedUrl ? (
-          <AnimatePresence mode="wait" initial={false}>
-            <motion.img
-              key={`backdrop:${item?.media.id}`}
-              className="slideshow-backdrop"
-              src={resolvedUrl}
-              alt=""
-              aria-hidden="true"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 0.72 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: TRANSITION_DURATION_SECONDS }}
-            />
-          </AnimatePresence>
-        ) : null}
-
         {frames.length ? (
           frames.map((frame) => {
-            const frameResolvedUrl =
-              frame.item.media.assetUrl ?? frame.item.media.previewUrl;
-            const creator =
-              frame.item.media.creatorHandle ??
-              frame.item.post.embedAuthorName ??
-              "Saved photo";
             return (
               <motion.div
                 key={frame.item.media.id}
                 className={`slideshow-frame${frame.slot === 0 ? " is-current" : " is-preloaded"}`}
                 data-slideshow-slot={frame.slot}
+                data-media-id={frame.item.media.id}
                 aria-hidden={frame.slot === 0 ? undefined : true}
                 initial={false}
                 animate={getFrameMotion(transitionPreset, frame.slot)}
@@ -151,21 +126,10 @@ export function ArchiveSlideshow({
                   ease: [0.22, 1, 0.36, 1],
                 }}
               >
-                {frameResolvedUrl ? (
-                  <img
-                    className="slideshow-photo"
-                    src={frameResolvedUrl}
-                    alt={frame.item.media.caption ?? creator}
-                    loading="eager"
-                    decoding="async"
-                    onError={() => onUnavailable(frame.item.media.id)}
-                  />
-                ) : (
-                  <InstagramSlideshowEmbed
-                    item={frame.item}
-                    onUnavailable={() => onUnavailable(frame.item.media.id)}
-                  />
-                )}
+                <InstagramSlideshowEmbed
+                  item={frame.item}
+                  onUnavailable={() => onUnavailable(frame.item.media.id)}
+                />
               </motion.div>
             );
           })

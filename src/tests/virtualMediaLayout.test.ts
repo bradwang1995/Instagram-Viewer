@@ -9,6 +9,20 @@ import {
 } from "../features/media/virtualMediaLayout";
 
 describe("virtual media layout", () => {
+  it("uses edge-aligned half-gap grids and a near-full-height half-gap ribbon", () => {
+    const grid = getGridMetrics(100, 1920, 900);
+    const ribbon = getRibbonMetrics([0.78, 0.78], 1920, 900);
+    const [first, second] = ribbon.layouts;
+
+    expect(grid.columns).toBe(4);
+    expect(grid.paddingX).toBe(0);
+    expect(grid.columnGap).toBeCloseTo(17.28, 5);
+    expect(grid.rowGap).toBeCloseTo(11.25, 5);
+    expect(first.height).toBe(891);
+    expect(first.top).toBeCloseTo(4.5, 5);
+    expect(second.left - first.left - first.width).toBeCloseTo(21.12, 5);
+  });
+
   it("keeps a dense desktop grid to visible rows plus bounded preload", () => {
     const metrics = getGridMetrics(1_800, 1920, 900);
     const firstWindow = getGridWindow(1_800, 0, metrics);

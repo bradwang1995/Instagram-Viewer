@@ -270,11 +270,16 @@ describe("Photo archive preview", () => {
     expect(
       within(slideshow).getByRole("slider", { name: "Start time" }),
     ).toHaveValue("1");
-    expect(
-      within(slideshow).getByRole("img", {
-        name: "@quietframes frame 1 of 1",
-      }),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        slideshow.querySelector('[data-slideshow-slot="0"]'),
+      ).toHaveAttribute("data-media-id", testState.queue[2].media.id),
+    );
+    await waitFor(() =>
+      expect(
+        within(slideshow).getByTitle("Instagram preview B"),
+      ).toBeInTheDocument(),
+    );
   });
 
   it("keeps filter feedback immediate but applies the queue at exactly 300ms", async () => {
@@ -658,7 +663,7 @@ describe("Photo archive preview", () => {
     });
   });
 
-  it("maps each wheel event to exactly one discrete Horizontal photo or Grid row", async () => {
+  it("moves one step for a single wheel input and caps a continuous burst at two steps", async () => {
     const source = createPost("STEP-WHEEL", "@step.wheel", "Reference");
     testState.posts = [source];
     testState.queue = Array.from({ length: 12 }, (_, index) =>
@@ -678,6 +683,8 @@ describe("Photo archive preview", () => {
     expect(card(1)).toHaveClass("is-selected");
     fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
     expect(card(2)).toHaveClass("is-selected");
+    fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
+    expect(card(2)).toHaveClass("is-selected");
     fireEvent.wheel(scroller, { deltaY: -120, cancelable: true });
     expect(card(1)).toHaveClass("is-selected");
 
@@ -690,6 +697,8 @@ describe("Photo archive preview", () => {
     fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
     expect(card(8)).toHaveClass("is-selected");
     await waitFor(() => expect(scroller.scrollTop).toBeGreaterThan(firstStep));
+    fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
+    expect(card(8)).toHaveClass("is-selected");
     fireEvent.wheel(scroller, { deltaY: -120, cancelable: true });
     expect(card(4)).toHaveClass("is-selected");
   });
@@ -723,28 +732,26 @@ describe("Photo archive preview", () => {
     expect(
       within(slideshow).getByRole("slider", { name: "Frame duration" }),
     ).toHaveAttribute("min", "3000");
-    expect(
-      within(slideshow).getByRole("img", {
-        name: "@north.archive frame 1 of 2",
-      }),
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        slideshow.querySelector('[data-slideshow-slot="0"]'),
+      ).toHaveAttribute("data-media-id", testState.queue[0].media.id),
+    );
+    expect(slideshow.querySelectorAll("iframe")).toHaveLength(3);
+    expect(slideshow.querySelector(".slideshow-photo")).toBeNull();
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
     await waitFor(() =>
       expect(
-        within(slideshow).getByRole("img", {
-          name: "@north.archive frame 2 of 2",
-        }),
-      ).toBeInTheDocument(),
+        slideshow.querySelector('[data-slideshow-slot="0"]'),
+      ).toHaveAttribute("data-media-id", testState.queue[1].media.id),
     );
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
     await waitFor(() =>
       expect(
-        within(slideshow).getByRole("img", {
-          name: "@quietframes frame 1 of 1",
-        }),
-      ).toBeInTheDocument(),
+        slideshow.querySelector('[data-slideshow-slot="0"]'),
+      ).toHaveAttribute("data-media-id", testState.queue[2].media.id),
     );
 
     fireEvent.click(within(slideshow).getByRole("tab", { name: /Grid View/ }));
@@ -756,7 +763,7 @@ describe("Photo archive preview", () => {
     expect(window.location.search).toBe("?view=grid");
   });
 
-  it("masks slideshow iframe chrome and keeps it out of the controls", async () => {
+  it("uses only a full-stage Instagram iframe and keeps it out of the controls", async () => {
     const source = createPost("INTERACTIVE", "@interactive", "Saved");
     testState.posts = [source];
     testState.queue = [createUnresolvedQueueItem(source, 0)];
@@ -769,6 +776,7 @@ describe("Photo archive preview", () => {
     expect(frame).toHaveAttribute("tabindex", "-1");
     expect(frame).toHaveAttribute("scrolling", "no");
     expect(frame.closest(".slideshow-embed")).toBeInTheDocument();
+    expect(document.querySelector(".slideshow-photo")).toBeNull();
     expect(
       screen.queryByRole("button", { name: /play|pause|next|previous/i }),
     ).not.toBeInTheDocument();

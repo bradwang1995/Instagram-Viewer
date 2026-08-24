@@ -37,10 +37,10 @@ export function getGridMetrics(
   const safeWidth = Math.max(320, viewportWidth);
   const safeHeight = Math.max(320, viewportHeight);
   const columns = safeWidth <= 640 ? 1 : safeWidth <= 1100 ? 2 : 4;
-  const paddingX = columns === 1 ? 14 : clamp(safeWidth * 0.03, 24, 64);
+  const paddingX = 0;
   const paddingY = columns === 1 ? 12 : 14;
-  const columnGap = columns === 1 ? 0 : clamp(safeWidth * 0.018, 18, 36);
-  const rowGap = columns === 1 ? 14 : clamp(safeHeight * 0.025, 18, 26);
+  const columnGap = columns === 1 ? 0 : clamp(safeWidth * 0.009, 9, 18);
+  const rowGap = columns === 1 ? 7 : clamp(safeHeight * 0.0125, 9, 13);
   const itemWidth =
     (safeWidth - paddingX * 2 - columnGap * (columns - 1)) / columns;
   // A square card matches the unresolved Instagram preview surface and avoids
@@ -154,8 +154,8 @@ export function getRibbonMetrics(
 ): RibbonMetrics {
   const safeWidth = Math.max(320, viewportWidth);
   const safeHeight = Math.max(320, viewportHeight);
-  const mediaHeight = clamp(safeHeight * 0.98, 300, 1040);
-  const gap = clamp(safeWidth * 0.022, 18, 44);
+  const mediaHeight = clamp(safeHeight * 0.99, 300, safeHeight);
+  const gap = clamp(safeWidth * 0.011, 9, 22);
   const widths = aspects.map((aspect) =>
     clamp(clamp(aspect, 0.62, 1.65) * mediaHeight, 240, safeWidth * 0.82),
   );

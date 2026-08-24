@@ -22,6 +22,16 @@ Browse or enter the automatic Slideshow tab
 
 The product remains one page with URL-backed Horizontal/Grid states, one shared date-range dock, and a full-viewport slideshow overlay. Browser Back and Forward restore the previous `?view=horizontal` / `?view=grid` state, while `?slideshow=1` keeps slideshow navigation in the same history model.
 
+## 2026-08-24 Viewport Density, Two-Step Wheel Bursts, And Iframe Slideshow
+
+Status: **implemented locally; focused automated validation and fresh desktop/mobile built-in-browser validation passed; release validation pending**.
+
+- Increased Horizontal media from `98%` to `99%` of the scrolling viewport and halved the neighboring-card gap. At `1920 × 1080`, the measured card surface is approximately `933px` high with about `4.7px` above/below and a `21.1px` card gap.
+- Removed Grid left/right layout padding at all breakpoints and halved its row/column gaps while retaining four desktop columns. Desktop QA measured `0px` left padding, only `0.016px` right subpixel rounding, and a `17.28px` column gap; mobile measured `0px` side padding and a `7px` row gap.
+- Kept isolated wheel input at exactly one photo/row while capping each continuous `180ms` wheel burst at two photos/rows. Real browser QA confirmed Horizontal `0 → 1 → 2` and Grid `0 → 4 → 8`, with a third same-direction event ignored and both surfaces settling normally.
+- Changed Slideshow so all media uses Instagram iframes, including resolved media, while preserving previous/current/next slot preload and DOM identity. The iframe container now spans the full viewport beneath the overlaid controls.
+- Focused validation passed `2` test files / `29` tests and TypeScript lint. Full test/build/release validation remains pending.
+
 ## 2026-08-23 Smooth Step Transition Refinement
 
 Status: **implemented and released; full automated validation, production build, and fresh local/production built-in-browser validation passed**.

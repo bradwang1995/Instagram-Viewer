@@ -34,8 +34,9 @@ Protected by `src/tests/virtualMediaLayout.test.ts` and `src/tests/HomePage.test
 Wheel and keyboard input share one step-based navigation contract:
 
 - In Horizontal View, one ArrowLeft/ArrowRight press targets exactly one photo backward/forward and centers it when space permits.
-- In Horizontal View, each non-zero wheel event uses only its direction and adds the same one-photo step. Delta magnitude cannot change the step count or skip additional photos.
-- In Grid View, one ArrowUp/ArrowDown press or wheel event targets exactly one row backward/forward, preserving the selected column when possible.
+- In Horizontal View, one isolated non-zero wheel input uses only its direction and adds one photo. A continuous wheel burst may add a second photo but is capped at two total target steps until the burst resets after `180ms`; delta magnitude cannot bypass that cap.
+- In Grid View, one isolated wheel input or ArrowUp/ArrowDown press targets exactly one row backward/forward, preserving the selected column when possible. A continuous wheel burst is capped at two rows.
+- Arrow keys always remain one exact step per key press and reset any active wheel-burst count.
 - Position changes use a requestAnimationFrame spring transition that preserves velocity across consecutive steps and eases to the exact selected photo/row instead of jumping there.
 - Reduced-motion preference disables that transition and moves directly to the same exact target.
 - Navigation stops at the first and last photo/row instead of wrapping.
@@ -56,6 +57,8 @@ Protected by `src/tests/mediaPreload.test.ts` and `src/tests/registerMediaCache.
 
 ## Slideshow
 
+- Every slideshow media item renders through its current Instagram iframe rather than switching resolved media to a direct `<img>` path.
+- The iframe container occupies the full viewport beneath the overlaid header and dock.
 - The previous, current, and next media frames remain mounted as slots `-1`, `0`, and `1`.
 - Moving forward turns the already-preloaded next iframe into the current frame without replacing its DOM node. The other neighboring iframe identities also remain stable.
 - Frame duration is clamped to the accepted `3–10s` range.

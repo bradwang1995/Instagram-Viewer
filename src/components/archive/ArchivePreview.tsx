@@ -58,6 +58,8 @@ type NavigationTarget = {
 };
 
 const SCROLL_SETTLE_DELAY_MS = 180;
+const WHEEL_BURST_RESET_MS = 180;
+const MAX_WHEEL_BURST_STEPS = 2;
 const HIDDEN_CARD_STYLE: CSSProperties = { display: "none" };
 const ARROW_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
 
@@ -84,6 +86,8 @@ export const ArchivePreview = memo(function ArchivePreview({
   const navigationPosition = useRef<number>();
   const navigationVelocity = useRef(0);
   const navigationLastFrameTime = useRef<number>();
+  const wheelBurstResetTimer = useRef<number>();
+  const wheelBurstSteps = useRef(0);
   const iframeObserverRef = useRef<IntersectionObserver>();
   const cardShellsRef = useRef(new Map<string, HTMLElement>());
   const activatedIframeIdsRef = useRef(new Set<string>());
@@ -317,6 +321,14 @@ export const ArchivePreview = memo(function ArchivePreview({
     navigationLastFrameTime.current = undefined;
   }, []);
 
+  const resetWheelBurst = useCallback(() => {
+    if (wheelBurstResetTimer.current) {
+      window.clearTimeout(wheelBurstResetTimer.current);
+    }
+    wheelBurstResetTimer.current = undefined;
+    wheelBurstSteps.current = 0;
+  }, []);
+
   const navigateByStep = useCallback(
     (direction: -1 | 1) => {
       const scroller = scrollerRef.current;
@@ -537,16 +549,20 @@ export const ArchivePreview = memo(function ArchivePreview({
 
       event.preventDefault();
       event.stopPropagation();
-      if (direction) navigateByStep(direction);
+      if (direction) {
+        resetWheelBurst();
+        navigateByStep(direction);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [keyboardNavigationEnabled, navigateByStep, viewMode]);
+  }, [keyboardNavigationEnabled, navigateByStep, resetWheelBurst, viewMode]);
 
   useEffect(
     () => () => {
       cancelNavigationAnimation();
+      resetWheelBurst();
       if (scrollRestoreFrame.current) {
         window.cancelAnimationFrame(scrollRestoreFrame.current);
       }
@@ -554,7 +570,7 @@ export const ArchivePreview = memo(function ArchivePreview({
         window.clearTimeout(scrollSettleTimer.current);
       }
     },
-    [cancelNavigationAnimation],
+    [cancelNavigationAnimation, resetWheelBurst],
   );
 
   useEffect(() => {
@@ -676,12 +692,25 @@ export const ArchivePreview = memo(function ArchivePreview({
     if (!dominantDelta) return;
 
     event.preventDefault();
-    navigateByStep(dominantDelta < 0 ? -1 : 1);
+    const direction = dominantDelta < 0 ? -1 : 1;
+    const nextBurstSteps = wheelBurstSteps.current + direction;
+    if (Math.abs(nextBurstSteps) <= MAX_WHEEL_BURST_STEPS) {
+      wheelBurstSteps.current = nextBurstSteps;
+      navigateByStep(direction);
+    }
+    if (wheelBurstResetTimer.current) {
+      window.clearTimeout(wheelBurstResetTimer.current);
+    }
+    wheelBurstResetTimer.current = window.setTimeout(() => {
+      wheelBurstResetTimer.current = undefined;
+      wheelBurstSteps.current = 0;
+    }, WHEEL_BURST_RESET_MS);
   }
 
   function handleViewModeChange(nextViewMode: ArchiveViewMode) {
     if (nextViewMode === viewMode) return;
     cancelNavigationAnimation();
+    resetWheelBurst();
     pendingViewMode.current = nextViewMode;
     const scroller = scrollerRef.current;
     if (scroller) {
