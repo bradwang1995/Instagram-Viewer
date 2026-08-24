@@ -3,6 +3,7 @@ import {
   getClosestRibbonIndex,
   getGridMetrics,
   getGridWindow,
+  getRetainedMediaLayouts,
   getRibbonMetrics,
   getRibbonWindow,
 } from "../features/media/virtualMediaLayout";
@@ -58,6 +59,29 @@ describe("virtual media layout", () => {
     expect(finalWindow[finalWindow.length - 1]?.index).toBe(1_799);
     expect(getClosestRibbonIndex(metrics.layouts, maxScroll + 960)).toBe(1_799);
   });
+
+  it.each([
+    { axis: "horizontal" as const, start: "left" as const },
+    { axis: "vertical" as const, start: "top" as const },
+  ])(
+    "retains exactly one viewport behind, current, and one ahead on the $axis axis",
+    ({ axis, start }) => {
+      const layouts = Array.from({ length: 5 }, (_, index) => ({
+        index,
+        left: start === "left" ? index * 100 : 0,
+        top: start === "top" ? index * 100 : 0,
+        width: 100,
+        height: 100,
+      }));
+
+      expect(getRetainedMediaLayouts(layouts, 200, 100, axis)).toEqual(
+        layouts.slice(1, 4),
+      );
+      expect(getRetainedMediaLayouts(layouts, 0, 100, axis)).toEqual(
+        layouts.slice(0, 2),
+      );
+    },
+  );
 
   it.each([
     { viewport: [390, 654], aspects: [0.62, 0.78, 1.65] },

@@ -14,6 +14,9 @@ import {
 type ArchiveSlideshowProps = {
   open: boolean;
   item?: MediaQueueItem;
+  previousItem?: MediaQueueItem;
+  nextItem?: MediaQueueItem;
+  direction: 1 | -1;
   dwellMs: number;
   transitionPreset: TransitionPreset;
   dateRange: ArchiveDateRange;
@@ -24,14 +27,22 @@ type ArchiveSlideshowProps = {
   onImport: () => void;
   onDwellChange: (value: number) => void;
   onTransitionPresetChange: (value: TransitionPreset) => void;
-  onUnavailable: () => void;
+  onUnavailable: (mediaId: string) => void;
 };
 
-const TRANSITION_DURATION_SECONDS = 0.18;
+type SlideshowFrame = {
+  item: MediaQueueItem;
+  slot: -1 | 0 | 1;
+};
+
+const TRANSITION_DURATION_SECONDS = 0.36;
 
 export function ArchiveSlideshow({
   open,
   item,
+  previousItem,
+  nextItem,
+  direction,
   dwellMs,
   transitionPreset,
   dateRange,
@@ -44,6 +55,8 @@ export function ArchiveSlideshow({
   onTransitionPresetChange,
   onUnavailable,
 }: ArchiveSlideshowProps) {
+  const previousCurrentIdRef = useRef<string>();
+
   useEffect(() => {
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       const target =
@@ -66,14 +79,23 @@ export function ArchiveSlideshow({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onNext, onPrevious]);
 
+  const frames = getSlideshowFrames(
+    item,
+    previousItem,
+    nextItem,
+    direction,
+    previousCurrentIdRef.current,
+  );
+
+  useEffect(() => {
+    previousCurrentIdRef.current = item?.media.id;
+  }, [item?.media.id]);
+
   if (!open) return null;
 
-  const creator =
-    item?.media.creatorHandle ?? item?.post.embedAuthorName ?? "Saved photo";
   const resolvedUrl = item
     ? (item.media.assetUrl ?? item.media.previewUrl)
     : undefined;
-  const motionState = getMotionState(transitionPreset);
 
   return (
     <motion.section
@@ -108,34 +130,47 @@ export function ArchiveSlideshow({
           </AnimatePresence>
         ) : null}
 
-        <AnimatePresence mode="wait" initial={false}>
-          {item ? (
-            <motion.div
-              key={item.media.id}
-              className="slideshow-frame"
-              initial={motionState.initial}
-              animate={motionState.animate}
-              exit={motionState.exit}
-              transition={{
-                duration: TRANSITION_DURATION_SECONDS,
-                ease: [0.22, 1, 0.36, 1],
-              }}
-            >
-              {resolvedUrl ? (
-                <img
-                  className="slideshow-photo"
-                  src={resolvedUrl}
-                  alt={item.media.caption ?? creator}
-                  onError={onUnavailable}
-                />
-              ) : (
-                <InstagramSlideshowEmbed
-                  item={item}
-                  onUnavailable={onUnavailable}
-                />
-              )}
-            </motion.div>
-          ) : (
+        {frames.length ? (
+          frames.map((frame) => {
+            const frameResolvedUrl =
+              frame.item.media.assetUrl ?? frame.item.media.previewUrl;
+            const creator =
+              frame.item.media.creatorHandle ??
+              frame.item.post.embedAuthorName ??
+              "Saved photo";
+            return (
+              <motion.div
+                key={frame.item.media.id}
+                className={`slideshow-frame${frame.slot === 0 ? " is-current" : " is-preloaded"}`}
+                data-slideshow-slot={frame.slot}
+                aria-hidden={frame.slot === 0 ? undefined : true}
+                initial={false}
+                animate={getFrameMotion(transitionPreset, frame.slot)}
+                transition={{
+                  duration: TRANSITION_DURATION_SECONDS,
+                  ease: [0.22, 1, 0.36, 1],
+                }}
+              >
+                {frameResolvedUrl ? (
+                  <img
+                    className="slideshow-photo"
+                    src={frameResolvedUrl}
+                    alt={frame.item.media.caption ?? creator}
+                    loading="eager"
+                    decoding="async"
+                    onError={() => onUnavailable(frame.item.media.id)}
+                  />
+                ) : (
+                  <InstagramSlideshowEmbed
+                    item={frame.item}
+                    onUnavailable={() => onUnavailable(frame.item.media.id)}
+                  />
+                )}
+              </motion.div>
+            );
+          })
+        ) : (
+          <AnimatePresence initial={false}>
             <motion.div
               key="empty"
               className="slideshow-empty"
@@ -145,8 +180,8 @@ export function ArchiveSlideshow({
               <strong>No photos in this date range.</strong>
               <span>Widen the range below to continue the slideshow.</span>
             </motion.div>
-          )}
-        </AnimatePresence>
+          </AnimatePresence>
+        )}
 
         {item && transitionPreset === "film-burn" ? (
           <motion.span
@@ -224,47 +259,81 @@ function InstagramSlideshowEmbed({
   );
 }
 
-function getMotionState(preset: TransitionPreset) {
+function getSlideshowFrames(
+  current: MediaQueueItem | undefined,
+  previous: MediaQueueItem | undefined,
+  next: MediaQueueItem | undefined,
+  direction: 1 | -1,
+  previousCurrentId: string | undefined,
+): SlideshowFrame[] {
+  if (!current) return [];
+
+  const frames = new Map<string, SlideshowFrame>([
+    [current.media.id, { item: current, slot: 0 }],
+  ]);
+  if (previous && previous.media.id !== current.media.id) {
+    frames.set(previous.media.id, { item: previous, slot: -1 });
+  }
+  if (next && next.media.id !== current.media.id) {
+    const duplicate = frames.get(next.media.id);
+    const slot =
+      next.media.id === previousCurrentId
+        ? direction === 1
+          ? -1
+          : 1
+        : duplicate
+          ? direction
+          : 1;
+    frames.set(next.media.id, { item: next, slot });
+  }
+  return Array.from(frames.values());
+}
+
+function getFrameMotion(preset: TransitionPreset, slot: -1 | 0 | 1) {
+  const isCurrent = slot === 0;
+  const directionalX = `${slot * 100}%`;
+
   switch (preset) {
     case "directional-wipe":
       return {
-        initial: { opacity: 0, x: "18%", clipPath: "inset(0 0 0 100%)" },
-        animate: { opacity: 1, x: 0, clipPath: "inset(0 0 0 0%)" },
-        exit: { opacity: 0, x: "-12%", clipPath: "inset(0 100% 0 0)" },
+        opacity: isCurrent ? 1 : 0,
+        x: directionalX,
+        clipPath: isCurrent ? "inset(0 0 0 0%)" : "inset(0 12% 0 12%)",
       };
     case "depth-zoom":
       return {
-        initial: { opacity: 0, scale: 1.08, filter: "blur(8px)" },
-        animate: { opacity: 1, scale: 1, filter: "blur(0px)" },
-        exit: { opacity: 0, scale: 0.95, filter: "blur(6px)" },
+        opacity: isCurrent ? 1 : 0,
+        x: `${slot * 10}%`,
+        scale: isCurrent ? 1 : 1.06,
+        filter: isCurrent ? "blur(0px)" : "blur(8px)",
       };
     case "rgb-split":
       return {
-        initial: { opacity: 0, x: 18, filter: "contrast(1.6) saturate(1.7)" },
-        animate: { opacity: 1, x: 0, filter: "contrast(1) saturate(1)" },
-        exit: { opacity: 0, x: -18, filter: "contrast(1.5) saturate(1.6)" },
+        opacity: isCurrent ? 1 : 0,
+        x: `${slot * 8}%`,
+        filter: isCurrent
+          ? "contrast(1) saturate(1)"
+          : "contrast(1.6) saturate(1.7)",
       };
     case "ken-burns":
       return {
-        initial: { opacity: 0, scale: 1.035 },
-        animate: { opacity: 1, scale: 1 },
-        exit: { opacity: 0, scale: 1.02 },
+        opacity: isCurrent ? 1 : 0,
+        x: `${slot * 6}%`,
+        scale: isCurrent ? 1 : 1.035,
       };
     case "film-burn":
       return {
-        initial: {
-          opacity: 0,
-          scale: 1.02,
-          filter: "sepia(0.55) contrast(1.12)",
-        },
-        animate: { opacity: 1, scale: 1, filter: "sepia(0) contrast(1)" },
-        exit: { opacity: 0, scale: 0.99, filter: "sepia(0.45) contrast(1.1)" },
+        opacity: isCurrent ? 1 : 0,
+        x: `${slot * 8}%`,
+        scale: isCurrent ? 1 : 1.02,
+        filter: isCurrent
+          ? "sepia(0) contrast(1)"
+          : "sepia(0.55) contrast(1.12)",
       };
     default:
       return {
-        initial: { opacity: 0 },
-        animate: { opacity: 1 },
-        exit: { opacity: 0 },
+        opacity: isCurrent ? 1 : 0,
+        x: `${slot * 6}%`,
       };
   }
 }

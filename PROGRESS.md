@@ -22,6 +22,50 @@ Browse or enter the automatic Slideshow tab
 
 The product remains one page with URL-backed Horizontal/Grid states, one shared date-range dock, and a full-viewport slideshow overlay. Browser Back and Forward restore the previous `?view=horizontal` / `?view=grid` state, while `?slideshow=1` keeps slideshow navigation in the same history model.
 
+## 2026-08-23 Discrete Wheel And Arrow Navigation
+
+Status: **implemented locally; full automated validation, production build, and fresh built-in-browser validation passed; not committed, pushed, or deployed**.
+
+- Replaced accumulated wheel momentum with one deterministic navigation step per wheel event.
+- Horizontal maps wheel direction and ArrowLeft/ArrowRight to exactly one previous/next photo, with centered target alignment where the track permits.
+- Grid maps wheel direction and ArrowUp/ArrowDown to exactly one previous/next row while preserving the selected column when possible.
+- Navigation clamps at the first/last photo or row and suppresses orthogonal browser scrolling.
+- Archive keyboard handling is disabled while Slideshow is open, preserving Slideshow's existing ArrowLeft/ArrowRight navigation.
+- Preserved the accepted card-shell, iframe retention, `180ms` settle, filter, image-cache, and slideshow-preload contracts.
+- The superseded momentum implementation remains documented in the dated milestones below as historical evidence.
+- Validation passed `18` test files / `75` tests, `npm run lint`, `npm run build`, and focused Prettier checks. Fresh built-in-browser QA confirmed one-step forward/reverse navigation in both views, intact Slideshow ArrowRight behavior, settled scrollers, accepted visual composition, and zero console warnings/errors.
+
+## 2026-07-29 Accepted Experience Baseline
+
+Status: **implemented locally; full automated validation, production build, and fresh built-in-browser validation passed; not committed, pushed, or deployed**.
+
+- Added [`EXPERIENCE.md`](EXPERIENCE.md) as the change-control contract for the accepted preload, cache, momentum, filtering, and slideshow balance.
+- Converted the one-viewport-behind/current/one-ahead retention rule into a directly tested layout policy used by the application.
+- Tightened the archive integration regression from a loose iframe ceiling to the exact `5 → 9 → 5` Horizontal lifecycle: initial activation, post-settle distant window, then return.
+- Locked the filter boundary to unchanged through `299ms` and applied at `300ms`.
+- Locked a standard `120px` wheel input to its accepted 60Hz reference: `42` frames and approximately `530.84865px` before settling.
+- Added decoded-image LRU coverage proving the exact `24`-URL capacity, reuse refresh, asset preference, async decode configuration, and one-time cache-first service-worker registration.
+- Expanded slideshow coverage to prove all three iframe DOM nodes survive the next-frame transition while their `-1 / 0 / 1` slots change.
+- Validation passed `18` test files / `75` tests, `npm run lint`, `npm run build`, focused Prettier checks, and `git diff --check`.
+- Fresh `1920 × 1080` built-in-browser validation confirmed settled Horizontal/Grid rolling stops with bounded iframe counts, three slideshow iframe slots, the `3000–10000ms` duration range, accepted visual composition, and zero console warnings/errors.
+
+## 2026-07-29 Bounded Iframe, Debounce, And Slideshow-Preload Milestone
+
+Status: **implemented; full automated validation, production build, and fresh built-in-browser desktop/mobile QA passed; not committed, pushed, or deployed**.
+
+- Added a `300ms` debounce between moving the Start time / End time controls and applying the filtered queue. Slider position and labels remain immediate.
+- Suppressed archive ArrowLeft/ArrowRight/ArrowUp/ArrowDown behavior even when a date-range slider is focused; real browser QA kept both the slider value and Grid scroll position unchanged.
+- Unified Grid and Horizontal wheel behavior on the same frame-time-aware velocity/friction model, so both views finish with a rolling stop.
+- Removed the full-library geometry scan from continuous scroll frames. IntersectionObserver handles immediate visible/ahead activation; the retained media window is reconciled once after scrolling settles.
+- Replaced infinite session iframe retention with a spatial window: one viewport behind, the current viewport, and one viewport ahead. Filter-hidden iframes preserve their existing identity.
+- Disabled card hover pointer/transition paint work while the scroller is moving.
+- Reduced the desktop header and dock to `72px` and `66px`. Mobile slideshow QA measured `94px` and `72px`; its single-line controls scroll horizontally instead of consuming a second vertical control row.
+- Changed frame duration from `1–10s` to `3–10s`; old locally persisted values below three seconds are clamped on load and save.
+- Slideshow now keeps the previous, current, and next media frames mounted. A neighboring iframe becomes current with the same keyed DOM node and a direction-aware transition instead of starting validation/loading after selection.
+- Real-data Browser QA used `1,742` mounted card shells. Horizontal scrolling to `4233px` retained nine iframes and removed the original first-screen iframe. Grid scrolling to `11294px` retained `27` iframes across the three-viewport spatial window. Both scrollers reported `settled`, and the browser console had zero warnings/errors.
+- Slideshow Browser QA confirmed three iframe frames with slots `-1 / 0 / 1`, `3000ms` duration minimum, and `72px / 66px` desktop chrome. Mobile QA at `390 × 844` preserved a `740px` iframe surface with compact `94px / 72px` chrome.
+- Final validation passed `16` test files / `67` tests, `npm run lint`, `npm run build`, Prettier check, and `git diff --check`.
+
 ## 2026-07-29 Slideshow And Session-Control Milestone
 
 Status: **implemented; automated validation and built-in-browser desktop/mobile QA passed**.
@@ -29,7 +73,7 @@ Status: **implemented; automated validation and built-in-browser desktop/mobile 
 - Merged `Horizontal View`, `Grid View`, and `Slideshow` into one top-center segmented tab switcher, with each icon placed before its label.
 - Removed the active Filter and Settings sheets, Hide/restore flow, loop choices, transition-duration control, and Previous/Play/Next text transport.
 - Added one Start time / End time month-range dual slider shared by all three views. It filters the existing queue without destroying activated card or iframe identity.
-- Slideshow now starts automatically, wraps the complete filtered queue, and supports ArrowLeft/ArrowRight navigation. Only transition style and a compact `1–10s` frame-duration control remain.
+- Slideshow now starts automatically, wraps the complete filtered queue, and supports ArrowLeft/ArrowRight navigation. Only transition style and a compact frame-duration control remain; its original `1–10s` range is superseded by the three-second minimum above.
 - Rebuilt resolved-image playback as a viewport-sized stage with the current image blurred across the background and a contained foreground image. Compatibility iframes are non-interactive, oversized, and clipped to mask Instagram's white header/footer chrome.
 - Removed the system Fullscreen API after built-in-browser QA exposed right/bottom black regions at some window sizes; the stage now relies on stable `100dvh` containment.
 - Browser QA passed at `1920 × 1080` and `390 × 844`: no page scrollbars, no white slideshow canvas, tab switching and ArrowRight advancement worked, the dark transition selector applied `ken-burns`, and console error/warning output was empty.
@@ -37,14 +81,14 @@ Status: **implemented; automated validation and built-in-browser desktop/mobile 
 
 ## 2026-07-29 Browsing Smoothness Milestone
 
-Status: **implemented; automated validation and bounded built-in-browser QA passed**.
+Status: **implemented; automated validation and bounded built-in-browser QA passed; iframe lifetime and per-frame geometry details superseded by the bounded-window milestone above**.
 
 - Reduced forward activation from two viewport lengths to one in both Horizontal and Grid views. The entire real viewport still activates immediately, while the number of not-yet-visible iframe loads is approximately halved.
 - Replaced the target-and-deadline wheel animation with bounded velocity, frame-time-aware friction, and a natural rolling stop. There is no deadline that jumps the scroller to a final target.
-- Removed per-scroll-frame React state updates. Geometry fallback activation now runs inside the scroll frame without rerendering the archive, and the scrolling/settled diagnostic state is written directly to the scroller.
+- Removed per-scroll-frame React state updates. The scrolling/settled diagnostic state is written directly to the scroller; the later bounded-window milestone also removed the full geometry fallback scan from continuous frames.
 - Memoized the archive and individual cards with stable layout styles and archive callbacks, preventing unrelated parent updates and newly activated cards from rerendering the full library.
 - Replaced thousands of card-level Motion instances and permanent `will-change: transform` hints with a lightweight CSS hover transition; the persistent iframe and card-shell model is unchanged.
-- Suppressed ArrowLeft/ArrowRight/ArrowUp/ArrowDown on the archive surface so focus on a page control cannot move the media field. Native form inputs and selectors retain their arrow-key behavior.
+- Suppressed ArrowLeft/ArrowRight/ArrowUp/ArrowDown on the archive surface so focus on a page control cannot move the media field. The later milestone extended suppression to focused archive range inputs.
 - Added focused regression coverage for one-screen observer margins, one-screen activation boundaries, arrow-key suppression, and the momentum deceleration/boundary model.
 - Short built-in-browser QA imported the repository's real `saved_posts.json`: 1,754 eligible card shells mounted, Horizontal initially activated five iframes and left 1,749 request-free placeholders, and Grid activated 23 iframes across its viewport plus one screen below. One real wheel gesture decelerated through `80 → 465 → 646 → 687 → 689px` before settling; ArrowRight left the settled `689px` position unchanged. The console reported zero errors/warnings.
 

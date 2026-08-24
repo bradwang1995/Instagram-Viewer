@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type KeyboardEvent,
   type WheelEvent,
 } from "react";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
@@ -16,13 +15,10 @@ import {
   getClosestRibbonIndex,
   getGridLayouts,
   getGridMetrics,
+  getRetainedMediaLayouts,
   getRibbonMetrics,
 } from "../../features/media/virtualMediaLayout";
 import { preloadMediaItems } from "../../features/media/mediaPreload";
-import {
-  addWheelImpulse,
-  advanceMomentum,
-} from "../../features/media/scrollMomentum";
 import { extendSessionMediaOrder } from "../../features/media/sessionMediaOrder";
 import {
   ArchiveControlBar,
@@ -41,6 +37,7 @@ type ArchivePreviewProps = {
   hasFilters: boolean;
   dateRange: ArchiveDateRange;
   isImporting: boolean;
+  keyboardNavigationEnabled: boolean;
   onSelect: (mediaId: string) => void;
   onMediaUnavailable: (mediaId: string) => void;
   onImport: () => void;
@@ -54,10 +51,8 @@ type ViewportSize = {
 };
 
 const SCROLL_SETTLE_DELAY_MS = 180;
-const PRELOAD_AHEAD_VIEWPORTS = 1;
 const HIDDEN_CARD_STYLE: CSSProperties = { display: "none" };
 const ARROW_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
-export const MAX_RETAINED_INSTAGRAM_IFRAMES = Infinity;
 
 export const ArchivePreview = memo(function ArchivePreview({
   items,
@@ -67,6 +62,7 @@ export const ArchivePreview = memo(function ArchivePreview({
   hasFilters,
   dateRange,
   isImporting,
+  keyboardNavigationEnabled,
   onSelect,
   onMediaUnavailable,
   onImport,
@@ -74,16 +70,12 @@ export const ArchivePreview = memo(function ArchivePreview({
   onStartSlideshow,
 }: ArchivePreviewProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
-  const scrollFrame = useRef<number>();
   const scrollRestoreFrame = useRef<number>();
-  const wheelFrame = useRef<number>();
   const scrollSettleTimer = useRef<number>();
   const iframeObserverRef = useRef<IntersectionObserver>();
   const cardShellsRef = useRef(new Map<string, HTMLElement>());
   const activatedIframeIdsRef = useRef(new Set<string>());
   const iframeStatusByIdRef = useRef(new Map<string, IframeStatus>());
-  const wheelVelocity = useRef(0);
-  const wheelLastFrameTime = useRef<number>();
   const activeViewMode = useRef(viewMode);
   const pendingViewMode = useRef<ArchiveViewMode>();
   const scrollPositions = useRef<Record<ArchiveViewMode, number>>({
@@ -179,11 +171,15 @@ export const ArchivePreview = memo(function ArchivePreview({
     [gridMetrics.totalHeight, ribbonMetrics.totalWidth, viewMode],
   );
 
-  const activateIframe = useCallback((itemId: string) => {
-    if (activatedIframeIdsRef.current.has(itemId)) return;
-    activatedIframeIdsRef.current.add(itemId);
-    iframeStatusByIdRef.current.set(itemId, "loading");
-    setIframeStateRevision((revision) => revision + 1);
+  const activateIframes = useCallback((itemIds: Iterable<string>) => {
+    let changed = false;
+    for (const itemId of itemIds) {
+      if (activatedIframeIdsRef.current.has(itemId)) continue;
+      activatedIframeIdsRef.current.add(itemId);
+      iframeStatusByIdRef.current.set(itemId, "loading");
+      changed = true;
+    }
+    if (changed) setIframeStateRevision((revision) => revision + 1);
   }, []);
 
   const registerShell = useCallback(
@@ -219,32 +215,46 @@ export const ArchivePreview = memo(function ArchivePreview({
     (itemId: string) => setIframeStatus(itemId, "error"),
     [setIframeStatus],
   );
-  const activatePreloadZone = useCallback(
-    (offset: number) => {
+  const synchronizeMediaWindow = useCallback(
+    (offset: number, pruneOutsideWindow: boolean) => {
       const viewportLength =
         viewMode === "grid" ? viewport.height : viewport.width;
-      const preloadEnd =
-        offset + viewportLength * (1 + PRELOAD_AHEAD_VIEWPORTS);
+      const retainedIds = new Set<string>();
       const preloadItems: MediaQueueItem[] = [];
 
-      allLayouts.forEach((layout) => {
-        const start = viewMode === "grid" ? layout.top : layout.left;
-        const size = viewMode === "grid" ? layout.height : layout.width;
-        if (start + size <= offset || start >= preloadEnd) return;
+      getRetainedMediaLayouts(
+        allLayouts,
+        offset,
+        viewportLength,
+        viewMode === "grid" ? "vertical" : "horizontal",
+      ).forEach((layout) => {
         const item = visibleOrderedItems[layout.index];
         if (!item) return;
-        activateIframe(item.media.id);
+        retainedIds.add(item.media.id);
         preloadItems.push(item);
       });
 
+      let pruned = false;
+      if (pruneOutsideWindow) {
+        for (const itemId of activatedIframeIdsRef.current) {
+          if (retainedIds.has(itemId)) continue;
+          if (!visibleItemIds.has(itemId)) continue;
+          activatedIframeIdsRef.current.delete(itemId);
+          iframeStatusByIdRef.current.delete(itemId);
+          pruned = true;
+        }
+      }
+      activateIframes(retainedIds);
+      if (pruned) setIframeStateRevision((revision) => revision + 1);
       preloadMediaItems(preloadItems);
     },
     [
-      activateIframe,
+      activateIframes,
       allLayouts,
       viewMode,
       viewport.height,
       viewport.width,
+      visibleItemIds,
       visibleOrderedItems,
     ],
   );
@@ -256,11 +266,12 @@ export const ArchivePreview = memo(function ArchivePreview({
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        entries.forEach((entry) => {
-          if (!entry.isIntersecting) return;
-          const itemId = (entry.target as HTMLElement).dataset.mediaId;
-          if (itemId) activateIframe(itemId);
-        });
+        activateIframes(
+          entries
+            .filter((entry) => entry.isIntersecting)
+            .map((entry) => (entry.target as HTMLElement).dataset.mediaId)
+            .filter((itemId): itemId is string => Boolean(itemId)),
+        );
       },
       {
         root: scroller,
@@ -277,19 +288,163 @@ export const ArchivePreview = memo(function ArchivePreview({
         iframeObserverRef.current = undefined;
       }
     };
-  }, [activateIframe, viewMode]);
+  }, [activateIframes, viewMode]);
 
   useEffect(() => {
-    activatePreloadZone(scrollPositions.current[viewMode]);
-  }, [activatePreloadZone, viewMode]);
+    synchronizeMediaWindow(scrollPositions.current[viewMode], true);
+  }, [synchronizeMediaWindow, viewMode]);
+
+  const navigateByStep = useCallback(
+    (direction: -1 | 1) => {
+      const scroller = scrollerRef.current;
+      if (!scroller || !visibleOrderedItems.length) return;
+
+      let targetIndex: number;
+      if (viewMode === "grid") {
+        const lastRow =
+          Math.ceil(visibleOrderedItems.length / gridMetrics.columns) - 1;
+        const fallbackRow = Math.min(
+          lastRow,
+          Math.max(0, Math.round(scroller.scrollTop / gridMetrics.rowStride)),
+        );
+        const selectedIndex = selectedId
+          ? visibleIndexById.get(selectedId)
+          : undefined;
+        const selectedLayout =
+          selectedIndex === undefined ? undefined : allLayouts[selectedIndex];
+        const selectedIsVisible = Boolean(
+          selectedLayout &&
+          selectedLayout.top + selectedLayout.height > scroller.scrollTop &&
+          selectedLayout.top < scroller.scrollTop + viewport.height,
+        );
+        const selectedRow =
+          selectedIndex === undefined
+            ? undefined
+            : Math.floor(selectedIndex / gridMetrics.columns);
+        const currentRow =
+          selectedIsVisible && selectedRow !== undefined
+            ? selectedRow
+            : fallbackRow;
+        const currentColumn =
+          selectedIndex !== undefined && selectedIsVisible
+            ? selectedIndex % gridMetrics.columns
+            : 0;
+        const targetRow = Math.min(
+          lastRow,
+          Math.max(0, currentRow + direction),
+        );
+        if (targetRow === currentRow) return;
+
+        targetIndex = Math.min(
+          visibleOrderedItems.length - 1,
+          targetRow * gridMetrics.columns + currentColumn,
+        );
+        const targetLayout = allLayouts[targetIndex];
+        if (!targetLayout) return;
+        const maximum = Math.max(0, gridMetrics.totalHeight - viewport.height);
+        scroller.scrollTop = Math.min(
+          maximum,
+          Math.max(0, targetLayout.top - gridMetrics.paddingY),
+        );
+      } else {
+        const viewportWidth = scroller.clientWidth || viewport.width;
+        const selectedIndex = selectedId
+          ? visibleIndexById.get(selectedId)
+          : undefined;
+        const selectedLayout =
+          selectedIndex === undefined
+            ? undefined
+            : ribbonMetrics.layouts[selectedIndex];
+        const selectedIsVisible = Boolean(
+          selectedLayout &&
+          selectedLayout.left + selectedLayout.width > scroller.scrollLeft &&
+          selectedLayout.left < scroller.scrollLeft + viewportWidth,
+        );
+        const currentIndex =
+          selectedIsVisible && selectedIndex !== undefined
+            ? selectedIndex
+            : getClosestRibbonIndex(
+                ribbonMetrics.layouts,
+                scroller.scrollLeft + viewportWidth / 2,
+              );
+        targetIndex = Math.min(
+          visibleOrderedItems.length - 1,
+          Math.max(0, currentIndex + direction),
+        );
+        if (targetIndex === currentIndex) return;
+
+        const targetLayout = ribbonMetrics.layouts[targetIndex];
+        if (!targetLayout) return;
+        const maximum = Math.max(0, ribbonMetrics.totalWidth - viewportWidth);
+        scroller.scrollLeft = Math.min(
+          maximum,
+          Math.max(
+            0,
+            targetLayout.left + targetLayout.width / 2 - viewportWidth / 2,
+          ),
+        );
+      }
+
+      const targetItem = visibleOrderedItems[targetIndex];
+      if (targetItem && targetItem.media.id !== selectedId) {
+        onSelect(targetItem.media.id);
+      }
+    },
+    [
+      allLayouts,
+      gridMetrics,
+      onSelect,
+      ribbonMetrics,
+      selectedId,
+      viewMode,
+      viewport.height,
+      viewport.width,
+      visibleIndexById,
+      visibleOrderedItems,
+    ],
+  );
+
+  useEffect(() => {
+    if (!keyboardNavigationEnabled) return undefined;
+
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey
+      ) {
+        return;
+      }
+
+      const direction =
+        viewMode === "grid"
+          ? event.key === "ArrowUp"
+            ? -1
+            : event.key === "ArrowDown"
+              ? 1
+              : undefined
+          : event.key === "ArrowLeft"
+            ? -1
+            : event.key === "ArrowRight"
+              ? 1
+              : undefined;
+      if (!ARROW_KEYS.has(event.key)) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+      if (direction) navigateByStep(direction);
+    };
+
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
+  }, [keyboardNavigationEnabled, navigateByStep, viewMode]);
 
   useEffect(
     () => () => {
-      if (scrollFrame.current) window.cancelAnimationFrame(scrollFrame.current);
       if (scrollRestoreFrame.current) {
         window.cancelAnimationFrame(scrollRestoreFrame.current);
       }
-      if (wheelFrame.current) window.cancelAnimationFrame(wheelFrame.current);
       if (scrollSettleTimer.current) {
         window.clearTimeout(scrollSettleTimer.current);
       }
@@ -324,11 +479,6 @@ export const ArchivePreview = memo(function ArchivePreview({
     const scroller = scrollerRef.current;
     if (!scroller) return;
 
-    if (wheelFrame.current) {
-      window.cancelAnimationFrame(wheelFrame.current);
-      wheelFrame.current = undefined;
-    }
-
     const maximum =
       viewMode === "grid"
         ? Math.max(0, gridMetrics.totalHeight - viewport.height)
@@ -339,8 +489,6 @@ export const ArchivePreview = memo(function ArchivePreview({
     scroller.scrollTop = viewMode === "grid" ? restoredOffset : 0;
     scrollPositions.current[viewMode] = restoredOffset;
     scroller.dataset.scrollState = "settled";
-    wheelVelocity.current = 0;
-    wheelLastFrameTime.current = undefined;
     if (scrollSettleTimer.current) {
       window.clearTimeout(scrollSettleTimer.current);
       scrollSettleTimer.current = undefined;
@@ -376,55 +524,39 @@ export const ArchivePreview = memo(function ArchivePreview({
       pendingViewMode.current = undefined;
     }
     scrollPositions.current[currentViewMode] = nextOffset;
-    if (currentViewMode === "ribbon" && !wheelFrame.current) {
-      wheelVelocity.current = 0;
-      wheelLastFrameTime.current = undefined;
-    }
-
     scroller.dataset.scrollState = "moving";
     if (scrollSettleTimer.current) {
       window.clearTimeout(scrollSettleTimer.current);
     }
     const settleScroll = () => {
-      if (wheelFrame.current) {
-        scrollSettleTimer.current = window.setTimeout(settleScroll, 40);
-        return;
-      }
       const scroller = scrollerRef.current;
       if (scroller) scroller.dataset.scrollState = "settled";
       scrollSettleTimer.current = undefined;
-      if (
-        !scroller ||
-        viewMode !== "ribbon" ||
-        activeViewMode.current !== viewMode ||
-        !visibleOrderedItems.length
-      ) {
+      if (!scroller || activeViewMode.current !== viewMode) {
         return;
       }
 
-      const nextIndex = getClosestRibbonIndex(
-        ribbonMetrics.layouts,
-        scroller.scrollLeft + scroller.clientWidth / 2,
-      );
-      const nextItem = visibleOrderedItems[nextIndex];
-      if (nextItem && nextItem.media.id !== selectedId) {
-        onSelect(nextItem.media.id);
+      const settledOffset =
+        viewMode === "grid" ? scroller.scrollTop : scroller.scrollLeft;
+      synchronizeMediaWindow(settledOffset, true);
+      if (viewMode === "ribbon" && visibleOrderedItems.length) {
+        const nextIndex = getClosestRibbonIndex(
+          ribbonMetrics.layouts,
+          scroller.scrollLeft + scroller.clientWidth / 2,
+        );
+        const nextItem = visibleOrderedItems[nextIndex];
+        if (nextItem && nextItem.media.id !== selectedId) {
+          onSelect(nextItem.media.id);
+        }
       }
     };
     scrollSettleTimer.current = window.setTimeout(
       settleScroll,
       SCROLL_SETTLE_DELAY_MS,
     );
-
-    if (scrollFrame.current) window.cancelAnimationFrame(scrollFrame.current);
-    scrollFrame.current = window.requestAnimationFrame(() => {
-      scrollFrame.current = undefined;
-      activatePreloadZone(nextOffset);
-    });
   }
 
   function handleWheel(event: WheelEvent<HTMLDivElement>) {
-    if (viewMode !== "ribbon") return;
     const dominantDelta =
       Math.abs(event.deltaX) > Math.abs(event.deltaY)
         ? event.deltaX
@@ -432,57 +564,7 @@ export const ArchivePreview = memo(function ArchivePreview({
     if (!dominantDelta) return;
 
     event.preventDefault();
-    const scroller = event.currentTarget;
-    const unit =
-      event.deltaMode === 1
-        ? 24
-        : event.deltaMode === 2
-          ? Math.max(320, scroller.clientWidth)
-          : 1;
-    const maximum = Math.max(0, scroller.scrollWidth - scroller.clientWidth);
-    const deltaPixels = dominantDelta * unit;
-    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
-      scroller.scrollLeft = Math.min(
-        maximum,
-        Math.max(0, scroller.scrollLeft + deltaPixels),
-      );
-      return;
-    }
-    wheelVelocity.current = addWheelImpulse(wheelVelocity.current, deltaPixels);
-
-    if (wheelFrame.current) return;
-    const animate = (timestamp: number) => {
-      const currentScroller = scrollerRef.current;
-      if (!currentScroller || viewMode !== "ribbon") {
-        wheelFrame.current = undefined;
-        wheelVelocity.current = 0;
-        wheelLastFrameTime.current = undefined;
-        return;
-      }
-
-      const elapsedMs = wheelLastFrameTime.current
-        ? timestamp - wheelLastFrameTime.current
-        : 1000 / 60;
-      wheelLastFrameTime.current = timestamp;
-      const frame = advanceMomentum(
-        currentScroller.scrollLeft,
-        wheelVelocity.current,
-        elapsedMs,
-        0,
-        Math.max(0, currentScroller.scrollWidth - currentScroller.clientWidth),
-      );
-      currentScroller.scrollLeft = frame.position;
-      wheelVelocity.current = frame.velocity;
-      if (frame.settled) {
-        wheelFrame.current = undefined;
-        wheelVelocity.current = 0;
-        wheelLastFrameTime.current = undefined;
-        return;
-      }
-
-      wheelFrame.current = window.requestAnimationFrame(animate);
-    };
-    wheelFrame.current = window.requestAnimationFrame(animate);
+    navigateByStep(dominantDelta < 0 ? -1 : 1);
   }
 
   function handleViewModeChange(nextViewMode: ArchiveViewMode) {
@@ -494,12 +576,6 @@ export const ArchivePreview = memo(function ArchivePreview({
         viewMode === "grid" ? scroller.scrollTop : scroller.scrollLeft;
       scrollPositions.current[viewMode] = currentOffset;
     }
-    if (wheelFrame.current) {
-      window.cancelAnimationFrame(wheelFrame.current);
-      wheelFrame.current = undefined;
-    }
-    wheelVelocity.current = 0;
-    wheelLastFrameTime.current = undefined;
     if (scrollSettleTimer.current) {
       window.clearTimeout(scrollSettleTimer.current);
       scrollSettleTimer.current = undefined;
@@ -507,21 +583,8 @@ export const ArchivePreview = memo(function ArchivePreview({
     onViewModeChange(nextViewMode);
   }
 
-  function handleArchiveKeyDown(event: KeyboardEvent<HTMLElement>) {
-    if (!ARROW_KEYS.has(event.key)) return;
-    const target = event.target as HTMLElement;
-    if (target.matches("input, select, textarea") || target.isContentEditable) {
-      return;
-    }
-    event.preventDefault();
-    event.stopPropagation();
-  }
-
   return (
-    <section
-      className={`archive-preview is-${viewMode}`}
-      onKeyDownCapture={handleArchiveKeyDown}
-    >
+    <section className={`archive-preview is-${viewMode}`}>
       <ArchiveHeader
         activeTab={viewMode}
         isImporting={isImporting}

@@ -111,16 +111,10 @@ export function ArchiveControlBar({
   return (
     <footer className="archive-dock">
       <div className="archive-date-range">
-        <div className="archive-date-labels" aria-hidden="true">
-          <span>
-            Start time
-            <strong>{formatMonth(months[startIndex])}</strong>
-          </span>
-          <span>
-            End time
-            <strong>{formatMonth(months[endIndex])}</strong>
-          </span>
-        </div>
+        <span className="archive-date-value" aria-hidden="true">
+          Start time
+          <strong>{formatMonth(months[startIndex])}</strong>
+        </span>
         <div className="archive-dual-range" style={rangeStyle}>
           <span className="archive-range-track" aria-hidden="true" />
           <input
@@ -148,6 +142,10 @@ export function ArchiveControlBar({
             }
           />
         </div>
+        <span className="archive-date-value is-end" aria-hidden="true">
+          End time
+          <strong>{formatMonth(months[endIndex])}</strong>
+        </span>
       </div>
 
       {slideshow ? (
@@ -171,14 +169,11 @@ export function ArchiveControlBar({
             </select>
           </label>
           <label className="slideshow-duration">
-            <span>
-              Frame duration
-              <output>{formatDuration(slideshow.dwellMs)}</output>
-            </span>
+            <span>Frame duration</span>
             <input
               type="range"
               aria-label="Frame duration"
-              min={1000}
+              min={3000}
               max={10000}
               step={500}
               value={slideshow.dwellMs}
@@ -186,6 +181,7 @@ export function ArchiveControlBar({
                 slideshow.onDwellChange(Number(event.target.value))
               }
             />
+            <output>{formatDuration(slideshow.dwellMs)}</output>
           </label>
         </div>
       ) : null}

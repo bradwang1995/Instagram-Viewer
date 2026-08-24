@@ -418,7 +418,7 @@ p {
 
 .archive-header {
   display: grid;
-  height: 104px;
+  height: 72px;
   grid-template-columns: minmax(190px, 1fr) auto minmax(190px, 1fr);
   gap: 24px;
   background: rgb(5 6 6 / 72%);
@@ -451,8 +451,8 @@ p {
 
 .archive-view-tabs button.viewer-control {
   min-width: 172px;
-  height: 46px;
-  min-height: 46px;
+  height: 38px;
+  min-height: 38px;
   border: 0;
   border-radius: 14px;
   background: transparent;
@@ -490,7 +490,7 @@ p {
 
 .archive-scroller {
   position: absolute;
-  inset: 104px 0 112px;
+  inset: 72px 0 66px;
   z-index: 4;
   overflow-x: auto;
   overflow-y: hidden;
@@ -529,6 +529,15 @@ p {
 
 .archive-card:hover {
   transform: translateY(-10px) scale(1.015);
+}
+
+.archive-scroller[data-scroll-state="moving"] .archive-card {
+  pointer-events: none;
+  transition: none;
+}
+
+.archive-scroller[data-scroll-state="moving"] .archive-card:hover {
+  transform: none;
 }
 
 .archive-card-hit {
@@ -638,31 +647,26 @@ p {
 .archive-dock {
   display: flex;
   width: 100%;
-  min-height: 112px;
+  min-height: 66px;
   align-items: center;
   justify-content: space-between;
-  gap: clamp(24px, 4vw, 72px);
+  gap: clamp(18px, 3vw, 48px);
   border-top: 1px solid var(--line);
   background: rgb(5 6 6 / 88%);
-  padding: 14px clamp(18px, 2.2vw, 38px) 13px;
+  padding: 7px clamp(18px, 2.2vw, 38px) 6px;
   backdrop-filter: blur(18px);
 }
 
 .archive-date-range {
   display: grid;
-  width: min(520px, 46vw);
-  min-width: 330px;
-  gap: 10px;
+  width: min(620px, 58vw);
+  min-width: 390px;
+  align-items: center;
+  grid-template-columns: max-content minmax(150px, 1fr) max-content;
+  gap: 12px;
 }
 
-.archive-date-labels {
-  display: flex;
-  align-items: end;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.archive-date-labels > span {
+.archive-date-value {
   display: grid;
   gap: 2px;
   color: var(--dim);
@@ -670,11 +674,11 @@ p {
   line-height: 1.15;
 }
 
-.archive-date-labels > span:last-child {
+.archive-date-value.is-end {
   text-align: right;
 }
 
-.archive-date-labels strong {
+.archive-date-value strong {
   color: var(--paper);
   font-size: 0.65rem;
   font-weight: 400;
@@ -758,7 +762,7 @@ p {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: clamp(18px, 2.5vw, 42px);
+  gap: clamp(14px, 2vw, 28px);
 }
 
 .slideshow-inline-settings label {
@@ -773,7 +777,7 @@ p {
 .slideshow-inline-settings select {
   width: auto;
   min-width: 150px;
-  height: 38px;
+  height: 34px;
   border: 1px solid #3a2b3d;
   border-radius: 11px;
   outline: none;
@@ -789,23 +793,21 @@ p {
 }
 
 .slideshow-duration {
-  display: grid !important;
-  width: 210px;
-  gap: 7px !important;
-}
-
-.slideshow-duration > span {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
+  display: flex !important;
+  width: 260px;
+  gap: 9px !important;
 }
 
 .slideshow-duration output {
+  min-width: 28px;
   color: var(--paper);
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .slideshow-duration input {
+  min-width: 110px;
+  flex: 1;
   width: 100%;
   accent-color: var(--acid);
 }
@@ -1130,13 +1132,15 @@ p {
 }
 
 .slideshow-frame {
-  position: relative;
+  position: absolute;
   z-index: 2;
+  inset: 0;
   display: grid;
   width: 100vw;
   height: 100dvh;
   overflow: hidden;
   place-items: center;
+  pointer-events: none;
 }
 
 .slideshow-photo {
@@ -1152,7 +1156,7 @@ p {
 .slideshow-embed {
   position: relative;
   width: min(88vw, 820px);
-  height: min(calc(100dvh - 156px), 980px);
+  height: min(calc(100dvh - 88px), 980px);
   overflow: hidden;
   border: 2px solid #2a202b;
   border-radius: 22px;
@@ -1282,9 +1286,9 @@ p {
 
 @media (max-width: 1120px) {
   .archive-header {
-    height: 136px;
+    height: 106px;
     grid-template-columns: 1fr auto;
-    grid-template-rows: 64px 72px;
+    grid-template-rows: 42px 64px;
     gap: 0 16px;
     padding-inline: 20px;
   }
@@ -1305,7 +1309,7 @@ p {
   }
 
   .archive-scroller {
-    inset: 136px 0 112px;
+    inset: 106px 0 66px;
   }
 
   .archive-view-tabs button.viewer-control {
@@ -1332,8 +1336,8 @@ p {
   }
 
   .archive-header {
-    height: 118px;
-    grid-template-rows: 50px 68px;
+    height: 94px;
+    grid-template-rows: 40px 54px;
     gap: 0 10px;
     padding: 0 12px;
   }
@@ -1394,13 +1398,13 @@ p {
   }
 
   .archive-scroller {
-    inset: 118px 0 112px;
+    inset: 94px 0 66px;
   }
 
   .archive-dock {
-    min-height: 112px;
+    min-height: 66px;
     justify-content: flex-start;
-    padding: 10px 12px 8px;
+    padding: 6px 12px 5px;
   }
 
   button.viewer-control {
@@ -1416,6 +1420,8 @@ p {
   .archive-date-range {
     width: 100%;
     min-width: 0;
+    grid-template-columns: max-content minmax(96px, 1fr) max-content;
+    gap: 7px;
   }
 
   .archive-slideshow {
@@ -1423,11 +1429,13 @@ p {
   }
 
   .archive-slideshow > .archive-dock {
-    min-height: 192px;
-    flex-direction: column;
-    align-items: stretch;
-    justify-content: center;
-    gap: 8px;
+    min-height: 72px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .slideshow-frame {
@@ -1437,12 +1445,17 @@ p {
 
   .slideshow-embed {
     width: calc(100vw - 20px);
-    height: calc(100dvh - 214px);
+    height: calc(100dvh - 104px);
     border-radius: 18px;
   }
 
+  .archive-slideshow .archive-date-range {
+    flex: 0 0 300px;
+  }
+
   .slideshow-inline-settings {
-    width: 100%;
+    width: auto;
+    flex: 0 0 390px;
     justify-content: space-between;
     gap: 12px;
   }
@@ -1458,8 +1471,7 @@ p {
   }
 
   .slideshow-duration {
-    flex: 1;
-    width: auto;
+    width: 220px;
   }
 }
 

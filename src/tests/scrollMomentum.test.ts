@@ -29,6 +29,24 @@ describe("scroll momentum", () => {
     expect(first.settled).toBe(false);
   });
 
+  it("preserves the accepted 120px wheel impulse rolling-stop profile", () => {
+    let position = 0;
+    let velocity = addWheelImpulse(0, 120);
+    let frameCount = 0;
+
+    while (frameCount < 100) {
+      const frame = advanceMomentum(position, velocity, 1000 / 60, 0, 10_000);
+      position = frame.position;
+      velocity = frame.velocity;
+      frameCount += 1;
+      if (frame.settled) break;
+    }
+
+    expect(frameCount).toBe(42);
+    expect(position).toBeCloseTo(530.84865, 5);
+    expect(velocity).toBeCloseTo(0.0178897, 6);
+  });
+
   it("comes to rest at a scroll boundary", () => {
     expect(advanceMomentum(990, 4, 16, 0, 1000)).toEqual({
       position: 1000,

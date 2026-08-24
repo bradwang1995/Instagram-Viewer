@@ -23,6 +23,8 @@ export type RibbonMetrics = {
   totalWidth: number;
 };
 
+export type MediaLayoutAxis = "horizontal" | "vertical";
+
 const DESKTOP_GRID_RENDERED_ROWS = 4;
 const MOBILE_GRID_RENDERED_ROWS = 3;
 const RIBBON_OVERSCAN_ITEMS = 3;
@@ -127,6 +129,22 @@ export function getGridLayouts(
   }
 
   return layouts;
+}
+
+export function getRetainedMediaLayouts(
+  layouts: VirtualMediaLayout[],
+  offset: number,
+  viewportLength: number,
+  axis: MediaLayoutAxis,
+): VirtualMediaLayout[] {
+  const retentionStart = Math.max(0, offset - viewportLength);
+  const retentionEnd = offset + viewportLength * 2;
+
+  return layouts.filter((layout) => {
+    const start = axis === "vertical" ? layout.top : layout.left;
+    const size = axis === "vertical" ? layout.height : layout.width;
+    return start + size > retentionStart && start < retentionEnd;
+  });
 }
 
 export function getRibbonMetrics(

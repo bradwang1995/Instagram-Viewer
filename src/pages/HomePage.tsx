@@ -17,6 +17,9 @@ import {
 import { preloadMediaItems } from "../features/media/mediaPreload";
 import { useMediaLibrary } from "../hooks/useMediaLibrary";
 
+const FILTER_DEBOUNCE_MS = 300;
+const MIN_SLIDESHOW_DWELL_MS = 3_000;
+
 function getViewModeFromUrl(): ArchiveViewMode {
   return new URLSearchParams(window.location.search).get("view") === "grid"
     ? "grid"
@@ -59,6 +62,9 @@ export function HomePage() {
   );
   const [dateStartMonth, setDateStartMonth] = useState<number>();
   const [dateEndMonth, setDateEndMonth] = useState<number>();
+  const [appliedDateStartMonth, setAppliedDateStartMonth] = useState<number>();
+  const [appliedDateEndMonth, setAppliedDateEndMonth] = useState<number>();
+  const [slideshowDirection, setSlideshowDirection] = useState<1 | -1>(1);
   const [isImporting, setIsImporting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [landingDismissed, setLandingDismissed] = useState(false);
@@ -122,11 +128,22 @@ export function HomePage() {
   useEffect(() => {
     void getSettings().then((settings) => {
       setDwellMs(
-        Math.min(10_000, Math.max(1_000, settings.slideshowIntervalMs)),
+        Math.min(
+          10_000,
+          Math.max(MIN_SLIDESHOW_DWELL_MS, settings.slideshowIntervalMs),
+        ),
       );
       setTransitionPreset(settings.slideshowTransitionPreset);
     });
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setAppliedDateStartMonth(dateStartMonth);
+      setAppliedDateEndMonth(dateEndMonth);
+    }, FILTER_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [dateEndMonth, dateStartMonth]);
 
   const sessionItems = useMemo(
     () => queue.filter((item) => !unavailableMediaIds.has(item.media.id)),
@@ -162,11 +179,31 @@ export function HomePage() {
           -1,
         );
   const dateEndIndex = Math.max(dateStartIndex, endMonthCandidate);
-  const dateFrom = dateMonths[dateStartIndex]
-    ? formatDateInput(dateMonths[dateStartIndex])
+  const appliedStartMonthCandidate =
+    appliedDateStartMonth === undefined
+      ? 0
+      : dateMonths.findIndex((month) => month >= appliedDateStartMonth);
+  const appliedDateStartIndex =
+    appliedStartMonthCandidate < 0
+      ? Math.max(0, dateMonths.length - 1)
+      : appliedStartMonthCandidate;
+  const appliedEndMonthCandidate =
+    appliedDateEndMonth === undefined
+      ? dateMonths.length - 1
+      : dateMonths.reduce(
+          (foundIndex, month, index) =>
+            month <= appliedDateEndMonth ? index : foundIndex,
+          -1,
+        );
+  const appliedDateEndIndex = Math.max(
+    appliedDateStartIndex,
+    appliedEndMonthCandidate,
+  );
+  const dateFrom = dateMonths[appliedDateStartIndex]
+    ? formatDateInput(dateMonths[appliedDateStartIndex])
     : "";
-  const dateTo = dateMonths[dateEndIndex]
-    ? formatDateInput(dateMonths[dateEndIndex], true)
+  const dateTo = dateMonths[appliedDateEndIndex]
+    ? formatDateInput(dateMonths[appliedDateEndIndex], true)
     : "";
   const visibleItems = useMemo(
     () =>
@@ -191,6 +228,16 @@ export function HomePage() {
   const selectedItem =
     visibleItems.find((item) => item.media.id === selectedMediaId) ??
     visibleItems[0];
+  const previousItem =
+    visibleItems.length > 1
+      ? visibleItems[
+          (selectedIndex - 1 + visibleItems.length) % visibleItems.length
+        ]
+      : undefined;
+  const nextItem =
+    visibleItems.length > 1
+      ? visibleItems[(selectedIndex + 1) % visibleItems.length]
+      : undefined;
   const hasFilters =
     dateStartIndex > 0 || dateEndIndex < Math.max(0, dateMonths.length - 1);
   const dateRange = useMemo(
@@ -245,6 +292,7 @@ export function HomePage() {
       );
       const targetIndex =
         (currentIndex + direction + visibleItems.length) % visibleItems.length;
+      setSlideshowDirection(direction);
       setSelectedMediaId(visibleItems[targetIndex].media.id);
     },
     [selectedItem, visibleItems],
@@ -384,6 +432,7 @@ export function HomePage() {
           hasFilters={hasFilters}
           dateRange={dateRange}
           isImporting={isImporting}
+          keyboardNavigationEnabled={!isSlideshowOpen}
           onSelect={handleArchiveSelect}
           onMediaUnavailable={omitUnavailableMedia}
           onImport={requestArchiveImport}
@@ -397,6 +446,9 @@ export function HomePage() {
           <ArchiveSlideshow
             open
             item={selectedItem}
+            previousItem={previousItem}
+            nextItem={nextItem}
+            direction={slideshowDirection}
             dwellMs={dwellMs}
             transitionPreset={transitionPreset}
             dateRange={dateRange}
@@ -406,16 +458,15 @@ export function HomePage() {
             onTabChange={handleTabChange}
             onImport={requestArchiveImport}
             onDwellChange={(value) => {
-              setDwellMs(value);
-              persistPlayback({ slideshowIntervalMs: value });
+              const nextValue = Math.max(MIN_SLIDESHOW_DWELL_MS, value);
+              setDwellMs(nextValue);
+              persistPlayback({ slideshowIntervalMs: nextValue });
             }}
             onTransitionPresetChange={(value) => {
               setTransitionPreset(value);
               persistPlayback({ slideshowTransitionPreset: value });
             }}
-            onUnavailable={() =>
-              selectedItem && omitUnavailableMedia(selectedItem.media.id)
-            }
+            onUnavailable={omitUnavailableMedia}
           />
         ) : null}
       </AnimatePresence>
