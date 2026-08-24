@@ -24,13 +24,15 @@ The product remains one page with URL-backed Horizontal/Grid states, one shared 
 
 ## 2026-08-24 Viewport Density, Two-Step Wheel Bursts, And Iframe Slideshow
 
-Status: **implemented locally; focused automated validation and fresh desktop/mobile built-in-browser validation passed; release validation pending**.
+Status: **implemented and released; full automated validation, production build, and fresh local/production built-in-browser validation passed**.
 
 - Increased Horizontal media from `98%` to `99%` of the scrolling viewport and halved the neighboring-card gap. At `1920 × 1080`, the measured card surface is approximately `933px` high with about `4.7px` above/below and a `21.1px` card gap.
 - Removed Grid left/right layout padding at all breakpoints and halved its row/column gaps while retaining four desktop columns. Desktop QA measured `0px` left padding, only `0.016px` right subpixel rounding, and a `17.28px` column gap; mobile measured `0px` side padding and a `7px` row gap.
 - Kept isolated wheel input at exactly one photo/row while capping each continuous `180ms` wheel burst at two photos/rows. Real browser QA confirmed Horizontal `0 → 1 → 2` and Grid `0 → 4 → 8`, with a third same-direction event ignored and both surfaces settling normally.
 - Changed Slideshow so all media uses Instagram iframes, including resolved media, while preserving previous/current/next slot preload and DOM identity. The iframe container now spans the full viewport beneath the overlaid controls.
-- Focused validation passed `2` test files / `29` tests and TypeScript lint. Full test/build/release validation remains pending.
+- Validation passed `18` test files / `78` tests, TypeScript lint, production build, focused Prettier checks, and `git diff --check`.
+- Released as `eb93e4d` through GitHub Pages workflow run `32689723586`. Production QA at `1920 × 1080` repeated the approximately `4.7px` Horizontal top/bottom gaps, `21.125px` Horizontal card gap, edge-aligned Grid with `17.281px` column gaps, `1 → 2` wheel-burst cap, settled scrolling, and zero console warnings/errors.
+- The bundled demo deliberately uses non-Instagram fixture URLs, so the official availability check removes them when the all-iframe Slideshow opens. Deterministic integration tests cover the valid public-embed path and three-frame DOM reuse; live content rendering still depends on a real public post with embedding enabled.
 
 ## 2026-08-23 Smooth Step Transition Refinement
 
