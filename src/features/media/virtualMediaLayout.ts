@@ -136,9 +136,11 @@ export function getRetainedMediaLayouts(
   offset: number,
   viewportLength: number,
   axis: MediaLayoutAxis,
+  behindViewports = 1,
+  aheadViewports = 1,
 ): VirtualMediaLayout[] {
-  const retentionStart = Math.max(0, offset - viewportLength);
-  const retentionEnd = offset + viewportLength * 2;
+  const retentionStart = Math.max(0, offset - viewportLength * behindViewports);
+  const retentionEnd = offset + viewportLength * (1 + aheadViewports);
 
   return layouts.filter((layout) => {
     const start = axis === "vertical" ? layout.top : layout.left;

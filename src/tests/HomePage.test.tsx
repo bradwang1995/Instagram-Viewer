@@ -214,7 +214,7 @@ describe("Photo archive preview", () => {
     expect(gridTab).toHaveClass("is-active");
   });
 
-  it("uses a one-screen IntersectionObserver margin in both layouts", async () => {
+  it("keeps one Horizontal screen and preloads two Grid screens ahead", async () => {
     render(<HomePage />);
     await waitFor(() =>
       expect(observedRootMargins).toContain("0px 100% 0px 0px"),
@@ -222,7 +222,7 @@ describe("Photo archive preview", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
     await waitFor(() =>
-      expect(observedRootMargins).toContain("0px 0px 100% 0px"),
+      expect(observedRootMargins).toContain("0px 0px 200% 0px"),
     );
   });
 
@@ -776,6 +776,17 @@ describe("Photo archive preview", () => {
     expect(frame).toHaveAttribute("tabindex", "-1");
     expect(frame).toHaveAttribute("scrolling", "no");
     expect(frame.closest(".slideshow-embed")).toBeInTheDocument();
+    expect(frame).not.toHaveClass("is-ready");
+    expect(frame.closest(".slideshow-embed")).toHaveAttribute(
+      "data-load-state",
+      "loading",
+    );
+    fireEvent.load(frame);
+    expect(frame).toHaveClass("is-ready");
+    expect(frame.closest(".slideshow-embed")).toHaveAttribute(
+      "data-load-state",
+      "loaded",
+    );
     expect(document.querySelector(".slideshow-photo")).toBeNull();
     expect(
       screen.queryByRole("button", { name: /play|pause|next|previous/i }),

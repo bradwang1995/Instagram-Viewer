@@ -97,6 +97,22 @@ describe("virtual media layout", () => {
     },
   );
 
+  it("keeps two vertical viewports ahead for batched Grid loading", () => {
+    const layouts = Array.from({ length: 24 }, (_, index) => ({
+      index,
+      left: (index % 4) * 100,
+      top: Math.floor(index / 4) * 100,
+      width: 100,
+      height: 100,
+    }));
+
+    expect(
+      getRetainedMediaLayouts(layouts, 200, 100, "vertical", 1, 2).map(
+        ({ index }) => index,
+      ),
+    ).toEqual(Array.from({ length: 16 }, (_, index) => index + 4));
+  });
+
   it.each([
     { viewport: [390, 654], aspects: [0.62, 0.78, 1.65] },
     { viewport: [1280, 720], aspects: [1.65, 0.62, 1.2] },

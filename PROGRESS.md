@@ -22,6 +22,16 @@ Browse or enter the automatic Slideshow tab
 
 The product remains one page with URL-backed Horizontal/Grid states, one shared date-range dock, and a full-viewport slideshow overlay. Browser Back and Forward restore the previous `?view=horizontal` / `?view=grid` state, while `?slideshow=1` keeps slideshow navigation in the same history model.
 
+## 2026-08-24 Grid Lookahead And Dark Iframe Reveal
+
+Status: **implemented; automated validation, production build, and fresh local built-in-browser validation passed; release pending**.
+
+- Doubled Grid's forward iframe activation distance from one viewport to two while preserving Horizontal's accepted one-viewport strategy and Grid's one-viewport reverse cache.
+- Kept archive and Slideshow iframe surfaces near-black through validation/loading, then reveal them with a delayed fade after the iframe load event to suppress transient white flashes.
+- Changed Slideshow from full-width stretching to a vertically full portrait stage capped at `78dvh` on wide screens.
+- Added regression coverage for the Grid-specific two-screen observer margin, spatial retention window, and Slideshow iframe load-state transition.
+- Validation passed `18` test files / `79` tests, TypeScript lint, production build, focused Prettier checks, and `git diff --check`. Fresh local built-in-browser QA confirmed the four-column Grid composition, dark media/stage backgrounds, the `min(100vw, 78dvh)` Slideshow width rule, and zero console warnings/errors. The bundled demo remains intentionally ineligible for live Instagram embedding, so deterministic tests cover the iframe reveal itself.
+
 ## 2026-08-24 Viewport Density, Two-Step Wheel Bursts, And Iframe Slideshow
 
 Status: **implemented and released; full automated validation, production build, and fresh local/production built-in-browser validation passed**.

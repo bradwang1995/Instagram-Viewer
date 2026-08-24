@@ -1,6 +1,6 @@
 # Accepted Experience Baseline
 
-Recorded on 2026-07-29 before adding further viewer features. The target-constrained browsing-navigation decision below superseded the original free-distance momentum profile on 2026-08-23.
+Recorded on 2026-07-29 before adding further viewer features. The target-constrained browsing-navigation decision below superseded the original free-distance momentum profile on 2026-08-23. The Grid-specific two-viewport lookahead below superseded its original one-viewport lookahead on 2026-08-24.
 
 This document defines the performance and loading balance that future work must preserve unless a later decision explicitly replaces it. The automated tests protect deterministic behavior; a fresh built-in-browser pass remains required for subjective smoothness, live Instagram latency, and visual acceptance.
 
@@ -16,11 +16,17 @@ Protected by `src/tests/HomePage.test.tsx`.
 ## Archive Loading And Retention
 
 - Every media item keeps a lightweight card shell in the DOM.
-- Horizontal and Grid activate the current viewport plus exactly one viewport ahead.
-- After scrolling settles, activated iframe documents are retained only when they overlap the spatial range from one viewport behind through one viewport ahead:
+- Horizontal activates the current viewport plus exactly one viewport ahead. Grid activates the current viewport plus two viewports ahead so each four-column row begins loading far enough ahead of a two-step scroll burst.
+- After scrolling settles, Horizontal iframe documents are retained only when they overlap the spatial range from one viewport behind through one viewport ahead:
 
   ```text
   [max(0, offset - viewport), offset + (2 × viewport))
+  ```
+
+- Grid uses the same one-viewport return cache while retaining two viewports ahead:
+
+  ```text
+  [max(0, offset - viewport), offset + (3 × viewport))
   ```
 
 - Iframes are not pruned while the browsing surface is moving. Reconciliation happens after the `180ms` settle delay following a step transition or other scroll.
@@ -58,7 +64,8 @@ Protected by `src/tests/mediaPreload.test.ts` and `src/tests/registerMediaCache.
 ## Slideshow
 
 - Every slideshow media item renders through its current Instagram iframe rather than switching resolved media to a direct `<img>` path.
-- The iframe container occupies the full viewport beneath the overlaid header and dock.
+- The iframe container fills the viewport vertically beneath the overlaid header and dock, but is capped to a portrait-width `78dvh` instead of stretching across a wide screen.
+- Archive and slideshow iframe surfaces stay dark until their load event, then reveal through a delayed crossfade so a transient white document does not flash at full brightness.
 - The previous, current, and next media frames remain mounted as slots `-1`, `0`, and `1`.
 - Moving forward turns the already-preloaded next iframe into the current frame without replacing its DOM node. The other neighboring iframe identities also remain stable.
 - Frame duration is clamped to the accepted `3–10s` range.

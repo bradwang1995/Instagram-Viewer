@@ -180,6 +180,7 @@ function InstagramSlideshowEmbed({
   onUnavailable: () => void;
 }) {
   const [isValidated, setIsValidated] = useState(false);
+  const [isLoaded, setIsLoaded] = useState(false);
   const onUnavailableRef = useRef(onUnavailable);
 
   useEffect(() => {
@@ -189,6 +190,7 @@ function InstagramSlideshowEmbed({
   useEffect(() => {
     let active = true;
     setIsValidated(false);
+    setIsLoaded(false);
     void getInstagramEmbedAvailability(item.post.canonicalUrl).then(
       (availability) => {
         if (!active) return;
@@ -209,14 +211,27 @@ function InstagramSlideshowEmbed({
   }
 
   return (
-    <div className="slideshow-embed">
+    <div
+      className="slideshow-embed"
+      data-load-state={isLoaded ? "loaded" : "loading"}
+    >
+      <span
+        className={`slideshow-embed-loading${isLoaded ? " is-hidden" : ""}`}
+        role={isLoaded ? undefined : "status"}
+        aria-label={isLoaded ? undefined : "Loading photo"}
+        aria-hidden={isLoaded ? true : undefined}
+      >
+        Loading photo…
+      </span>
       <iframe
+        className={isLoaded ? "is-ready" : undefined}
         src={getInstagramEmbedUrl(item.post)}
         title={`Instagram preview ${item.post.shortcode ?? item.post.id}`}
         allow="autoplay; encrypted-media; picture-in-picture"
         referrerPolicy="strict-origin-when-cross-origin"
         scrolling="no"
         tabIndex={-1}
+        onLoad={() => setIsLoaded(true)}
         onError={onUnavailable}
       />
     </div>

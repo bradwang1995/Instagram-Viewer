@@ -247,7 +247,7 @@ function CroppedInstagramPreview({
           itemId={item.media.id}
           embedUrl={embedUrl}
           title={`Instagram photo preview ${item.post.shortcode ?? item.post.id}`}
-          ready={status === "loaded" || status === "error"}
+          ready={status === "loaded"}
           onLoad={onLoad}
           onError={onError}
         />

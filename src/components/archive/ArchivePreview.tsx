@@ -60,6 +60,7 @@ type NavigationTarget = {
 const SCROLL_SETTLE_DELAY_MS = 180;
 const WHEEL_BURST_RESET_MS = 180;
 const MAX_WHEEL_BURST_STEPS = 2;
+const GRID_AHEAD_VIEWPORTS = 2;
 const HIDDEN_CARD_STYLE: CSSProperties = { display: "none" };
 const ARROW_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
 
@@ -243,6 +244,8 @@ export const ArchivePreview = memo(function ArchivePreview({
         offset,
         viewportLength,
         viewMode === "grid" ? "vertical" : "horizontal",
+        1,
+        viewMode === "grid" ? GRID_AHEAD_VIEWPORTS : 1,
       ).forEach((layout) => {
         const item = visibleOrderedItems[layout.index];
         if (!item) return;
@@ -292,7 +295,7 @@ export const ArchivePreview = memo(function ArchivePreview({
       {
         root: scroller,
         rootMargin:
-          viewMode === "grid" ? "0px 0px 100% 0px" : "0px 100% 0px 0px",
+          viewMode === "grid" ? "0px 0px 200% 0px" : "0px 100% 0px 0px",
         threshold: 0,
       },
     );
