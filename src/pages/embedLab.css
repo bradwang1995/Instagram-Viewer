@@ -129,3 +129,29 @@
     padding: 16px;
   }
 }
+.lab-url {
+  overflow-wrap: anywhere;
+  font-family: system-ui, sans-serif;
+  font-size: 14px;
+}
+.lab-table-wrap {
+  overflow-x: auto;
+  margin-bottom: 24px;
+}
+.embed-lab table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.embed-lab th,
+.embed-lab td {
+  padding: 12px;
+  border-bottom: 1px solid #353644;
+  text-align: left;
+  line-height: 1.6;
+}
+.embed-lab th {
+  color: #bfb9ff;
+}
+.embed-lab {
+  font-family: system-ui, sans-serif;
+}
