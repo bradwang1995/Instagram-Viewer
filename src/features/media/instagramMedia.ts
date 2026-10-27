@@ -3,7 +3,10 @@ import type { MediaQueueItem } from "./mediaQueue";
 const mediaOrigin =
   import.meta.env.VITE_INSTAGRAM_MEDIA_ORIGIN || "https://d.oginstagram.com";
 const metadataOrigin =
-  import.meta.env.VITE_INSTAGRAM_METADATA_ORIGIN || "/api/instagram";
+  import.meta.env.VITE_INSTAGRAM_METADATA_ORIGIN ||
+  (import.meta.env.DEV
+    ? "/api/instagram"
+    : "https://instagram-viewer-metadata.bradwang1995.workers.dev");
 const cache = new Map<string, { expires: number; items: MediaQueueItem[] }>();
 const pending = new Map<string, Promise<MediaQueueItem[]>>();
 

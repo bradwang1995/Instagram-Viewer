@@ -14,3 +14,5 @@ saved_posts.json
 savepost.json
 *saved_posts*.json
 *savepost*.json
+.wrangler/
+worker/worker-configuration.d.ts
