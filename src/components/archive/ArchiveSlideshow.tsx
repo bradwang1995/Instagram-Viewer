@@ -1,8 +1,7 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { TransitionPreset } from "../../db/schema";
-import { getInstagramEmbedUrl } from "../../features/embed/instagramEmbedUrl";
-import { getInstagramEmbedAvailability } from "../../features/embed/instagramOEmbed";
+import { ArchiveMediaCard } from "./ArchiveMediaCard";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
 import {
   ArchiveControlBar,
@@ -19,7 +18,10 @@ type ArchiveSlideshowProps = {
   direction: 1 | -1;
   dwellMs: number;
   transitionPreset: TransitionPreset;
-  dateRange: ArchiveDateRange;
+  dateRange?: ArchiveDateRange;
+  photoLevel?: boolean;
+  keyboardNavigationEnabled?: boolean;
+  onOpenPost?: (mediaId: string) => void;
   isImporting: boolean;
   onPrevious: () => void;
   onNext: () => void;
@@ -46,6 +48,9 @@ export function ArchiveSlideshow({
   dwellMs,
   transitionPreset,
   dateRange,
+  photoLevel = false,
+  keyboardNavigationEnabled = true,
+  onOpenPost,
   isImporting,
   onPrevious,
   onNext,
@@ -58,6 +63,7 @@ export function ArchiveSlideshow({
   const previousCurrentIdRef = useRef<string>();
 
   useEffect(() => {
+    if (!open || !keyboardNavigationEnabled) return;
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
       const target =
         event.target instanceof HTMLElement ? event.target : undefined;
@@ -77,7 +83,7 @@ export function ArchiveSlideshow({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onNext, onPrevious]);
+  }, [open, keyboardNavigationEnabled, onNext, onPrevious]);
 
   const frames = getSlideshowFrames(
     item,
@@ -104,6 +110,7 @@ export function ArchiveSlideshow({
     >
       <ArchiveHeader
         activeTab="slideshow"
+        photoLevel={photoLevel}
         isImporting={isImporting}
         onImport={onImport}
         onTabChange={onTabChange}
@@ -126,9 +133,13 @@ export function ArchiveSlideshow({
                   ease: [0.22, 1, 0.36, 1],
                 }}
               >
-                <InstagramSlideshowEmbed
+                <ArchiveMediaCard
                   item={frame.item}
-                  onUnavailable={() => onUnavailable(frame.item.media.id)}
+                  index={0}
+                  selected={false}
+                  layoutStyle={{ width: "100%", height: "100%" }}
+                  onSelect={onOpenPost ?? (() => {})}
+                  onUnavailable={onUnavailable}
                 />
               </motion.div>
             );
@@ -169,72 +180,6 @@ export function ArchiveSlideshow({
         }}
       />
     </motion.section>
-  );
-}
-
-function InstagramSlideshowEmbed({
-  item,
-  onUnavailable,
-}: {
-  item: MediaQueueItem;
-  onUnavailable: () => void;
-}) {
-  const [isValidated, setIsValidated] = useState(false);
-  const [isLoaded, setIsLoaded] = useState(false);
-  const onUnavailableRef = useRef(onUnavailable);
-
-  useEffect(() => {
-    onUnavailableRef.current = onUnavailable;
-  }, [onUnavailable]);
-
-  useEffect(() => {
-    let active = true;
-    setIsValidated(false);
-    setIsLoaded(false);
-    void getInstagramEmbedAvailability(item.post.canonicalUrl).then(
-      (availability) => {
-        if (!active) return;
-        if (availability === "unavailable") {
-          onUnavailableRef.current();
-          return;
-        }
-        setIsValidated(true);
-      },
-    );
-    return () => {
-      active = false;
-    };
-  }, [item.post.canonicalUrl]);
-
-  if (!isValidated) {
-    return <span className="slideshow-loading">Loading photo…</span>;
-  }
-
-  return (
-    <div
-      className="slideshow-embed"
-      data-load-state={isLoaded ? "loaded" : "loading"}
-    >
-      <span
-        className={`slideshow-embed-loading${isLoaded ? " is-hidden" : ""}`}
-        role={isLoaded ? undefined : "status"}
-        aria-label={isLoaded ? undefined : "Loading photo"}
-        aria-hidden={isLoaded ? true : undefined}
-      >
-        Loading photo…
-      </span>
-      <iframe
-        className={isLoaded ? "is-ready" : undefined}
-        src={getInstagramEmbedUrl(item.post)}
-        title={`Instagram preview ${item.post.shortcode ?? item.post.id}`}
-        allow="autoplay; encrypted-media; picture-in-picture"
-        referrerPolicy="strict-origin-when-cross-origin"
-        scrolling="no"
-        tabIndex={-1}
-        onLoad={() => setIsLoaded(true)}
-        onError={onUnavailable}
-      />
-    </div>
   );
 }
 

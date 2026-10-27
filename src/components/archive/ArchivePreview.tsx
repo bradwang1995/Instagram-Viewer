@@ -26,7 +26,7 @@ import {
   type ArchiveDateRange,
   ArchiveHeader,
 } from "./ArchiveChrome";
-import { ArchiveMediaCard, type IframeStatus } from "./ArchiveMediaCard";
+import { ArchiveMediaCard } from "./ArchiveMediaCard";
 
 export type ArchiveViewMode = "ribbon" | "grid";
 
@@ -36,7 +36,9 @@ type ArchivePreviewProps = {
   selectedId?: string;
   viewMode: ArchiveViewMode;
   hasFilters: boolean;
-  dateRange: ArchiveDateRange;
+  dateRange?: ArchiveDateRange;
+  onOpenPost?: (mediaId: string) => void;
+  photoLevel?: boolean;
   isImporting: boolean;
   keyboardNavigationEnabled: boolean;
   onSelect: (mediaId: string) => void;
@@ -71,6 +73,8 @@ export const ArchivePreview = memo(function ArchivePreview({
   viewMode,
   hasFilters,
   dateRange,
+  onOpenPost,
+  photoLevel = false,
   isImporting,
   keyboardNavigationEnabled,
   onSelect,
@@ -89,10 +93,9 @@ export const ArchivePreview = memo(function ArchivePreview({
   const navigationLastFrameTime = useRef<number>();
   const wheelBurstResetTimer = useRef<number>();
   const wheelBurstSteps = useRef(0);
-  const iframeObserverRef = useRef<IntersectionObserver>();
+  const mediaObserverRef = useRef<IntersectionObserver>();
   const cardShellsRef = useRef(new Map<string, HTMLElement>());
-  const activatedIframeIdsRef = useRef(new Set<string>());
-  const iframeStatusByIdRef = useRef(new Map<string, IframeStatus>());
+  const activatedMediaIdsRef = useRef(new Set<string>());
   const activeViewMode = useRef(viewMode);
   const pendingViewMode = useRef<ArchiveViewMode>();
   const scrollPositions = useRef<Record<ArchiveViewMode, number>>({
@@ -103,7 +106,7 @@ export const ArchivePreview = memo(function ArchivePreview({
     ribbon: [],
     grid: [],
   });
-  const [, setIframeStateRevision] = useState(0);
+  const [, setMediaStateRevision] = useState(0);
   if (activeViewMode.current !== viewMode) {
     pendingViewMode.current = viewMode;
   }
@@ -115,14 +118,12 @@ export const ArchivePreview = memo(function ArchivePreview({
         : Math.max(320, window.innerHeight - 192),
   }));
   const currentIds = items.map((item) => item.media.id);
-  sessionOrders.current.ribbon = extendSessionMediaOrder(
-    sessionOrders.current.ribbon,
-    currentIds,
-  );
-  sessionOrders.current.grid = extendSessionMediaOrder(
-    sessionOrders.current.grid,
-    currentIds,
-  );
+  sessionOrders.current.ribbon = photoLevel
+    ? currentIds
+    : extendSessionMediaOrder(sessionOrders.current.ribbon, currentIds);
+  sessionOrders.current.grid = photoLevel
+    ? currentIds
+    : extendSessionMediaOrder(sessionOrders.current.grid, currentIds);
   const orderedItems = useMemo(() => {
     const itemById = new Map(items.map((item) => [item.media.id, item]));
     return sessionOrders.current[viewMode]
@@ -188,50 +189,32 @@ export const ArchivePreview = memo(function ArchivePreview({
     [gridMetrics.totalHeight, ribbonMetrics.totalWidth, viewMode],
   );
 
-  const activateIframes = useCallback((itemIds: Iterable<string>) => {
+  const activateMedia = useCallback((itemIds: Iterable<string>) => {
     let changed = false;
     for (const itemId of itemIds) {
-      if (activatedIframeIdsRef.current.has(itemId)) continue;
-      activatedIframeIdsRef.current.add(itemId);
-      iframeStatusByIdRef.current.set(itemId, "loading");
+      if (activatedMediaIdsRef.current.has(itemId)) continue;
+      activatedMediaIdsRef.current.add(itemId);
       changed = true;
     }
-    if (changed) setIframeStateRevision((revision) => revision + 1);
+    if (changed) setMediaStateRevision((revision) => revision + 1);
   }, []);
 
   const registerShell = useCallback(
     (itemId: string, node: HTMLElement | null) => {
       const previous = cardShellsRef.current.get(itemId);
       if (previous && previous !== node) {
-        iframeObserverRef.current?.unobserve(previous);
+        mediaObserverRef.current?.unobserve(previous);
       }
       if (!node) {
         cardShellsRef.current.delete(itemId);
         return;
       }
       cardShellsRef.current.set(itemId, node);
-      iframeObserverRef.current?.observe(node);
+      mediaObserverRef.current?.observe(node);
     },
     [],
   );
 
-  const setIframeStatus = useCallback(
-    (itemId: string, status: "loaded" | "error") => {
-      const current = iframeStatusByIdRef.current.get(itemId);
-      if (current === status || current === "loaded") return;
-      iframeStatusByIdRef.current.set(itemId, status);
-      setIframeStateRevision((revision) => revision + 1);
-    },
-    [],
-  );
-  const handleIframeLoad = useCallback(
-    (itemId: string) => setIframeStatus(itemId, "loaded"),
-    [setIframeStatus],
-  );
-  const handleIframeError = useCallback(
-    (itemId: string) => setIframeStatus(itemId, "error"),
-    [setIframeStatus],
-  );
   const synchronizeMediaWindow = useCallback(
     (offset: number, pruneOutsideWindow: boolean) => {
       const viewportLength =
@@ -255,20 +238,19 @@ export const ArchivePreview = memo(function ArchivePreview({
 
       let pruned = false;
       if (pruneOutsideWindow) {
-        for (const itemId of activatedIframeIdsRef.current) {
+        for (const itemId of activatedMediaIdsRef.current) {
           if (retainedIds.has(itemId)) continue;
           if (!visibleItemIds.has(itemId)) continue;
-          activatedIframeIdsRef.current.delete(itemId);
-          iframeStatusByIdRef.current.delete(itemId);
+          activatedMediaIdsRef.current.delete(itemId);
           pruned = true;
         }
       }
-      activateIframes(retainedIds);
-      if (pruned) setIframeStateRevision((revision) => revision + 1);
+      activateMedia(retainedIds);
+      if (pruned) setMediaStateRevision((revision) => revision + 1);
       preloadMediaItems(preloadItems);
     },
     [
-      activateIframes,
+      activateMedia,
       allLayouts,
       viewMode,
       viewport.height,
@@ -285,7 +267,7 @@ export const ArchivePreview = memo(function ArchivePreview({
     }
     const observer = new IntersectionObserver(
       (entries) => {
-        activateIframes(
+        activateMedia(
           entries
             .filter((entry) => entry.isIntersecting)
             .map((entry) => (entry.target as HTMLElement).dataset.mediaId)
@@ -299,15 +281,15 @@ export const ArchivePreview = memo(function ArchivePreview({
         threshold: 0,
       },
     );
-    iframeObserverRef.current = observer;
+    mediaObserverRef.current = observer;
     cardShellsRef.current.forEach((node) => observer.observe(node));
     return () => {
       observer.disconnect();
-      if (iframeObserverRef.current === observer) {
-        iframeObserverRef.current = undefined;
+      if (mediaObserverRef.current === observer) {
+        mediaObserverRef.current = undefined;
       }
     };
-  }, [activateIframes, viewMode]);
+  }, [activateMedia, viewMode]);
 
   useEffect(() => {
     synchronizeMediaWindow(scrollPositions.current[viewMode], true);
@@ -732,6 +714,7 @@ export const ArchivePreview = memo(function ArchivePreview({
     <section className={`archive-preview is-${viewMode}`}>
       <ArchiveHeader
         activeTab={viewMode}
+        photoLevel={photoLevel}
         isImporting={isImporting}
         onImport={onImport}
         onTabChange={(tab) => {
@@ -754,11 +737,7 @@ export const ArchivePreview = memo(function ArchivePreview({
           {orderedItems.map((item, sessionIndex) => {
             const visibleIndex = visibleIndexById.get(item.media.id);
             const layoutStyle = layoutStyleById.get(item.media.id);
-            const isActivated = activatedIframeIdsRef.current.has(
-              item.media.id,
-            );
-            const iframeStatus =
-              iframeStatusByIdRef.current.get(item.media.id) ?? "not-activated";
+            const isActivated = activatedMediaIdsRef.current.has(item.media.id);
             return (
               <ArchiveMediaCard
                 key={item.media.id}
@@ -766,14 +745,10 @@ export const ArchivePreview = memo(function ArchivePreview({
                 index={visibleIndex ?? sessionIndex}
                 selected={item.media.id === selectedId}
                 loadMedia={isActivated}
-                allowCompatibilityPreview={isActivated}
                 visuallyHidden={!layoutStyle}
-                iframeStatus={iframeStatus}
                 registerShell={registerShell}
-                onIframeLoad={handleIframeLoad}
-                onIframeError={handleIframeError}
                 layoutStyle={layoutStyle ?? HIDDEN_CARD_STYLE}
-                onSelect={onSelect}
+                onSelect={onOpenPost ?? onSelect}
                 onUnavailable={onMediaUnavailable}
               />
             );
@@ -787,14 +762,16 @@ export const ArchivePreview = memo(function ArchivePreview({
         </div>
       </div>
 
-      <motion.div
-        className="archive-dock-motion"
-        initial={{ y: "110%" }}
-        animate={{ y: 0 }}
-        transition={{ duration: 0.7, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <ArchiveControlBar dateRange={dateRange} />
-      </motion.div>
+      {dateRange ? (
+        <motion.div
+          className="archive-dock-motion"
+          initial={{ y: "110%" }}
+          animate={{ y: 0 }}
+          transition={{ duration: 0.7, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <ArchiveControlBar dateRange={dateRange} />
+        </motion.div>
+      ) : null}
     </section>
   );
 });

@@ -6,6 +6,8 @@ import {
   ArchivePreview,
   type ArchiveViewMode,
 } from "../components/archive/ArchivePreview";
+import { PostPhotoPanel } from "../components/archive/PostPhotoPanel";
+import { firstPhotoPerPost } from "../features/media/instagramMedia";
 import { ArchiveSlideshow } from "../components/archive/ArchiveSlideshow";
 import { getSettings, updateSettings } from "../db/settingsRepository";
 import { DEFAULT_SETTINGS, type TransitionPreset } from "../db/schema";
@@ -51,6 +53,8 @@ function formatDateInput(value: number, endOfMonth = false): string {
 export function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { posts, queue, isLoading, error, refresh } = useMediaLibrary();
+  const postQueue = useMemo(() => firstPhotoPerPost(queue), [queue]);
+  const [openedPost, setOpenedPost] = useState<MediaQueueItem>();
   const [selectedMediaId, setSelectedMediaId] = useState<string>();
   const [viewMode, setViewMode] = useState<ArchiveViewMode>(getViewModeFromUrl);
   const [isSlideshowOpen, setIsSlideshowOpen] = useState(() =>
@@ -146,8 +150,8 @@ export function HomePage() {
   }, [dateEndMonth, dateStartMonth]);
 
   const sessionItems = useMemo(
-    () => queue.filter((item) => !unavailableMediaIds.has(item.media.id)),
-    [queue, unavailableMediaIds],
+    () => postQueue.filter((item) => !unavailableMediaIds.has(item.media.id)),
+    [postQueue, unavailableMediaIds],
   );
   const dateMonths = useMemo(
     () =>
@@ -207,7 +211,7 @@ export function HomePage() {
     : "";
   const visibleItems = useMemo(
     () =>
-      filterMediaQueue(queue, {
+      filterMediaQueue(postQueue, {
         query: "",
         creator: "",
         collection: "",
@@ -215,7 +219,7 @@ export function HomePage() {
         dateTo,
         includeHidden: true,
       }).filter((item) => !unavailableMediaIds.has(item.media.id)),
-    [dateFrom, dateTo, queue, unavailableMediaIds],
+    [dateFrom, dateTo, postQueue, unavailableMediaIds],
   );
   const visibleItemIds = useMemo(
     () => new Set(visibleItems.map((item) => item.media.id)),
@@ -299,7 +303,7 @@ export function HomePage() {
   );
 
   useEffect(() => {
-    if (!isSlideshowOpen || visibleItems.length < 2) {
+    if (openedPost || !isSlideshowOpen || visibleItems.length < 2) {
       return undefined;
     }
     const timer = window.setTimeout(() => move(1), dwellMs);
@@ -307,6 +311,7 @@ export function HomePage() {
   }, [
     dwellMs,
     isSlideshowOpen,
+    openedPost,
     move,
     selectedItem?.media.id,
     visibleItems.length,
@@ -432,7 +437,11 @@ export function HomePage() {
           hasFilters={hasFilters}
           dateRange={dateRange}
           isImporting={isImporting}
-          keyboardNavigationEnabled={!isSlideshowOpen}
+          keyboardNavigationEnabled={!isSlideshowOpen && !openedPost}
+          onOpenPost={(id) => {
+            const item = postQueue.find((entry) => entry.media.id === id);
+            if (item) setOpenedPost(item);
+          }}
           onSelect={handleArchiveSelect}
           onMediaUnavailable={omitUnavailableMedia}
           onImport={requestArchiveImport}
@@ -445,6 +454,10 @@ export function HomePage() {
         {isSlideshowOpen ? (
           <ArchiveSlideshow
             open
+            keyboardNavigationEnabled={!openedPost}
+            onOpenPost={() => {
+              if (selectedItem) setOpenedPost(selectedItem);
+            }}
             item={selectedItem}
             previousItem={previousItem}
             nextItem={nextItem}
@@ -470,6 +483,15 @@ export function HomePage() {
           />
         ) : null}
       </AnimatePresence>
+      {openedPost ? (
+        <PostPhotoPanel
+          item={openedPost}
+          knownItems={queue}
+          initialDwellMs={dwellMs}
+          initialPreset={transitionPreset}
+          onClose={() => setOpenedPost(undefined)}
+        />
+      ) : null}
     </div>
   );
 }

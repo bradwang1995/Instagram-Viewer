@@ -15,6 +15,7 @@ export type ArchiveDateRange = {
 
 type ArchiveHeaderProps = {
   activeTab: ArchiveTab;
+  photoLevel?: boolean;
   isImporting: boolean;
   onTabChange: (tab: ArchiveTab) => void;
   onImport: () => void;
@@ -22,6 +23,7 @@ type ArchiveHeaderProps = {
 
 export function ArchiveHeader({
   activeTab,
+  photoLevel = false,
   isImporting,
   onTabChange,
   onImport,
@@ -29,7 +31,7 @@ export function ArchiveHeader({
   return (
     <header className="archive-header">
       <div className="archive-logo">
-        <strong>Instagram Viewer</strong>
+        <strong>{photoLevel ? "Post photos" : "Instagram Viewer"}</strong>
       </div>
       <div className="archive-view-tabs" role="tablist" aria-label="Photo view">
         <button
@@ -63,20 +65,24 @@ export function ArchiveHeader({
           Slideshow
         </button>
       </div>
-      <button
-        className="viewer-control archive-import-link"
-        type="button"
-        onClick={onImport}
-      >
-        <Upload size={18} aria-hidden="true" />
-        {isImporting ? "Importing…" : "Import JSON"}
-      </button>
+      {photoLevel ? (
+        <span />
+      ) : (
+        <button
+          className="viewer-control archive-import-link"
+          type="button"
+          onClick={onImport}
+        >
+          <Upload size={18} aria-hidden="true" />
+          {isImporting ? "Importing…" : "Import JSON"}
+        </button>
+      )}
     </header>
   );
 }
 
 type ArchiveControlBarProps = {
-  dateRange: ArchiveDateRange;
+  dateRange?: ArchiveDateRange;
   slideshow?: {
     dwellMs: number;
     transitionPreset: TransitionPreset;
@@ -99,7 +105,13 @@ export function ArchiveControlBar({
   slideshow,
 }: ArchiveControlBarProps) {
   const { months, startIndex, endIndex, onStartChange, onEndChange } =
-    dateRange;
+    dateRange ?? {
+      months: [],
+      startIndex: 0,
+      endIndex: 0,
+      onStartChange: () => {},
+      onEndChange: () => {},
+    };
   const maximum = Math.max(0, months.length - 1);
   const startPercent = maximum ? (startIndex / maximum) * 100 : 0;
   const endPercent = maximum ? (endIndex / maximum) * 100 : 100;
@@ -110,43 +122,45 @@ export function ArchiveControlBar({
 
   return (
     <footer className="archive-dock">
-      <div className="archive-date-range">
-        <span className="archive-date-value" aria-hidden="true">
-          Start time
-          <strong>{formatMonth(months[startIndex])}</strong>
-        </span>
-        <div className="archive-dual-range" style={rangeStyle}>
-          <span className="archive-range-track" aria-hidden="true" />
-          <input
-            type="range"
-            aria-label="Start time"
-            min={0}
-            max={maximum}
-            step={1}
-            value={startIndex}
-            disabled={maximum === 0}
-            onChange={(event) =>
-              onStartChange(Math.min(Number(event.target.value), endIndex))
-            }
-          />
-          <input
-            type="range"
-            aria-label="End time"
-            min={0}
-            max={maximum}
-            step={1}
-            value={endIndex}
-            disabled={maximum === 0}
-            onChange={(event) =>
-              onEndChange(Math.max(Number(event.target.value), startIndex))
-            }
-          />
+      {dateRange ? (
+        <div className="archive-date-range">
+          <span className="archive-date-value" aria-hidden="true">
+            Start time
+            <strong>{formatMonth(months[startIndex])}</strong>
+          </span>
+          <div className="archive-dual-range" style={rangeStyle}>
+            <span className="archive-range-track" aria-hidden="true" />
+            <input
+              type="range"
+              aria-label="Start time"
+              min={0}
+              max={maximum}
+              step={1}
+              value={startIndex}
+              disabled={maximum === 0}
+              onChange={(event) =>
+                onStartChange(Math.min(Number(event.target.value), endIndex))
+              }
+            />
+            <input
+              type="range"
+              aria-label="End time"
+              min={0}
+              max={maximum}
+              step={1}
+              value={endIndex}
+              disabled={maximum === 0}
+              onChange={(event) =>
+                onEndChange(Math.max(Number(event.target.value), startIndex))
+              }
+            />
+          </div>
+          <span className="archive-date-value is-end" aria-hidden="true">
+            End time
+            <strong>{formatMonth(months[endIndex])}</strong>
+          </span>
         </div>
-        <span className="archive-date-value is-end" aria-hidden="true">
-          End time
-          <strong>{formatMonth(months[endIndex])}</strong>
-        </span>
-      </div>
+      ) : null}
 
       {slideshow ? (
         <div className="slideshow-inline-settings">

@@ -52,6 +52,10 @@ vi.mock("../features/embed/instagramOEmbed", () => ({
 describe("Photo archive preview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.spyOn(Math, "random").mockReturnValue(0.999);
+    HTMLDialogElement.prototype.showModal = function () {
+      this.setAttribute("open", "");
+    };
     observedRootMargins = [];
     vi.stubGlobal(
       "IntersectionObserver",
@@ -84,7 +88,7 @@ describe("Photo archive preview", () => {
     testState.posts = [first, second];
     testState.queue = [
       createQueueItem(first, 0, 2),
-      createQueueItem(first, 1, 2),
+      createQueueItem(createPost("C", "@third", "Saved"), 0, 1),
       createQueueItem(second, 0, 1),
     ];
     testState.refresh.mockResolvedValue(undefined);
@@ -94,69 +98,47 @@ describe("Photo archive preview", () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
-  it("shows each media item as a separate, control-free photo card", async () => {
+  it("shows only the first photo per post and opens its isolated photo panel", async () => {
+    const post = testState.posts[0];
+    testState.queue = [
+      createQueueItem(post, 0, 3),
+      createQueueItem(post, 1, 3),
+      createQueueItem(post, 2, 3),
+      createQueueItem(testState.posts[1], 0, 1),
+    ];
     render(<HomePage />);
     await act(async () => undefined);
-
-    expect(screen.getAllByTestId("archive-media-card")).toHaveLength(3);
-    const unselectedCard = screen
-      .getAllByTestId("archive-media-card")
-      .find((card) => !card.classList.contains("is-selected"));
-    const secondFrame = unselectedCard?.querySelector(
-      ".archive-card-hit",
-    ) as HTMLElement;
-    expect(secondFrame).not.toHaveAttribute("role");
-    expect(secondFrame).not.toHaveAttribute("tabindex");
-    fireEvent.keyDown(secondFrame, { key: "Enter" });
-    expect(secondFrame.closest("article")).not.toHaveClass("is-selected");
-    fireEvent.click(secondFrame);
-
-    const selectedCard = secondFrame.closest("article");
-    expect(selectedCard).toHaveClass("is-selected");
+    expect(screen.getAllByTestId("archive-media-card")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("button", { name: "Open post A" }));
+    const panel = await screen.findByRole("dialog");
+    await waitFor(() =>
+      expect(within(panel).getAllByTestId("archive-media-card")).toHaveLength(
+        3,
+      ),
+    );
     expect(
-      screen.queryByRole("button", { name: "Hide this media" }),
-    ).not.toBeInTheDocument();
+      within(panel).queryByRole("slider", { name: "Start time" }),
+    ).toBeNull();
+    fireEvent.click(within(panel).getByRole("tab", { name: /Grid View/ }));
     expect(
-      screen.queryByRole("link", { name: "Open source on Instagram" }),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText("Instagram Viewer")).toBeInTheDocument();
+      within(panel).getByRole("tab", { name: /Grid View/ }),
+    ).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(within(panel).getByRole("tab", { name: "Slideshow" }));
     expect(
-      screen.getByRole("tab", { name: /Horizontal View/ }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: /Grid View/ })).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Slideshow" })).toBeInTheDocument();
-    expect(
-      screen.queryByText(/local-first photo viewer/i),
-    ).not.toBeInTheDocument();
-    expect(screen.getByText("Instagram Viewer").closest("a")).toBeNull();
-    expect(
-      document.querySelector(".archive-header .archive-view-tabs"),
-    ).toBeInTheDocument();
-    [
-      screen.getByRole("tab", { name: /Horizontal View/ }),
-      screen.getByRole("tab", { name: /Grid View/ }),
-      screen.getByRole("tab", { name: "Slideshow" }),
-      screen.getByRole("button", { name: "Import JSON" }),
-    ].forEach((control) => expect(control).toHaveClass("viewer-control"));
-    expect(
-      screen.queryByRole("button", { name: "Filter" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Settings" }),
-    ).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("slider", { name: "Start time" }),
+      within(panel).getByRole("combobox", { name: "Transition style" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("slider", { name: "End time" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /reload|refresh/i }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByText("INS/ARCHIVE")).not.toBeInTheDocument();
-    expect(screen.queryByText("YOUR ARCHIVE")).not.toBeInTheDocument();
+      within(panel).queryByRole("slider", { name: "Start time" }),
+    ).toBeNull();
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "Close post photos" }),
+    );
+    expect(screen.queryByRole("dialog")).toBeNull();
+    expect(screen.getAllByTestId("archive-media-card")).toHaveLength(2);
+    expect(document.querySelector("iframe")).toBeNull();
   });
 
   it("keeps view tabs synchronized with URL history navigation", async () => {
@@ -276,9 +258,7 @@ describe("Photo archive preview", () => {
       ).toHaveAttribute("data-media-id", testState.queue[2].media.id),
     );
     await waitFor(() =>
-      expect(
-        within(slideshow).getByTitle("Instagram preview B"),
-      ).toBeInTheDocument(),
+      expect(slideshow.querySelector("img")).toBeInTheDocument(),
     );
   });
 
@@ -314,7 +294,7 @@ describe("Photo archive preview", () => {
     ).toHaveLength(1);
   });
 
-  it("visually date-filters an activated iframe without destroying it", async () => {
+  it("visually date-filters an activated img without destroying it", async () => {
     const first = createPost("FILTER-A", "@keep.frame", "Saved");
     const laterDate = "2026-03-20T12:00:00.000Z";
     const second = {
@@ -330,10 +310,10 @@ describe("Photo archive preview", () => {
     ];
     const view = render(<HomePage />);
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(2),
+      expect(view.container.querySelectorAll("img")).toHaveLength(2),
     );
     const retainedFrame = view.container.querySelector(
-      'iframe[data-instagram-id="post:FILTER-A:unresolved:0"]',
+      'img[data-media-id="post:FILTER-A:unresolved:0"]',
     );
 
     fireEvent.change(screen.getByRole("slider", { name: "Start time" }), {
@@ -356,13 +336,13 @@ describe("Photo archive preview", () => {
     await waitFor(() =>
       expect(
         view.container.querySelector(
-          'iframe[data-instagram-id="post:FILTER-A:unresolved:0"]',
+          'img[data-media-id="post:FILTER-A:unresolved:0"]',
         ),
       ).toBe(retainedFrame),
     );
   });
 
-  it("preserves iframe DOM identity when source items are reordered", async () => {
+  it("preserves img DOM identity when source items are reordered", async () => {
     const first = createPost("SORT-A", "@sort.a", "Saved");
     const second = createPost("SORT-B", "@sort.b", "Saved");
     const third = createPost("SORT-C", "@sort.c", "Saved");
@@ -372,11 +352,11 @@ describe("Photo archive preview", () => {
     );
     const view = render(<HomePage />);
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(3),
+      expect(view.container.querySelectorAll("img")).toHaveLength(3),
     );
     const originalFrames = new Map(
-      Array.from(view.container.querySelectorAll("iframe")).map((frame) => [
-        frame.dataset.instagramId,
+      Array.from(view.container.querySelectorAll("img")).map((frame) => [
+        frame.dataset.mediaId,
         frame,
       ]),
     );
@@ -386,7 +366,7 @@ describe("Photo archive preview", () => {
 
     originalFrames.forEach((frame, itemId) => {
       expect(
-        view.container.querySelector(`iframe[data-instagram-id="${itemId}"]`),
+        view.container.querySelector(`img[data-media-id="${itemId}"]`),
       ).toBe(frame);
     });
   });
@@ -414,7 +394,15 @@ describe("Photo archive preview", () => {
     const source = createPost("LONG", "@long.library", "Reference");
     testState.posts = [source];
     testState.queue = Array.from({ length: 100 }, (_, index) =>
-      createQueueItem(source, index, 100),
+      createQueueItem(
+        {
+          ...source,
+          id: source.id + index,
+          shortcode: `${source.shortcode}${index}`,
+        },
+        0,
+        100,
+      ),
     );
     render(<HomePage />);
     await act(async () => undefined);
@@ -446,7 +434,15 @@ describe("Photo archive preview", () => {
     const source = createPost("SCROLL", "@stable.scroll", "Reference");
     testState.posts = [source];
     testState.queue = Array.from({ length: 100 }, (_, index) =>
-      createQueueItem(source, index, 100),
+      createQueueItem(
+        {
+          ...source,
+          id: source.id + index,
+          shortcode: `${source.shortcode}${index}`,
+        },
+        0,
+        100,
+      ),
     );
     const view = render(<HomePage />);
     await act(async () => undefined);
@@ -477,36 +473,40 @@ describe("Photo archive preview", () => {
     expect(view.container.querySelector("img")).toBeInTheDocument();
   });
 
-  it("evicts iframes beyond the one-screen return cache and reloads them once on return", async () => {
+  it("evicts images beyond the one-screen return cache and reloads them once on return", async () => {
     const source = createPost("IFRAME-STABLE", "@stable.frame", "Saved");
     testState.posts = [source];
     testState.queue = Array.from({ length: 20 }, (_, index) =>
-      createUnresolvedQueueItem(source, index),
+      createUnresolvedQueueItem(
+        {
+          ...source,
+          id: source.id + index,
+          shortcode: `${source.shortcode}${index}`,
+        },
+        0,
+      ),
     );
     const view = render(<HomePage />);
     await act(async () => undefined);
 
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(5),
+      expect(view.container.querySelectorAll("img")).toHaveLength(5),
     );
     const mountedFrame = view.container.querySelector(
-      "iframe",
-    ) as HTMLIFrameElement;
-    const itemId = mountedFrame.dataset.instagramId as string;
+      "img",
+    ) as HTMLImageElement;
+    const itemId = mountedFrame.dataset.mediaId as string;
     fireEvent.load(mountedFrame);
-    expect(mountedFrame.closest(".archive-embed-crop")).toHaveAttribute(
-      "data-load-state",
-      "loaded",
-    );
+
     const scroller = screen.getByTestId("archive-scroller");
     scroller.scrollLeft = 10_000;
     fireEvent.scroll(scroller);
 
     expect(scroller).toHaveAttribute("data-scroll-state", "moving");
     expect(mountedFrame).toBeInTheDocument();
-    expect(view.container.querySelectorAll("iframe")).toHaveLength(5);
+    expect(view.container.querySelectorAll("img")).toHaveLength(5);
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(9),
+      expect(view.container.querySelectorAll("img")).toHaveLength(9),
     );
     expect(scroller).toHaveAttribute("data-scroll-state", "settled");
     expect(mountedFrame).not.toBeInTheDocument();
@@ -514,39 +514,39 @@ describe("Photo archive preview", () => {
     scroller.scrollLeft = 0;
     fireEvent.scroll(scroller);
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(5),
+      expect(view.container.querySelectorAll("img")).toHaveLength(5),
     );
     expect(scroller).toHaveAttribute("data-scroll-state", "settled");
     const remountedFrame = view.container.querySelector(
-      `iframe[data-instagram-id="${itemId}"]`,
-    ) as HTMLIFrameElement;
+      `img[data-media-id="${itemId}"]`,
+    ) as HTMLImageElement;
     expect(remountedFrame).toBeInTheDocument();
     expect(remountedFrame).not.toBe(mountedFrame);
     expect(
-      view.container.querySelectorAll(`iframe[data-instagram-id="${itemId}"]`),
+      view.container.querySelectorAll(`img[data-media-id="${itemId}"]`),
     ).toHaveLength(1);
-    expect(remountedFrame?.closest(".archive-embed-crop")).toHaveAttribute(
-      "data-load-state",
-      "loading",
-    );
-    expect(
-      remountedFrame
-        .closest(".archive-embed-crop")
-        ?.querySelector(".archive-embed-loading"),
-    ).not.toHaveClass("is-hidden");
+    expect(remountedFrame).toHaveAttribute("loading", "eager");
+    expect(remountedFrame?.closest("article")).toBeInTheDocument();
   });
 
   it("activates one screen ahead and leaves farther cards as placeholders", async () => {
     const source = createPost("IFRAME-AHEAD", "@fast.frame", "Saved");
     testState.posts = [source];
     testState.queue = Array.from({ length: 100 }, (_, index) =>
-      createUnresolvedQueueItem(source, index),
+      createUnresolvedQueueItem(
+        {
+          ...source,
+          id: source.id + index,
+          shortcode: `${source.shortcode}${index}`,
+        },
+        0,
+      ),
     );
     const view = render(<HomePage />);
     await act(async () => undefined);
 
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(5),
+      expect(view.container.querySelectorAll("img")).toHaveLength(5),
     );
     expect(
       view.container.querySelectorAll('[data-media-load="paused"]').length,
@@ -557,47 +557,54 @@ describe("Photo archive preview", () => {
     expect(Number.parseFloat(aheadCard.style.left)).toBeGreaterThan(
       window.innerWidth,
     );
-    expect(aheadCard.querySelector("iframe")).toBeInTheDocument();
+    expect(aheadCard.querySelector("img")).toBeInTheDocument();
     const farCard = view.container.querySelector(
       '[data-media-index="99"]',
     ) as HTMLElement;
     expect(farCard).toHaveAttribute("data-media-load", "paused");
-    expect(farCard.querySelector("iframe")).not.toBeInTheDocument();
+    expect(farCard.querySelector("img")).not.toBeInTheDocument();
     expect(
-      view.container.querySelectorAll(".archive-embed-loading"),
+      view.container.querySelectorAll(".archive-image-loading"),
     ).toHaveLength(5);
     const scroller = screen.getByTestId("archive-scroller");
     scroller.scrollLeft = 10_000;
     fireEvent.scroll(scroller);
 
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(9),
+      expect(view.container.querySelectorAll("img")).toHaveLength(9),
     );
     expect(scroller).toHaveAttribute("data-scroll-state", "settled");
     expect(
-      view.container.querySelectorAll(".archive-embed-loading").length,
+      view.container.querySelectorAll(".archive-image-loading").length,
     ).toBeGreaterThan(0);
     expect(
       view.container.querySelectorAll('[data-media-load="enabled"]').length,
     ).toBeGreaterThan(0);
   });
 
-  it("does not duplicate iframe elements during rapid back-and-forth scrolling", async () => {
+  it("does not duplicate img elements during rapid back-and-forth scrolling", async () => {
     const source = createPost("NETWORKBOUND", "@network.bound", "Saved");
     testState.posts = [source];
     testState.queue = Array.from({ length: 100 }, (_, index) =>
-      createUnresolvedQueueItem(source, index),
+      createUnresolvedQueueItem(
+        {
+          ...source,
+          id: source.id + index,
+          shortcode: `${source.shortcode}${index}`,
+        },
+        0,
+      ),
     );
     const view = render(<HomePage />);
     await act(async () => undefined);
 
     await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(5),
+      expect(view.container.querySelectorAll("img")).toHaveLength(5),
     );
     const initialFrame = view.container.querySelector(
-      "iframe",
-    ) as HTMLIFrameElement;
-    const itemId = initialFrame.dataset.instagramId as string;
+      "img",
+    ) as HTMLImageElement;
+    const itemId = initialFrame.dataset.mediaId as string;
     const scroller = screen.getByTestId("archive-scroller");
     scroller.scrollLeft = 10_000;
     fireEvent.scroll(scroller);
@@ -612,18 +619,26 @@ describe("Photo archive preview", () => {
       expect(scroller).toHaveAttribute("data-scroll-state", "settled"),
     );
     expect(
-      view.container.querySelectorAll(`iframe[data-instagram-id="${itemId}"]`),
+      view.container.querySelectorAll(`img[data-media-id="${itemId}"]`),
     ).toHaveLength(1);
-    expect(
-      view.container.querySelector(`iframe[data-instagram-id="${itemId}"]`),
-    ).toBe(initialFrame);
+    expect(view.container.querySelector(`img[data-media-id="${itemId}"]`)).toBe(
+      initialFrame,
+    );
   });
 
   it("moves one photo with Left/Right in Horizontal and one row with Up/Down in Grid", async () => {
     const source = createPost("STEP-KEYS", "@step.keys", "Reference");
     testState.posts = [source];
     testState.queue = Array.from({ length: 12 }, (_, index) =>
-      createQueueItem(source, index, 12),
+      createQueueItem(
+        {
+          ...source,
+          id: source.id + index,
+          shortcode: `${source.shortcode}${index}`,
+        },
+        0,
+        12,
+      ),
     );
     const view = render(<HomePage />);
     await act(async () => undefined);
@@ -633,7 +648,6 @@ describe("Photo archive preview", () => {
       view.container.querySelector(
         `[data-media-index="${index}"]`,
       ) as HTMLElement;
-    fireEvent.click(card(0).querySelector(".archive-card-hit") as HTMLElement);
 
     expect(
       fireEvent.keyDown(window, { key: "ArrowRight", cancelable: true }),
@@ -650,7 +664,7 @@ describe("Photo archive preview", () => {
     });
 
     fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
-    fireEvent.click(card(0).querySelector(".archive-card-hit") as HTMLElement);
+
     fireEvent.keyDown(window, { key: "ArrowDown", cancelable: true });
     expect(card(4)).toHaveClass("is-selected");
     expect(scroller.scrollTop).toBe(0);
@@ -667,7 +681,15 @@ describe("Photo archive preview", () => {
     const source = createPost("STEP-WHEEL", "@step.wheel", "Reference");
     testState.posts = [source];
     testState.queue = Array.from({ length: 12 }, (_, index) =>
-      createQueueItem(source, index, 12),
+      createQueueItem(
+        {
+          ...source,
+          id: source.id + index,
+          shortcode: `${source.shortcode}${index}`,
+        },
+        0,
+        12,
+      ),
     );
     const view = render(<HomePage />);
     await act(async () => undefined);
@@ -677,7 +699,6 @@ describe("Photo archive preview", () => {
       view.container.querySelector(
         `[data-media-index="${index}"]`,
       ) as HTMLElement;
-    fireEvent.click(card(0).querySelector(".archive-card-hit") as HTMLElement);
 
     fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
     expect(card(1)).toHaveClass("is-selected");
@@ -688,8 +709,10 @@ describe("Photo archive preview", () => {
     fireEvent.wheel(scroller, { deltaY: -120, cancelable: true });
     expect(card(1)).toHaveClass("is-selected");
 
+    fireEvent.keyDown(window, { key: "ArrowLeft", cancelable: true });
+    await waitFor(() => expect(scroller.scrollLeft).toBe(0));
     fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
-    fireEvent.click(card(0).querySelector(".archive-card-hit") as HTMLElement);
+
     fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
     expect(card(4)).toHaveClass("is-selected");
     await waitFor(() => expect(scroller.scrollTop).toBeGreaterThan(0));
@@ -737,7 +760,7 @@ describe("Photo archive preview", () => {
         slideshow.querySelector('[data-slideshow-slot="0"]'),
       ).toHaveAttribute("data-media-id", testState.queue[0].media.id),
     );
-    expect(slideshow.querySelectorAll("iframe")).toHaveLength(3);
+    expect(slideshow.querySelectorAll("img")).toHaveLength(3);
     expect(slideshow.querySelector(".slideshow-photo")).toBeNull();
 
     fireEvent.keyDown(window, { key: "ArrowRight" });
@@ -763,42 +786,25 @@ describe("Photo archive preview", () => {
     expect(window.location.search).toBe("?view=grid");
   });
 
-  it("uses only a full-stage Instagram iframe and keeps it out of the controls", async () => {
-    const source = createPost("INTERACTIVE", "@interactive", "Saved");
-    testState.posts = [source];
-    testState.queue = [createUnresolvedQueueItem(source, 0)];
-
+  it("opens a post from the main slideshow and pauses background playback", async () => {
     render(<HomePage />);
     await act(async () => undefined);
     fireEvent.click(screen.getByRole("tab", { name: "Slideshow" }));
-
-    const frame = await screen.findByTitle("Instagram preview INTERACTIVE");
-    expect(frame).toHaveAttribute("tabindex", "-1");
-    expect(frame).toHaveAttribute("scrolling", "no");
-    expect(frame.closest(".slideshow-embed")).toBeInTheDocument();
-    expect(frame).not.toHaveClass("is-ready");
-    expect(frame.closest(".slideshow-embed")).toHaveAttribute(
-      "data-load-state",
-      "loading",
+    const slideshow = screen.getByRole("region", { name: "Slideshow viewer" });
+    fireEvent.click(
+      slideshow.querySelector('[data-slideshow-slot="0"] .archive-card-hit')!,
     );
-    fireEvent.load(frame);
-    expect(frame).toHaveClass("is-ready");
-    expect(frame.closest(".slideshow-embed")).toHaveAttribute(
-      "data-load-state",
-      "loaded",
-    );
-    expect(document.querySelector(".slideshow-photo")).toBeNull();
+    await screen.findByRole("dialog");
+    await act(async () => undefined);
+    vi.useFakeTimers();
+    act(() => vi.advanceTimersByTime(6000));
     expect(
-      screen.queryByRole("button", { name: /play|pause|next|previous/i }),
-    ).not.toBeInTheDocument();
-
-    fireEvent.keyDown(window, { key: "ArrowRight" });
-    expect(
-      screen.getByTitle("Instagram preview INTERACTIVE"),
-    ).toBeInTheDocument();
+      slideshow.querySelector('[data-slideshow-slot="0"]'),
+    ).toHaveAttribute("data-media-id", testState.queue[0].media.id);
+    vi.useRealTimers();
   });
 
-  it("preloads both neighboring slideshow iframes and transitions the existing next frame", async () => {
+  it("preloads both neighboring slideshow images and transitions the existing next frame", async () => {
     const posts = ["PRELOAD-A", "PRELOAD-B", "PRELOAD-C"].map((id) =>
       createPost(id, `@${id.toLowerCase()}`, "Saved"),
     );
@@ -810,18 +816,18 @@ describe("Photo archive preview", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Slideshow" }));
 
     await waitFor(() =>
-      expect(
-        document.querySelectorAll(".archive-slideshow iframe"),
-      ).toHaveLength(3),
+      expect(document.querySelectorAll(".archive-slideshow img")).toHaveLength(
+        3,
+      ),
     );
-    const preloadedNext = screen.getByTitle(
-      "Instagram preview PRELOAD-B",
+    const preloadedNext = document.querySelector(
+      '.archive-slideshow img[src*="PRELOAD-B"]',
     ) as HTMLIFrameElement;
-    const initialCurrent = screen.getByTitle(
-      "Instagram preview PRELOAD-A",
+    const initialCurrent = document.querySelector(
+      '.archive-slideshow img[src*="PRELOAD-A"]',
     ) as HTMLIFrameElement;
-    const preloadedPrevious = screen.getByTitle(
-      "Instagram preview PRELOAD-C",
+    const preloadedPrevious = document.querySelector(
+      '.archive-slideshow img[src*="PRELOAD-C"]',
     ) as HTMLIFrameElement;
     expect(initialCurrent.closest(".slideshow-frame")).toHaveAttribute(
       "data-slideshow-slot",
@@ -843,15 +849,15 @@ describe("Photo archive preview", () => {
         "0",
       ),
     );
-    expect(screen.getByTitle("Instagram preview PRELOAD-B")).toBe(
-      preloadedNext,
-    );
-    expect(screen.getByTitle("Instagram preview PRELOAD-A")).toBe(
-      initialCurrent,
-    );
-    expect(screen.getByTitle("Instagram preview PRELOAD-C")).toBe(
-      preloadedPrevious,
-    );
+    expect(
+      document.querySelector('.archive-slideshow img[src*="PRELOAD-B"]'),
+    ).toBe(preloadedNext);
+    expect(
+      document.querySelector('.archive-slideshow img[src*="PRELOAD-A"]'),
+    ).toBe(initialCurrent);
+    expect(
+      document.querySelector('.archive-slideshow img[src*="PRELOAD-C"]'),
+    ).toBe(preloadedPrevious);
     expect(initialCurrent.closest(".slideshow-frame")).toHaveAttribute(
       "data-slideshow-slot",
       "-1",
@@ -862,30 +868,21 @@ describe("Photo archive preview", () => {
     );
   });
 
-  it("silently removes posts rejected by the official embed check", async () => {
-    const blocked = createPost("BLOCKED", "@blocked", "Saved");
-    const available = createPost("AVAILABLE", "@available", "Saved");
-    testState.posts = [blocked, available];
-    testState.queue = [
-      createUnresolvedQueueItem(blocked, 0),
-      createUnresolvedQueueItem(available, 0),
-    ];
-    testState.getInstagramEmbedAvailability.mockImplementation((url: string) =>
-      Promise.resolve(url.includes("BLOCKED") ? "unavailable" : "available"),
-    );
-
+  it("removes a failed cover without using the official embed endpoint", async () => {
     render(<HomePage />);
+    await act(async () => undefined);
+    const image = document.querySelector(
+      'img[data-media-id="' + testState.queue[0].media.id + '"]',
+    )!;
+    fireEvent.error(image);
     await waitFor(() =>
       expect(
-        document.querySelector('[data-media-id="post:BLOCKED:unresolved:0"]'),
-      ).not.toBeInTheDocument(),
+        document.querySelector(
+          'article[data-media-id="' + testState.queue[0].media.id + '"]',
+        ),
+      ).toBeNull(),
     );
-    expect(
-      document.querySelector('[data-media-id="post:AVAILABLE:unresolved:0"]'),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText(/unavailable|could not display/i),
-    ).not.toBeInTheDocument();
+    expect(testState.getInstagramEmbedAvailability).not.toHaveBeenCalled();
   });
 });
 

@@ -1,300 +1,96 @@
-import {
-  act,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import { ArchiveMediaCard } from "../components/archive/ArchiveMediaCard";
 import type { MediaItem, SavedPost } from "../db/schema";
-import { getInstagramEmbedAvailability } from "../features/embed/instagramOEmbed";
 import type { MediaQueueItem } from "../features/media/mediaQueue";
 
-vi.mock("../features/embed/instagramOEmbed", () => ({
-  getInstagramEmbedAvailability: vi.fn(),
-}));
-
-const mockGetInstagramEmbedAvailability = vi.mocked(
-  getInstagramEmbedAvailability,
-);
-
-describe("ArchiveMediaCard", () => {
-  beforeEach(() => {
-    mockGetInstagramEmbedAvailability.mockResolvedValue("available");
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-    vi.clearAllMocks();
-  });
-
-  it("falls back from the asset to the preview and remembers a terminal failure", () => {
-    const item = createItem("fallback-test");
+function card(item: MediaQueueItem, onUnavailable = vi.fn(), loadMedia = true) {
+  return (
+    <ArchiveMediaCard
+      item={item}
+      index={0}
+      selected={false}
+      loadMedia={loadMedia}
+      layoutStyle={{ width: 400, height: 500 }}
+      onSelect={vi.fn()}
+      onUnavailable={onUnavailable}
+    />
+  );
+}
+describe("ArchiveMediaCard direct images", () => {
+  it("tries the asset then the preview and reports a terminal failure once", () => {
     const onUnavailable = vi.fn();
-    const first = render(
-      <ArchiveMediaCard
-        item={item}
-        index={0}
-        selected={false}
-        allowCompatibilityPreview
-        layoutStyle={{ width: 400, height: 500 }}
-        onSelect={vi.fn()}
-        onUnavailable={onUnavailable}
-      />,
+    const view = render(card(createItem("fallback"), onUnavailable));
+    expect(view.container.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://example.com/asset.jpg",
     );
-
-    const asset = first.container.querySelector("img");
-    expect(asset).toHaveAttribute("src", "https://example.com/asset.jpg");
-    fireEvent.error(asset as HTMLImageElement);
-    expect(first.container.querySelector("img")).toHaveAttribute(
+    fireEvent.error(view.container.querySelector("img")!);
+    expect(view.container.querySelector("img")).toHaveAttribute(
       "src",
       "https://example.com/preview.jpg",
     );
-    fireEvent.error(first.container.querySelector("img") as HTMLImageElement);
+    fireEvent.error(view.container.querySelector("img")!);
     expect(onUnavailable).toHaveBeenCalledTimes(1);
-    expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
-    expect(first.container).toBeEmptyDOMElement();
-
-    first.unmount();
-    const remounted = render(
-      <ArchiveMediaCard
-        item={item}
-        index={0}
-        selected={false}
-        allowCompatibilityPreview
-        layoutStyle={{ width: 400, height: 500 }}
-        onSelect={vi.fn()}
-        onUnavailable={onUnavailable}
-      />,
-    );
-    expect(remounted.container.querySelector("img")).not.toBeInTheDocument();
-    expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
+    expect(view.container.querySelector("iframe")).toBeNull();
   });
-
-  it("retries a stable media ID when its resource URLs change", () => {
-    const item = createItem("revised-url");
-    const onUnavailable = vi.fn();
-    const first = render(
-      <ArchiveMediaCard
-        item={item}
-        index={0}
-        selected={false}
-        allowCompatibilityPreview
-        layoutStyle={{ width: 400, height: 500 }}
-        onSelect={vi.fn()}
-        onUnavailable={onUnavailable}
-      />,
+  it("retries when its URLs change", () => {
+    const item = createItem("revised");
+    const view = render(card(item));
+    fireEvent.error(view.container.querySelector("img")!);
+    fireEvent.error(view.container.querySelector("img")!);
+    view.rerender(
+      card({
+        ...item,
+        media: { ...item.media, assetUrl: "https://example.com/new.jpg" },
+      }),
     );
-    fireEvent.error(first.container.querySelector("img") as HTMLImageElement);
-    fireEvent.error(first.container.querySelector("img") as HTMLImageElement);
-    expect(onUnavailable).toHaveBeenCalledTimes(1);
-    first.unmount();
-
-    const revised = createItem("revised-url");
-    revised.media.assetUrl = "https://example.com/revised.jpg";
-    revised.media.previewUrl = undefined;
-    const second = render(
-      <ArchiveMediaCard
-        item={revised}
-        index={0}
-        selected={false}
-        allowCompatibilityPreview
-        layoutStyle={{ width: 400, height: 500 }}
-        onSelect={vi.fn()}
-        onUnavailable={vi.fn()}
-      />,
-    );
-    expect(second.container.querySelector("img")).toHaveAttribute(
+    expect(view.container.querySelector("img")).toHaveAttribute(
       "src",
-      "https://example.com/revised.jpg",
+      "https://example.com/new.jpg",
     );
   });
-
-  it("mounts every activated compatibility iframe without a request queue", async () => {
-    const items = Array.from({ length: 5 }, (_, index) => {
-      const item = createItem(`embed-${index}`);
-      item.media.sourceKind = "embed";
-      item.media.assetUrl = undefined;
-      item.media.previewUrl = undefined;
-      return item;
-    });
-    const view = render(
-      <div>
-        {items.map((item, index) => (
-          <ArchiveMediaCard
-            key={item.media.id}
-            item={item}
-            index={index}
-            selected={index === 0}
-            allowCompatibilityPreview
-            layoutStyle={{ width: 400, height: 500 }}
-            onSelect={vi.fn()}
-            onUnavailable={vi.fn()}
-          />
-        ))}
-      </div>,
-    );
-
-    await waitFor(() =>
-      expect(view.container.querySelectorAll("iframe")).toHaveLength(5),
-    );
-  });
-
-  it("eagerly preloads a permitted embed and crossfades it over the loader", async () => {
-    const item = createItem("eager-fade");
-    item.media.sourceKind = "embed";
+  it("uses the indexed media service for unresolved posts without an iframe or oEmbed", () => {
+    const item = createItem("Unresolved");
     item.media.assetUrl = undefined;
     item.media.previewUrl = undefined;
-    const view = render(
-      <ArchiveMediaCard
-        item={item}
-        index={0}
-        selected
-        allowCompatibilityPreview
-        layoutStyle={{ width: 400, height: 500 }}
-        onSelect={vi.fn()}
-        onUnavailable={vi.fn()}
-      />,
+    item.media.sourceIndex = 2;
+    const view = render(card(item));
+    expect(view.container.querySelector("img")).toHaveAttribute(
+      "src",
+      "https://d.oginstagram.com/p/Unresolved/?img_index=3",
     );
-
-    await waitFor(() =>
-      expect(view.container.querySelector("iframe")).toBeInTheDocument(),
-    );
-    const frame = view.container.querySelector("iframe") as HTMLIFrameElement;
-    expect(frame).toHaveAttribute("loading", "eager");
-    expect(view.container.querySelector(".archive-embed-crop")).toHaveAttribute(
-      "data-load-state",
-      "loading",
-    );
-
-    fireEvent.load(frame);
-
-    expect(view.container.querySelector(".archive-embed-crop")).toHaveAttribute(
-      "data-load-state",
-      "loaded",
-    );
-    expect(frame).toHaveClass("is-ready");
-    expect(view.container.querySelector(".archive-embed-loading")).toHaveClass(
-      "is-hidden",
-    );
+    expect(view.container.querySelector("iframe")).toBeNull();
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    fireEvent.load(view.container.querySelector("img")!);
+    expect(screen.queryByRole("status")).toBeNull();
   });
-
-  it("keeps slow and errored iframes mounted instead of evicting them", async () => {
-    vi.useFakeTimers();
-    const onUnavailable = vi.fn();
-    const items = Array.from({ length: 5 }, (_, index) => {
-      const item = createItem(`timeout-${index}`);
-      item.media.sourceKind = "embed";
-      item.media.assetUrl = undefined;
-      item.media.previewUrl = undefined;
-      return item;
-    });
-    const renderCards = (firstStatus: "loading" | "error") => (
-      <div>
-        {items.map((item, index) => (
-          <ArchiveMediaCard
-            key={item.media.id}
-            item={item}
-            index={index}
-            selected={index === 0}
-            allowCompatibilityPreview
-            iframeStatus={index === 0 ? firstStatus : "loading"}
-            layoutStyle={{ width: 400, height: 500 }}
-            onSelect={vi.fn()}
-            onUnavailable={onUnavailable}
-          />
-        ))}
-      </div>
-    );
-    const view = render(renderCards("loading"));
-
-    await act(async () => undefined);
-    expect(view.container.querySelectorAll("iframe")).toHaveLength(5);
-    await act(async () => vi.advanceTimersByTime(12_000));
-    expect(view.container.querySelectorAll("iframe")).toHaveLength(5);
-    expect(onUnavailable).not.toHaveBeenCalled();
-
-    const firstFrame = view.container.querySelector("iframe");
-    view.rerender(renderCards("error"));
-    expect(firstFrame).toBeInTheDocument();
-    expect(firstFrame?.closest(".archive-embed-crop")).toHaveAttribute(
-      "data-load-state",
-      "error",
-    );
-    expect(onUnavailable).not.toHaveBeenCalled();
+  it("defers requests outside the active zone and preserves the image after activation", () => {
+    const item = createItem("deferred");
+    const view = render(card(item, undefined, false));
+    expect(view.container.querySelector("img")).toBeNull();
+    view.rerender(card(item));
+    const image = view.container.querySelector("img");
+    view.rerender(card(item));
+    expect(view.container.querySelector("img")).toBe(image);
   });
-
-  it("does not request a deferred preview and preserves it after activation", async () => {
-    const item = createItem("deferred-embed");
-    item.media.sourceKind = "embed";
-    item.media.assetUrl = undefined;
-    item.media.previewUrl = undefined;
-    const view = render(
+  it("opens the post using click or Enter", () => {
+    const item = createItem("keyboard"),
+      onSelect = vi.fn();
+    render(
       <ArchiveMediaCard
         item={item}
         index={0}
         selected={false}
-        allowCompatibilityPreview={false}
-        layoutStyle={{ width: 400, height: 500 }}
-        onSelect={vi.fn()}
+        layoutStyle={{}}
+        onSelect={onSelect}
         onUnavailable={vi.fn()}
       />,
     );
-    expect(view.container.querySelector("iframe")).not.toBeInTheDocument();
-
-    view.rerender(
-      <ArchiveMediaCard
-        item={item}
-        index={0}
-        selected
-        allowCompatibilityPreview
-        layoutStyle={{ width: 400, height: 500 }}
-        onSelect={vi.fn()}
-        onUnavailable={vi.fn()}
-      />,
-    );
-    await waitFor(() =>
-      expect(view.container.querySelector("iframe")).toBeInTheDocument(),
-    );
-    const activatedFrame = view.container.querySelector("iframe");
-
-    view.rerender(
-      <ArchiveMediaCard
-        item={item}
-        index={0}
-        selected={false}
-        loadMedia
-        allowCompatibilityPreview
-        layoutStyle={{ width: 400, height: 500 }}
-        onSelect={vi.fn()}
-        onUnavailable={vi.fn()}
-      />,
-    );
-    expect(view.container.querySelector("iframe")).toBe(activatedFrame);
-  });
-
-  it("silently rejects a post that the official oEmbed endpoint marks unavailable", async () => {
-    mockGetInstagramEmbedAvailability.mockResolvedValueOnce("unavailable");
-    const item = createItem("private-post");
-    item.media.sourceKind = "embed";
-    item.media.assetUrl = undefined;
-    item.media.previewUrl = undefined;
-    const onUnavailable = vi.fn();
-    const view = render(
-      <ArchiveMediaCard
-        item={item}
-        index={0}
-        selected
-        allowCompatibilityPreview
-        layoutStyle={{ width: 400, height: 500 }}
-        onSelect={vi.fn()}
-        onUnavailable={onUnavailable}
-      />,
-    );
-
-    await waitFor(() => expect(onUnavailable).toHaveBeenCalledTimes(1));
-    expect(view.container.querySelector("iframe")).not.toBeInTheDocument();
-    expect(screen.queryByText(/unavailable|error/i)).not.toBeInTheDocument();
+    const hit = screen.getByRole("button", { name: "Open post keyboard" });
+    fireEvent.click(hit);
+    fireEvent.keyDown(hit, { key: "Enter" });
+    expect(onSelect).toHaveBeenCalledTimes(2);
   });
 });
 

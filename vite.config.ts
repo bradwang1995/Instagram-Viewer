@@ -3,6 +3,16 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    proxy: {
+      "/api/instagram": {
+        target: "https://oginstagram.com",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/instagram/, ""),
+        headers: { Accept: "application/activity+json" },
+      },
+    },
+  },
   build: {
     rollupOptions: {
       output: {
