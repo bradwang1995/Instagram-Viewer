@@ -14,6 +14,74 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("production metadata gateway", () => {
+  it("resolves signed media to a validated CDN URL instead of returning another post lookup", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            type: "Note",
+            attachment: [
+              {
+                mediaType: "image/jpeg",
+                url: "https://oginstagram.com/offload/Code/1?sig=test",
+              },
+            ],
+          }),
+          { headers: { "Content-Type": "application/activity+json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { Location: "https://scontent.cdninstagram.com/photo.jpg" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetcher);
+    const response = await worker.fetch(
+      request("/p/Code/?img_index=1&resolve=1"),
+      {},
+      context,
+    );
+    expect(response.status).toBe(200);
+    expect((await response.json()).attachment[0].url).toBe(
+      "https://scontent.cdninstagram.com/photo.jpg",
+    );
+    expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("rejects offload redirects outside Instagram's CDN and never caches that failure", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            type: "Note",
+            attachment: [
+              {
+                mediaType: "image/jpeg",
+                url: "https://oginstagram.com/offload/Code/1?sig=test",
+              },
+            ],
+          }),
+          { headers: { "Content-Type": "application/activity+json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 302,
+          headers: { Location: "https://example.com/image.jpg" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetcher);
+    const response = await worker.fetch(
+      request("/p/Code/?img_index=1&resolve=1"),
+      {},
+      context,
+    );
+    expect(response.status).toBe(502);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(cache.put).not.toHaveBeenCalled();
+  });
   it("rejects arbitrary destinations, extra parameters, and other origins", async () => {
     for (const path of [
       "/https://example.com/",

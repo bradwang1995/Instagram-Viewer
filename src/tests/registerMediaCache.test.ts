@@ -31,4 +31,14 @@ describe("media cache registration", () => {
 
     expect(addEventListener).not.toHaveBeenCalled();
   });
+  it("registers immediately if the page finished loading before the app started", () => {
+    const ready = vi
+      .spyOn(document, "readyState", "get")
+      .mockReturnValue("complete");
+    const register = vi.fn().mockResolvedValue(undefined);
+    vi.stubGlobal("navigator", { serviceWorker: { register } });
+    registerMediaCache();
+    expect(register).toHaveBeenCalledOnce();
+    ready.mockRestore();
+  });
 });

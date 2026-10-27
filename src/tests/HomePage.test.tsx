@@ -49,6 +49,18 @@ vi.mock("../features/embed/instagramOEmbed", () => ({
   getInstagramEmbedAvailability: testState.getInstagramEmbedAvailability,
 }));
 
+vi.mock("../features/media/instagramMedia", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("../features/media/instagramMedia")
+  >()),
+  resolveMediaUrl: async (item: MediaQueueItem) =>
+    "https://scontent.cdninstagram.com/" +
+    item.post.shortcode +
+    "/" +
+    item.media.sourceIndex +
+    ".jpg",
+}));
+
 describe("Photo archive preview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -114,6 +126,9 @@ describe("Photo archive preview", () => {
     expect(screen.getAllByTestId("archive-media-card")).toHaveLength(2);
     fireEvent.click(screen.getByRole("button", { name: "Open post A" }));
     const panel = await screen.findByRole("dialog");
+    expect(
+      document.querySelectorAll(".archive-app > .archive-preview img"),
+    ).toHaveLength(0);
     await waitFor(() =>
       expect(within(panel).getAllByTestId("archive-media-card")).toHaveLength(
         3,
@@ -238,7 +253,7 @@ describe("Photo archive preview", () => {
     ).toHaveLength(1);
     expect(
       document.querySelectorAll('[data-media-visibility="filtered"]'),
-    ).toHaveLength(2);
+    ).toHaveLength(0);
 
     fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
     expect(
@@ -294,7 +309,7 @@ describe("Photo archive preview", () => {
     ).toHaveLength(1);
   });
 
-  it("visually date-filters an activated img without destroying it", async () => {
+  it("unmounts date-filtered photos and restores their source when the filter is cleared", async () => {
     const first = createPost("FILTER-A", "@keep.frame", "Saved");
     const laterDate = "2026-03-20T12:00:00.000Z";
     const second = {
@@ -320,15 +335,7 @@ describe("Photo archive preview", () => {
       target: { value: "1" },
     });
 
-    await waitFor(() =>
-      expect(
-        retainedFrame?.closest('[data-media-visibility="filtered"]'),
-      ).toBeInTheDocument(),
-    );
-    expect(retainedFrame).toBeInTheDocument();
-    expect(
-      retainedFrame?.closest('[data-media-visibility="filtered"]'),
-    ).toBeInTheDocument();
+    await waitFor(() => expect(retainedFrame).not.toBeInTheDocument());
 
     fireEvent.change(screen.getByRole("slider", { name: "Start time" }), {
       target: { value: "0" },
@@ -338,7 +345,7 @@ describe("Photo archive preview", () => {
         view.container.querySelector(
           'img[data-media-id="post:FILTER-A:unresolved:0"]',
         ),
-      ).toBe(retainedFrame),
+      ).toHaveAttribute("src", retainedFrame?.getAttribute("src")),
     );
   });
 
@@ -390,44 +397,33 @@ describe("Photo archive preview", () => {
     ).toBeInTheDocument();
   });
 
-  it("keeps every Grid card shell mounted while only activating the preload zone", async () => {
-    const source = createPost("LONG", "@long.library", "Reference");
-    testState.posts = [source];
-    testState.queue = Array.from({ length: 100 }, (_, index) =>
+  it("bounds Grid DOM size for a large library and renders the final row on demand", async () => {
+    const source = createPost("LONG", "@large", "Saved");
+    testState.queue = Array.from({ length: 1000 }, (_, index) =>
       createQueueItem(
-        {
-          ...source,
-          id: source.id + index,
-          shortcode: `${source.shortcode}${index}`,
-        },
+        { ...source, id: source.id + index, shortcode: "LONG" + index },
         0,
-        100,
+        1,
       ),
     );
     render(<HomePage />);
     await act(async () => undefined);
-
     fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
-    await waitFor(() =>
-      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(100),
-    );
-    expect(screen.getByTestId("archive-scroller")).toHaveAttribute(
-      "data-rendered-count",
-      "100",
-    );
-    expect(
-      document.querySelectorAll('[data-media-load="paused"]').length,
-    ).toBeGreaterThan(0);
-
+    expect(screen.getAllByTestId("archive-media-card").length).toBeLessThan(40);
     const scroller = screen.getByTestId("archive-scroller");
-    scroller.scrollTop = Number.MAX_SAFE_INTEGER;
+    expect(scroller).toHaveAttribute("data-total-count", "1000");
+    scroller.scrollTop =
+      parseFloat(
+        (scroller.querySelector(".archive-track") as HTMLElement).style.height,
+      ) - 888;
     fireEvent.scroll(scroller);
     await waitFor(() =>
       expect(
-        document.querySelector('[data-media-index="99"]'),
+        document.querySelector('[data-media-index="999"]'),
       ).toBeInTheDocument(),
     );
-    expect(screen.getAllByTestId("archive-media-card")).toHaveLength(100);
+    expect(screen.getAllByTestId("archive-media-card").length).toBeLessThan(40);
+    expect(document.querySelector('[data-media-index="0"]')).toBeNull();
   });
 
   it("keeps loaded media mounted while scrolling and restores each view position", async () => {
@@ -508,7 +504,9 @@ describe("Photo archive preview", () => {
     await waitFor(() =>
       expect(view.container.querySelectorAll("img")).toHaveLength(9),
     );
-    expect(scroller).toHaveAttribute("data-scroll-state", "settled");
+    await waitFor(() =>
+      expect(scroller).toHaveAttribute("data-scroll-state", "settled"),
+    );
     expect(mountedFrame).not.toBeInTheDocument();
 
     scroller.scrollLeft = 0;
@@ -516,7 +514,9 @@ describe("Photo archive preview", () => {
     await waitFor(() =>
       expect(view.container.querySelectorAll("img")).toHaveLength(5),
     );
-    expect(scroller).toHaveAttribute("data-scroll-state", "settled");
+    await waitFor(() =>
+      expect(scroller).toHaveAttribute("data-scroll-state", "settled"),
+    );
     const remountedFrame = view.container.querySelector(
       `img[data-media-id="${itemId}"]`,
     ) as HTMLImageElement;
@@ -548,9 +548,7 @@ describe("Photo archive preview", () => {
     await waitFor(() =>
       expect(view.container.querySelectorAll("img")).toHaveLength(5),
     );
-    expect(
-      view.container.querySelectorAll('[data-media-load="paused"]').length,
-    ).toBeGreaterThan(0);
+    expect(view.container.querySelectorAll("article").length).toBeLessThan(12);
     const aheadCard = view.container.querySelector(
       '[data-media-index="3"]',
     ) as HTMLElement;
@@ -561,8 +559,7 @@ describe("Photo archive preview", () => {
     const farCard = view.container.querySelector(
       '[data-media-index="99"]',
     ) as HTMLElement;
-    expect(farCard).toHaveAttribute("data-media-load", "paused");
-    expect(farCard.querySelector("img")).not.toBeInTheDocument();
+    expect(farCard).toBeNull();
     expect(
       view.container.querySelectorAll(".archive-image-loading"),
     ).toHaveLength(5);
@@ -573,7 +570,9 @@ describe("Photo archive preview", () => {
     await waitFor(() =>
       expect(view.container.querySelectorAll("img")).toHaveLength(9),
     );
-    expect(scroller).toHaveAttribute("data-scroll-state", "settled");
+    await waitFor(() =>
+      expect(scroller).toHaveAttribute("data-scroll-state", "settled"),
+    );
     expect(
       view.container.querySelectorAll(".archive-image-loading").length,
     ).toBeGreaterThan(0);
@@ -675,6 +674,34 @@ describe("Photo archive preview", () => {
     await waitFor(() => expect(scroller.scrollTop).toBe(0), {
       timeout: 2_000,
     });
+  });
+
+  it("continues navigating during a sustained wheel gesture after each bounded burst", async () => {
+    const source = createPost("CONTINUOUS", "@scroll", "Saved");
+    testState.queue = Array.from({ length: 12 }, (_, index) =>
+      createQueueItem(
+        { ...source, id: source.id + index, shortcode: "CONTINUOUS" + index },
+        0,
+        1,
+      ),
+    );
+    render(<HomePage />);
+    await act(async () => undefined);
+    vi.useFakeTimers();
+    const scroller = screen.getByTestId("archive-scroller");
+    const selected = () =>
+      document
+        .querySelector(".archive-card.is-selected")
+        ?.getAttribute("data-media-index");
+    fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
+    fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
+    expect(selected()).toBe("2");
+    for (let step = 0; step < 4; step++) {
+      act(() => vi.advanceTimersByTime(50));
+      fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
+    }
+    expect(selected()).toBe("3");
+    vi.useRealTimers();
   });
 
   it("moves one step for a single wheel input and caps a continuous burst at two steps", async () => {
@@ -868,20 +895,20 @@ describe("Photo archive preview", () => {
     );
   });
 
-  it("removes a failed cover without using the official embed endpoint", async () => {
+  it("keeps a failed cover and its scroll geometry stable until explicit retry", async () => {
     render(<HomePage />);
     await act(async () => undefined);
     const image = document.querySelector(
       'img[data-media-id="' + testState.queue[0].media.id + '"]',
     )!;
     fireEvent.error(image);
-    await waitFor(() =>
-      expect(
-        document.querySelector(
-          'article[data-media-id="' + testState.queue[0].media.id + '"]',
-        ),
-      ).toBeNull(),
-    );
+    expect(
+      document.querySelector(
+        'article[data-media-id="' + testState.queue[0].media.id + '"]',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Photo could not load.")).toBeInTheDocument();
+    expect(screen.getAllByTestId("archive-media-card")).toHaveLength(3);
     expect(testState.getInstagramEmbedAvailability).not.toHaveBeenCalled();
   });
 });

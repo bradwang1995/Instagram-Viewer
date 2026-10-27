@@ -2,7 +2,7 @@
 
 The GitHub Pages frontend uses `https://instagram-viewer-metadata.bradwang1995.workers.dev` in production. Local Vite uses its `/api/instagram` proxy. `VITE_INSTAGRAM_METADATA_ORIGIN` overrides either default.
 
-This Worker accepts only indexed public post metadata requests, targets only OGInstagram, and allows browser access from `https://bradwang1995.github.io`. Images continue to load directly from the media service. Successful metadata responses are cached for five minutes; failed responses are not cached or retried. A successful `/health` response confirms the gateway is running, not that OGInstagram is available.
+This Worker accepts only indexed public post metadata requests, targets only OGInstagram, and allows browser access from `https://bradwang1995.github.io`. With `resolve=1`, it resolves the signed offload link to a validated Instagram CDN address. The browser loads that image directly, avoiding another `d.oginstagram.com` post lookup. Successful metadata responses are cached for five minutes; failed responses are not cached or retried. A successful `/health` response confirms the gateway is running, not that OGInstagram is available.
 
 Deploy this service before releasing frontend changes that depend on it:
 

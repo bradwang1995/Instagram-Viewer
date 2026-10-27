@@ -584,6 +584,16 @@ p {
   pointer-events: none;
 }
 
+.archive-photo-error {
+  display: grid;
+  height: 100%;
+  gap: 12px;
+  place-content: center;
+  justify-items: center;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
 .archive-dock-motion {
   position: absolute;
   z-index: 20;

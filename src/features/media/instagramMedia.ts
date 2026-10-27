@@ -1,7 +1,6 @@
 import type { MediaQueueItem } from "./mediaQueue";
+import { createRequestQueue } from "./requestQueue";
 
-const mediaOrigin =
-  import.meta.env.VITE_INSTAGRAM_MEDIA_ORIGIN || "https://d.oginstagram.com";
 const metadataOrigin =
   import.meta.env.VITE_INSTAGRAM_METADATA_ORIGIN ||
   (import.meta.env.DEV
@@ -9,14 +8,26 @@ const metadataOrigin =
     : "https://instagram-viewer-metadata.bradwang1995.workers.dev");
 const cache = new Map<string, { expires: number; items: MediaQueueItem[] }>();
 const pending = new Map<string, Promise<MediaQueueItem[]>>();
+const requestMetadata = createRequestQueue(2);
+const notes = new Map<string, { expires: number; note: Note }>();
+const pendingNotes = new Map<string, Promise<Note>>();
+let blockedUntil = 0;
 
-export function getMediaUrl(item: MediaQueueItem): string | undefined {
-  if (item.media.assetUrl || item.media.previewUrl) {
-    return item.media.assetUrl ?? item.media.previewUrl;
+export class MediaRateLimitError extends Error {
+  constructor() {
+    super("The media service is busy. Please wait a minute before retrying.");
   }
-  const shortcode = item.post.shortcode;
-  if (!shortcode || !/^[\w-]{1,24}$/.test(shortcode)) return undefined;
-  return `${mediaOrigin}/p/${shortcode}/?img_index=${item.media.sourceIndex + 1}`;
+}
+
+export async function resolveMediaUrl(item: MediaQueueItem): Promise<string> {
+  const direct = item.media.assetUrl ?? item.media.previewUrl;
+  if (direct) return direct;
+  if (!item.post.shortcode) throw new Error("No photo source available.");
+  const note = await readPhoto(item.post.shortcode, item.media.sourceIndex + 1);
+  const url = note.attachment[0]?.url;
+  if (!url || !note.attachment[0]?.mediaType.startsWith("image/"))
+    throw new Error("This photo is unavailable.");
+  return url;
 }
 
 export function firstPhotoPerPost(queue: MediaQueueItem[]): MediaQueueItem[] {
@@ -30,7 +41,12 @@ export function firstPhotoPerPost(queue: MediaQueueItem[]): MediaQueueItem[] {
   return [...first.values()];
 }
 
-type Attachment = { mediaType: string; width?: number; height?: number };
+type Attachment = {
+  mediaType: string;
+  url?: string;
+  width?: number;
+  height?: number;
+};
 type Note = {
   id: string;
   type: string;
@@ -39,13 +55,40 @@ type Note = {
 };
 
 async function readPhoto(shortcode: string, index: number): Promise<Note> {
+  const key = `${shortcode}:${index}`;
+  const cached = notes.get(key);
+  if (cached && cached.expires > Date.now()) return cached.note;
+  const inFlight = pendingNotes.get(key);
+  if (inFlight) return inFlight;
+  const task = requestMetadata(async () => {
+    if (Date.now() < blockedUntil) throw new MediaRateLimitError();
+    const note = await fetchPhoto(shortcode, index);
+    notes.set(key, { expires: Date.now() + 300_000, note });
+    if (notes.size > 300) notes.delete(notes.keys().next().value!);
+    return note;
+  });
+  pendingNotes.set(key, task);
+  try {
+    return await task;
+  } finally {
+    pendingNotes.delete(key);
+  }
+}
+
+async function fetchPhoto(shortcode: string, index: number): Promise<Note> {
   const response = await fetch(
-    `${metadataOrigin}/p/${shortcode}/?img_index=${index}`,
+    `${metadataOrigin}/p/${shortcode}/?img_index=${index}&resolve=1`,
     {
       headers: { Accept: "application/activity+json" },
       signal: AbortSignal.timeout(20_000),
     },
   );
+  if (response.status === 429) {
+    const seconds = Number(response.headers.get("Retry-After"));
+    blockedUntil =
+      Date.now() + Math.max(60, Math.min(3600, seconds || 60)) * 1000;
+    throw new MediaRateLimitError();
+  }
   if (!response.ok)
     throw new Error(`Photo list request failed (${response.status}).`);
   const note = (await response.json()) as Note;
@@ -127,7 +170,7 @@ async function fetchPostPhotos(
           sourceIndex: offset,
           type: "image",
           sourceKind: "remote",
-          assetUrl: `${mediaOrigin}/p/${shortcode}/?img_index=${offset + 1}`,
+          assetUrl: attachment.url,
           previewUrl: undefined,
           width: attachment.width,
           height: attachment.height,

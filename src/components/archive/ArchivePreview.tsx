@@ -8,7 +8,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type WheelEvent,
 } from "react";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
 import {
@@ -18,7 +17,6 @@ import {
   getRetainedMediaLayouts,
   getRibbonMetrics,
 } from "../../features/media/virtualMediaLayout";
-import { preloadMediaItems } from "../../features/media/mediaPreload";
 import { advanceTargetedMomentum } from "../../features/media/scrollMomentum";
 import { extendSessionMediaOrder } from "../../features/media/sessionMediaOrder";
 import {
@@ -32,6 +30,7 @@ export type ArchiveViewMode = "ribbon" | "grid";
 
 type ArchivePreviewProps = {
   items: MediaQueueItem[];
+  active?: boolean;
   visibleItemIds: ReadonlySet<string>;
   selectedId?: string;
   viewMode: ArchiveViewMode;
@@ -68,6 +67,7 @@ const ARROW_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
 
 export const ArchivePreview = memo(function ArchivePreview({
   items,
+  active = true,
   visibleItemIds,
   selectedId,
   viewMode,
@@ -84,9 +84,12 @@ export const ArchivePreview = memo(function ArchivePreview({
   onStartSlideshow,
 }: ArchivePreviewProps) {
   const scrollerRef = useRef<HTMLDivElement>(null);
+  const wheelHandlerRef = useRef(handleWheel);
+  wheelHandlerRef.current = handleWheel;
   const scrollRestoreFrame = useRef<number>();
   const scrollSettleTimer = useRef<number>();
   const navigationFrame = useRef<number>();
+  const mediaWindowFrame = useRef<number>();
   const navigationTarget = useRef<NavigationTarget>();
   const navigationPosition = useRef<number>();
   const navigationVelocity = useRef(0);
@@ -217,10 +220,10 @@ export const ArchivePreview = memo(function ArchivePreview({
 
   const synchronizeMediaWindow = useCallback(
     (offset: number, pruneOutsideWindow: boolean) => {
+      if (!active) return;
       const viewportLength =
         viewMode === "grid" ? viewport.height : viewport.width;
       const retainedIds = new Set<string>();
-      const preloadItems: MediaQueueItem[] = [];
 
       getRetainedMediaLayouts(
         allLayouts,
@@ -233,23 +236,21 @@ export const ArchivePreview = memo(function ArchivePreview({
         const item = visibleOrderedItems[layout.index];
         if (!item) return;
         retainedIds.add(item.media.id);
-        preloadItems.push(item);
       });
 
       let pruned = false;
       if (pruneOutsideWindow) {
         for (const itemId of activatedMediaIdsRef.current) {
           if (retainedIds.has(itemId)) continue;
-          if (!visibleItemIds.has(itemId)) continue;
           activatedMediaIdsRef.current.delete(itemId);
           pruned = true;
         }
       }
       activateMedia(retainedIds);
       if (pruned) setMediaStateRevision((revision) => revision + 1);
-      preloadMediaItems(preloadItems);
     },
     [
+      active,
       activateMedia,
       allLayouts,
       viewMode,
@@ -262,7 +263,7 @@ export const ArchivePreview = memo(function ArchivePreview({
 
   useEffect(() => {
     const scroller = scrollerRef.current;
-    if (!scroller || typeof IntersectionObserver === "undefined") {
+    if (!active || !scroller || typeof IntersectionObserver === "undefined") {
       return undefined;
     }
     const observer = new IntersectionObserver(
@@ -289,7 +290,7 @@ export const ArchivePreview = memo(function ArchivePreview({
         mediaObserverRef.current = undefined;
       }
     };
-  }, [activateMedia, viewMode]);
+  }, [active, activateMedia, viewMode]);
 
   useEffect(() => {
     synchronizeMediaWindow(scrollPositions.current[viewMode], true);
@@ -313,6 +314,13 @@ export const ArchivePreview = memo(function ArchivePreview({
     wheelBurstResetTimer.current = undefined;
     wheelBurstSteps.current = 0;
   }, []);
+
+  useEffect(() => {
+    if (!active) {
+      cancelNavigationAnimation();
+      resetWheelBurst();
+    }
+  }, [active, cancelNavigationAnimation, resetWheelBurst]);
 
   const navigateByStep = useCallback(
     (direction: -1 | 1) => {
@@ -548,6 +556,8 @@ export const ArchivePreview = memo(function ArchivePreview({
     () => () => {
       cancelNavigationAnimation();
       resetWheelBurst();
+      if (mediaWindowFrame.current)
+        window.cancelAnimationFrame(mediaWindowFrame.current);
       if (scrollRestoreFrame.current) {
         window.cancelAnimationFrame(scrollRestoreFrame.current);
       }
@@ -633,6 +643,12 @@ export const ArchivePreview = memo(function ArchivePreview({
       pendingViewMode.current = undefined;
     }
     scrollPositions.current[currentViewMode] = nextOffset;
+    if (mediaWindowFrame.current)
+      window.cancelAnimationFrame(mediaWindowFrame.current);
+    mediaWindowFrame.current = window.requestAnimationFrame(() => {
+      mediaWindowFrame.current = undefined;
+      synchronizeMediaWindow(nextOffset, true);
+    });
     scroller.dataset.scrollState = "moving";
     if (scrollSettleTimer.current) {
       window.clearTimeout(scrollSettleTimer.current);
@@ -669,7 +685,8 @@ export const ArchivePreview = memo(function ArchivePreview({
     );
   }
 
-  function handleWheel(event: WheelEvent<HTMLDivElement>) {
+  function handleWheel(event: globalThis.WheelEvent) {
+    if (!active) return;
     const dominantDelta =
       Math.abs(event.deltaX) > Math.abs(event.deltaY)
         ? event.deltaX
@@ -683,14 +700,22 @@ export const ArchivePreview = memo(function ArchivePreview({
       wheelBurstSteps.current = nextBurstSteps;
       navigateByStep(direction);
     }
-    if (wheelBurstResetTimer.current) {
-      window.clearTimeout(wheelBurstResetTimer.current);
+    if (!wheelBurstResetTimer.current) {
+      wheelBurstResetTimer.current = window.setTimeout(() => {
+        wheelBurstResetTimer.current = undefined;
+        wheelBurstSteps.current = 0;
+      }, WHEEL_BURST_RESET_MS);
     }
-    wheelBurstResetTimer.current = window.setTimeout(() => {
-      wheelBurstResetTimer.current = undefined;
-      wheelBurstSteps.current = 0;
-    }, WHEEL_BURST_RESET_MS);
   }
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const handle = (event: globalThis.WheelEvent) =>
+      wheelHandlerRef.current(event);
+    scroller.addEventListener("wheel", handle, { passive: false });
+    return () => scroller.removeEventListener("wheel", handle);
+  }, []);
 
   function handleViewModeChange(nextViewMode: ArchiveViewMode) {
     if (nextViewMode === viewMode) return;
@@ -727,32 +752,36 @@ export const ArchivePreview = memo(function ArchivePreview({
         ref={scrollerRef}
         className="archive-scroller"
         data-testid="archive-scroller"
-        data-rendered-count={orderedItems.length}
+        data-rendered-count={activatedMediaIdsRef.current.size}
+        data-total-count={orderedItems.length}
         data-visible-count={visibleOrderedItems.length}
         data-scroll-state="settled"
-        onWheel={handleWheel}
         onScroll={handleScroll}
       >
         <div className="archive-track" style={trackStyle}>
-          {orderedItems.map((item, sessionIndex) => {
-            const visibleIndex = visibleIndexById.get(item.media.id);
-            const layoutStyle = layoutStyleById.get(item.media.id);
-            const isActivated = activatedMediaIdsRef.current.has(item.media.id);
-            return (
-              <ArchiveMediaCard
-                key={item.media.id}
-                item={item}
-                index={visibleIndex ?? sessionIndex}
-                selected={item.media.id === selectedId}
-                loadMedia={isActivated}
-                visuallyHidden={!layoutStyle}
-                registerShell={registerShell}
-                layoutStyle={layoutStyle ?? HIDDEN_CARD_STYLE}
-                onSelect={onOpenPost ?? onSelect}
-                onUnavailable={onMediaUnavailable}
-              />
-            );
-          })}
+          {orderedItems
+            .filter((item) => activatedMediaIdsRef.current.has(item.media.id))
+            .map((item, sessionIndex) => {
+              const visibleIndex = visibleIndexById.get(item.media.id);
+              const layoutStyle = layoutStyleById.get(item.media.id);
+              const isActivated = activatedMediaIdsRef.current.has(
+                item.media.id,
+              );
+              return (
+                <ArchiveMediaCard
+                  key={item.media.id}
+                  item={item}
+                  index={visibleIndex ?? sessionIndex}
+                  selected={item.media.id === selectedId}
+                  loadMedia={active && isActivated && !!layoutStyle}
+                  visuallyHidden={!layoutStyle}
+                  registerShell={registerShell}
+                  layoutStyle={layoutStyle ?? HIDDEN_CARD_STYLE}
+                  onSelect={onOpenPost ?? onSelect}
+                  onUnavailable={onMediaUnavailable}
+                />
+              );
+            })}
           {!visibleOrderedItems.length && hasFilters ? (
             <div className="archive-empty-field">
               <strong>No photos match.</strong>

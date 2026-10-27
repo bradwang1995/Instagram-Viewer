@@ -12,6 +12,7 @@ import {
 
 type ArchiveSlideshowProps = {
   open: boolean;
+  active?: boolean;
   item?: MediaQueueItem;
   previousItem?: MediaQueueItem;
   nextItem?: MediaQueueItem;
@@ -41,6 +42,7 @@ const TRANSITION_DURATION_SECONDS = 0.36;
 
 export function ArchiveSlideshow({
   open,
+  active = true,
   item,
   previousItem,
   nextItem,
@@ -137,6 +139,7 @@ export function ArchiveSlideshow({
                   item={frame.item}
                   index={0}
                   selected={false}
+                  loadMedia={active}
                   layoutStyle={{ width: "100%", height: "100%" }}
                   onSelect={onOpenPost ?? (() => {})}
                   onUnavailable={onUnavailable}

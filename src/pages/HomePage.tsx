@@ -16,7 +16,6 @@ import {
   filterMediaQueue,
   type MediaQueueItem,
 } from "../features/media/mediaQueue";
-import { preloadMediaItems } from "../features/media/mediaPreload";
 import { useMediaLibrary } from "../hooks/useMediaLibrary";
 
 const FILTER_DEBOUNCE_MS = 300;
@@ -72,9 +71,6 @@ export function HomePage() {
   const [isImporting, setIsImporting] = useState(false);
   const [actionError, setActionError] = useState("");
   const [landingDismissed, setLandingDismissed] = useState(false);
-  const [unavailableMediaIds, setUnavailableMediaIds] = useState<Set<string>>(
-    () => new Set(),
-  );
 
   const forceLanding = useMemo(
     () => new URLSearchParams(window.location.search).has("landing"),
@@ -149,10 +145,7 @@ export function HomePage() {
     return () => window.clearTimeout(timer);
   }, [dateEndMonth, dateStartMonth]);
 
-  const sessionItems = useMemo(
-    () => postQueue.filter((item) => !unavailableMediaIds.has(item.media.id)),
-    [postQueue, unavailableMediaIds],
-  );
+  const sessionItems = postQueue;
   const dateMonths = useMemo(
     () =>
       Array.from(
@@ -218,8 +211,8 @@ export function HomePage() {
         dateFrom,
         dateTo,
         includeHidden: true,
-      }).filter((item) => !unavailableMediaIds.has(item.media.id)),
-    [dateFrom, dateTo, postQueue, unavailableMediaIds],
+      }),
+    [dateFrom, dateTo, postQueue],
   );
   const visibleItemIds = useMemo(
     () => new Set(visibleItems.map((item) => item.media.id)),
@@ -260,22 +253,6 @@ export function HomePage() {
   );
   const showLanding =
     !isLoading && (posts.length === 0 || (forceLanding && !landingDismissed));
-
-  useEffect(() => {
-    if (!visibleItems.length) return;
-    const preloadOffsets = [-2, -1, 1, 2, 3, 4];
-    preloadMediaItems(
-      preloadOffsets
-        .map(
-          (offset) =>
-            visibleItems[
-              (selectedIndex + offset + visibleItems.length) %
-                visibleItems.length
-            ],
-        )
-        .filter((item): item is MediaQueueItem => Boolean(item)),
-    );
-  }, [selectedIndex, visibleItems]);
 
   useEffect(() => {
     if (!selectedItem) {
@@ -325,7 +302,6 @@ export function HomePage() {
     setIsImporting(false);
     if (job.status === "completed") {
       await refresh();
-      setUnavailableMediaIds(new Set());
       setSelectedMediaId(undefined);
       setLandingDismissed(true);
       if (forceLanding) {
@@ -345,31 +321,8 @@ export function HomePage() {
     setSlideshowRoute(true);
   }, [setSlideshowRoute]);
 
-  const omitUnavailableMedia = useCallback(
-    (mediaId: string) => {
-      const currentIndex = visibleItems.findIndex(
-        (item) => item.media.id === mediaId,
-      );
-      const next =
-        visibleItems.length > 1 && currentIndex >= 0
-          ? visibleItems[(currentIndex + 1) % visibleItems.length]
-          : undefined;
-
-      if (selectedMediaId === mediaId) {
-        setSelectedMediaId(next?.media.id);
-        if (!next) {
-          closeSlideshow();
-        }
-      }
-      setUnavailableMediaIds((current) => {
-        if (current.has(mediaId)) return current;
-        const nextIds = new Set(current);
-        nextIds.add(mediaId);
-        return nextIds;
-      });
-    },
-    [closeSlideshow, selectedMediaId, visibleItems],
-  );
+  // Failed covers keep their positions; removing them causes scroll jumps and request cascades.
+  const keepFailedMedia = useCallback((_mediaId: string) => {}, []);
 
   function persistPlayback(patch: Parameters<typeof updateSettings>[0]) {
     void updateSettings(patch).catch(() => {
@@ -437,13 +390,14 @@ export function HomePage() {
           hasFilters={hasFilters}
           dateRange={dateRange}
           isImporting={isImporting}
+          active={!isSlideshowOpen && !openedPost}
           keyboardNavigationEnabled={!isSlideshowOpen && !openedPost}
           onOpenPost={(id) => {
             const item = postQueue.find((entry) => entry.media.id === id);
             if (item) setOpenedPost(item);
           }}
           onSelect={handleArchiveSelect}
-          onMediaUnavailable={omitUnavailableMedia}
+          onMediaUnavailable={keepFailedMedia}
           onImport={requestArchiveImport}
           onViewModeChange={setViewModeRoute}
           onStartSlideshow={openSlideshow}
@@ -454,6 +408,7 @@ export function HomePage() {
         {isSlideshowOpen ? (
           <ArchiveSlideshow
             open
+            active={!openedPost}
             keyboardNavigationEnabled={!openedPost}
             onOpenPost={() => {
               if (selectedItem) setOpenedPost(selectedItem);
@@ -479,7 +434,7 @@ export function HomePage() {
               setTransitionPreset(value);
               persistPlayback({ slideshowTransitionPreset: value });
             }}
-            onUnavailable={omitUnavailableMedia}
+            onUnavailable={keepFailedMedia}
           />
         ) : null}
       </AnimatePresence>

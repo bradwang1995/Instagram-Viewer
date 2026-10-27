@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { ArchiveMediaCard } from "../components/archive/ArchiveMediaCard";
 import type { MediaItem, SavedPost } from "../db/schema";
@@ -50,16 +50,39 @@ describe("ArchiveMediaCard direct images", () => {
       "https://example.com/new.jpg",
     );
   });
-  it("uses the indexed media service for unresolved posts without an iframe or oEmbed", () => {
+  it("uses the indexed media service for unresolved posts without an iframe or oEmbed", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response(
+            JSON.stringify({
+              type: "Note",
+              id: "https://oginstagram.com/p/Unresolved/3",
+              content: "",
+              attachment: [
+                {
+                  mediaType: "image/jpeg",
+                  url: "https://scontent.cdninstagram.com/photo.jpg",
+                },
+              ],
+            }),
+          ),
+        ),
+    );
     const item = createItem("Unresolved");
     item.media.assetUrl = undefined;
     item.media.previewUrl = undefined;
     item.media.sourceIndex = 2;
     const view = render(card(item));
-    expect(view.container.querySelector("img")).toHaveAttribute(
-      "src",
-      "https://d.oginstagram.com/p/Unresolved/?img_index=3",
+    await waitFor(() =>
+      expect(view.container.querySelector("img")).toHaveAttribute(
+        "src",
+        "https://scontent.cdninstagram.com/photo.jpg",
+      ),
     );
+    vi.unstubAllGlobals();
     expect(view.container.querySelector("iframe")).toBeNull();
     expect(screen.getByRole("status")).toBeInTheDocument();
     fireEvent.load(view.container.querySelector("img")!);

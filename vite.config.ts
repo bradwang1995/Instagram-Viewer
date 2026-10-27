@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     proxy: {
       "/api/instagram": {
-        target: "https://oginstagram.com",
+        target: "https://instagram-viewer-metadata.bradwang1995.workers.dev",
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api\/instagram/, ""),
         headers: { Accept: "application/activity+json" },

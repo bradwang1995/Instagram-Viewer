@@ -1,4 +1,3 @@
-import { getMediaUrl } from "./instagramMedia";
 import type { MediaQueueItem } from "./mediaQueue";
 
 const MAX_RETAINED_IMAGES = 24;
@@ -8,7 +7,7 @@ export function preloadMediaItems(items: MediaQueueItem[]): void {
   if (typeof Image === "undefined") return;
 
   for (const item of items) {
-    const url = getMediaUrl(item);
+    const url = item.media.assetUrl ?? item.media.previewUrl;
     if (!url) continue;
 
     const retained = retainedImages.get(url);

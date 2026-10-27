@@ -53,6 +53,7 @@ describe("post photo source", () => {
           attachment: [
             {
               mediaType: index === 4 ? "video/mp4" : "image/jpeg",
+              url: "https://scontent.cdninstagram.com/photo-" + index + ".jpg",
               width: 800,
               height: 1000,
             },
@@ -71,7 +72,7 @@ describe("post photo source", () => {
       0, 1, 2, 4, 5, 6,
     ]);
     expect(photos[5].media.assetUrl).toBe(
-      "https://d.oginstagram.com/p/Seven/?img_index=7",
+      "https://scontent.cdninstagram.com/photo-7.jpg",
     );
     expect(await loadPostPhotos(item("Seven"), [])).toBe(photos);
     expect(fetcher).toHaveBeenCalledTimes(7);
@@ -112,5 +113,27 @@ describe("post photo source", () => {
     await expect(loadPostPhotos(item("Single"), [])).rejects.toThrow("offline");
     expect(await loadPostPhotos(item("Single"), [])).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("stops queued metadata traffic during a rate-limit cooldown", async () => {
+    const fetcher = vi
+      .fn()
+      .mockResolvedValue(
+        new Response("limited", {
+          status: 429,
+          headers: { "Retry-After": "120" },
+        }),
+      );
+    vi.stubGlobal("fetch", fetcher);
+    const result = await Promise.allSettled(
+      Array.from({ length: 12 }, (_, index) =>
+        loadPostPhotos(item("Limited" + index), []),
+      ),
+    );
+    expect(result.every((entry) => entry.status === "rejected")).toBe(true);
+    expect(fetcher.mock.calls.length).toBeLessThanOrEqual(2);
+    await expect(loadPostPhotos(item("LimitedLater"), [])).rejects.toThrow(
+      "wait a minute",
+    );
+    expect(fetcher.mock.calls.length).toBeLessThanOrEqual(2);
   });
 });

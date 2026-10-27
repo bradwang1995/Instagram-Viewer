@@ -8,10 +8,12 @@ import {
   useState,
   type CSSProperties,
 } from "react";
-import { getMediaUrl } from "../../features/media/instagramMedia";
+import { resolveMediaUrl } from "../../features/media/instagramMedia";
+import { createRequestQueue } from "../../features/media/requestQueue";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
 
 const resolvedCandidateByRevision = new Map<string, string>();
+const resolveCover = createRequestQueue(2);
 
 type ArchiveMediaCardProps = {
   item: MediaQueueItem;
@@ -37,8 +39,11 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   onUnavailable,
 }: ArchiveMediaCardProps) {
   const { media, post } = item;
-  const url = getMediaUrl(item);
-  const mediaRevision = `${media.id}\u0000${media.assetUrl ?? ""}\u0000${media.previewUrl ?? ""}`;
+  const [proxyUrl, setProxyUrl] = useState<string>();
+  const [attempt, setAttempt] = useState(0);
+  const directUrl = media.assetUrl ?? media.previewUrl;
+  const url = directUrl ?? proxyUrl;
+  const mediaRevision = `${media.id}\u0000${url ?? ""}\u0000${media.previewUrl ?? ""}`;
   const creator =
     media.creatorHandle ?? post.embedAuthorName ?? "Instagram photo";
   const candidateUrls = useMemo(
@@ -61,6 +66,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   );
   const [hasFailed, setHasFailed] = useState(false);
   const unavailableReportedRef = useRef(false);
+  const imageRef = useRef<HTMLImageElement>(null);
   const resolvedUrl = candidateUrls[candidateIndex];
   const shellRef = useCallback(
     (node: HTMLElement | null) => registerShell?.(media.id, node),
@@ -71,10 +77,37 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     const cached = resolvedCandidateByRevision.get(mediaRevision);
     const nextIndex = cached ? candidateUrls.indexOf(cached) : 0;
     setCandidateIndex(Math.max(0, nextIndex));
-    setIsLoading(candidateUrls.length > 0 && !cached);
+    const image = imageRef.current;
+    const alreadyLoaded =
+      image?.complete &&
+      image.naturalWidth > 0 &&
+      image.getAttribute("src") === candidateUrls[Math.max(0, nextIndex)];
+    setIsLoading(candidateUrls.length > 0 && !cached && !alreadyLoaded);
     setHasFailed(false);
     unavailableReportedRef.current = false;
   }, [candidateUrls, mediaRevision]);
+
+  useEffect(() => {
+    if (!loadMedia || visuallyHidden || directUrl) return;
+    const controller = new AbortController();
+    setHasFailed(false);
+    setIsLoading(true);
+    void resolveCover(() => resolveMediaUrl(item), controller.signal)
+      .then((source) => {
+        if (controller.signal.aborted) return;
+        setProxyUrl(source);
+      })
+      .catch((error: unknown) => {
+        if (
+          controller.signal.aborted ||
+          (error instanceof DOMException && error.name === "AbortError")
+        )
+          return;
+        setHasFailed(true);
+        setIsLoading(false);
+      });
+    return () => controller.abort();
+  }, [loadMedia, visuallyHidden, directUrl, item, attempt]);
 
   const reportUnavailable = useCallback(() => {
     if (unavailableReportedRef.current) return;
@@ -97,8 +130,6 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     reportUnavailable();
   }
 
-  if (hasFailed) return null;
-
   return (
     <article
       ref={shellRef}
@@ -118,6 +149,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
         aria-label={`Open post ${post.shortcode ?? post.id}`}
         onClick={() => onSelect(media.id)}
         onKeyDown={(event) => {
+          if (event.target !== event.currentTarget) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             onSelect(media.id);
@@ -125,9 +157,26 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
         }}
       >
         <div className="archive-media-surface">
-          {loadMedia && resolvedUrl && !hasFailed ? (
+          {hasFailed ? (
+            <div className="archive-photo-error" role="status">
+              <span>Photo could not load.</span>
+              <button
+                className="viewer-control"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  unavailableReportedRef.current = false;
+                  setHasFailed(false);
+                  setIsLoading(true);
+                  setAttempt((value) => value + 1);
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          ) : loadMedia && resolvedUrl ? (
             <>
               <img
+                ref={imageRef}
                 key={resolvedUrl}
                 src={resolvedUrl}
                 data-media-id={media.id}
@@ -137,6 +186,10 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 referrerPolicy="no-referrer"
                 draggable={false}
                 onLoad={() => {
+                  if (resolvedCandidateByRevision.size > 200)
+                    resolvedCandidateByRevision.delete(
+                      resolvedCandidateByRevision.keys().next().value!,
+                    );
                   resolvedCandidateByRevision.set(mediaRevision, resolvedUrl);
                   setIsLoading(false);
                 }}
@@ -146,6 +199,8 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 <MediaLoadingState className="archive-image-loading" />
               ) : null}
             </>
+          ) : loadMedia ? (
+            <MediaLoadingState className="archive-image-loading" />
           ) : null}
         </div>
       </div>
