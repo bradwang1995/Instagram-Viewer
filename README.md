@@ -8,6 +8,10 @@ Repository: [github.com/bradwang1995/Instagram-Viewer](https://github.com/bradwa
 
 Live app: [bradwang1995.github.io/Instagram-Viewer](https://bradwang1995.github.io/Instagram-Viewer/)
 
+## Media Mechanism Research
+
+See [Instagram multi-photo and OGInstagram research](./INSTAGRAM-MEDIA-RESEARCH.md) for the verified local pure-image carousel prototype, upstream source/license/configuration references, and maintenance guidance. This research has not been integrated into the production viewer; the current workflow below still describes the existing iframe implementation.
+
 ## Current Workflow
 
 1. Export your Instagram Saved posts JSON.
