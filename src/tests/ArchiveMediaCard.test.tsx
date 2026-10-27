@@ -53,23 +53,21 @@ describe("ArchiveMediaCard direct images", () => {
   it("uses the indexed media service for unresolved posts without an iframe or oEmbed", async () => {
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response(
-            JSON.stringify({
-              type: "Note",
-              id: "https://oginstagram.com/p/Unresolved/3",
-              content: "",
-              attachment: [
-                {
-                  mediaType: "image/jpeg",
-                  url: "https://scontent.cdninstagram.com/photo.jpg",
-                },
-              ],
-            }),
-          ),
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: "Note",
+            id: "https://oginstagram.com/p/Unresolved/3",
+            content: "",
+            attachment: [
+              {
+                mediaType: "image/jpeg",
+                url: "https://scontent.cdninstagram.com/photo.jpg",
+              },
+            ],
+          }),
         ),
+      ),
     );
     const item = createItem("Unresolved");
     item.media.assetUrl = undefined;
@@ -87,6 +85,17 @@ describe("ArchiveMediaCard direct images", () => {
     expect(screen.getByRole("status")).toBeInTheDocument();
     fireEvent.load(view.container.querySelector("img")!);
     expect(screen.queryByRole("status")).toBeNull();
+    const image = view.container.querySelector("img")!;
+    Object.defineProperty(image, "complete", {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(image, "naturalWidth", {
+      configurable: true,
+      value: 800,
+    });
+    view.rerender(card({ ...item, media: { ...item.media } }));
+    await waitFor(() => expect(screen.queryByRole("status")).toBeNull());
   });
   it("defers requests outside the active zone and preserves the image after activation", () => {
     const item = createItem("deferred");

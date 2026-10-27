@@ -91,7 +91,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     if (!loadMedia || visuallyHidden || directUrl) return;
     const controller = new AbortController();
     setHasFailed(false);
-    setIsLoading(true);
+    setIsLoading(!imageRef.current?.complete || !imageRef.current.naturalWidth);
     void resolveCover(() => resolveMediaUrl(item), controller.signal)
       .then((source) => {
         if (controller.signal.aborted) return;
