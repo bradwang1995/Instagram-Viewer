@@ -825,6 +825,13 @@ Remaining architectural work is intentionally not hidden by this checkpoint:
 
 ## Notes
 
+### 2026-10-29: Personal PC hosting
+
+- Added one-click Windows start/stop for a loopback-only viewer on 5178 and pinned OG core on 18081.
+- Personal mode resolves a whole post once and serves photo bytes through a bounded persistent disk cache; the existing post-level and photo-level views retain their presentation.
+- Validated one real carousel (5 photos), image decoding, restart cache HIT, and Windows PowerShell repeated startup. App tests: 105 passed; production type-check/build passed.
+- Setup and cache limits: [LOCAL-HOSTING.md](./LOCAL-HOSTING.md). GitHub Pages retains its existing remote media source; local data and binaries remain ignored.
+
 - MVP v1 was committed as `9c31a75` and pushed to `origin/main`.
 - Keep imported data browser-local unless a future phase explicitly designs authentication, authorization, encryption, retention, and deletion controls.
 - Keep README and PROGRESS updated after each meaningful change.

@@ -1,4 +1,5 @@
 import type { MediaQueueItem } from "./mediaQueue";
+import { mediaSource } from "./personalMedia";
 
 const MAX_RETAINED_IMAGES = 24;
 const retainedImages = new Map<string, HTMLImageElement>();
@@ -7,7 +8,7 @@ export function preloadMediaItems(items: MediaQueueItem[]): void {
   if (typeof Image === "undefined") return;
 
   for (const item of items) {
-    const url = item.media.assetUrl ?? item.media.previewUrl;
+    const url = mediaSource(item);
     if (!url) continue;
 
     const retained = retainedImages.get(url);

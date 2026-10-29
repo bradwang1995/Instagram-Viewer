@@ -1,9 +1,27 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { configDefaults } from "vitest/config";
+import path from "node:path";
+import { createPersonalMedia } from "./scripts/personal-media.mjs";
 
-export default defineConfig({
-  plugins: [react()],
+export default defineConfig(({ mode }) => ({
+  plugins: [
+    react(),
+    ...(mode === "personal"
+      ? [
+          {
+            name: "personal-media",
+            configureServer(server) {
+              server.middlewares.use(
+                createPersonalMedia({
+                  directory: path.resolve("embed-lab.local/personal/images"),
+                }),
+              );
+            },
+          },
+        ]
+      : []),
+  ],
   server: {
     proxy: {
       "/api/instagram": {
@@ -32,4 +50,4 @@ export default defineConfig({
     globals: true,
     setupFiles: "./src/tests/setup.ts",
   },
-});
+}));

@@ -9,6 +9,10 @@ import {
   type CSSProperties,
 } from "react";
 import { resolveMediaUrl } from "../../features/media/instagramMedia";
+import {
+  mediaSource,
+  usesPersonalMedia,
+} from "../../features/media/personalMedia";
 import { createRequestQueue } from "../../features/media/requestQueue";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
 
@@ -41,7 +45,8 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   const { media, post } = item;
   const [proxyUrl, setProxyUrl] = useState<string>();
   const [attempt, setAttempt] = useState(0);
-  const directUrl = media.assetUrl ?? media.previewUrl;
+  const directUrl = mediaSource(item);
+  const previewUrl = usesPersonalMedia(item) ? undefined : media.previewUrl;
   const url = directUrl ?? proxyUrl;
   const mediaRevision = `${media.id}\u0000${url ?? ""}\u0000${media.previewUrl ?? ""}`;
   const creator =
@@ -50,12 +55,10 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     () =>
       Array.from(
         new Set(
-          [url, media.previewUrl].filter((value): value is string =>
-            Boolean(value),
-          ),
+          [url, previewUrl].filter((value): value is string => Boolean(value)),
         ),
       ),
-    [url, media.previewUrl],
+    [url, previewUrl],
   );
   const cachedCandidate = resolvedCandidateByRevision.get(mediaRevision);
   const [candidateIndex, setCandidateIndex] = useState(() =>

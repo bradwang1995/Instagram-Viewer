@@ -1,5 +1,6 @@
 import type { MediaQueueItem } from "./mediaQueue";
 import { createRequestQueue } from "./requestQueue";
+import { mediaSource, usesPersonalMedia } from "./personalMedia";
 
 const metadataOrigin =
   import.meta.env.VITE_INSTAGRAM_METADATA_ORIGIN ||
@@ -20,7 +21,7 @@ export class MediaRateLimitError extends Error {
 }
 
 export async function resolveMediaUrl(item: MediaQueueItem): Promise<string> {
-  const direct = item.media.assetUrl ?? item.media.previewUrl;
+  const direct = mediaSource(item);
   if (direct) return direct;
   if (!item.post.shortcode) throw new Error("No photo source available.");
   const note = await readPhoto(item.post.shortcode, item.media.sourceIndex + 1);
@@ -117,7 +118,7 @@ export async function loadPostPhotos(
   if (
     item.media.sourceKind === "demo" ||
     item.media.sourceKind === "local" ||
-    local.length > 1
+    (local.length > 1 && !usesPersonalMedia(item))
   ) {
     return [...local].sort((a, b) => a.media.sourceIndex - b.media.sourceIndex);
   }
@@ -141,6 +142,54 @@ async function fetchPostPhotos(
   item: MediaQueueItem,
   shortcode: string,
 ): Promise<MediaQueueItem[]> {
+  if (usesPersonalMedia(item)) {
+    const response = await fetch(
+      `/api/personal/posts/${encodeURIComponent(shortcode)}`,
+      { signal: AbortSignal.timeout(45_000) },
+    );
+    if (response.status === 429) throw new MediaRateLimitError();
+    if (!response.ok)
+      throw new Error(`Local photo list request failed (${response.status}).`);
+    const data = await response.json();
+    if (
+      !Array.isArray(data.photos) ||
+      !data.photos.length ||
+      data.photos.length > 50 ||
+      data.photos.some(
+        (photo: { sourceIndex: number; url: string }) =>
+          !Number.isInteger(photo.sourceIndex) ||
+          photo.sourceIndex < 0 ||
+          photo.sourceIndex > 49 ||
+          photo.url !==
+            `/api/personal/images/${shortcode}/${photo.sourceIndex}`,
+      )
+    )
+      throw new Error("Invalid local photo list.");
+    const items: MediaQueueItem[] = data.photos.map(
+      (photo: {
+        sourceIndex: number;
+        url: string;
+        width?: number;
+        height?: number;
+      }) => ({
+        post: item.post,
+        media: {
+          ...item.media,
+          id: `${item.post.id}:photo:${photo.sourceIndex}`,
+          sourceIndex: photo.sourceIndex,
+          type: "image",
+          sourceKind: "remote",
+          assetUrl: photo.url,
+          previewUrl: undefined,
+          width: photo.width,
+          height: photo.height,
+        },
+      }),
+    );
+    cache.set(shortcode, { expires: Date.now() + 600_000, items });
+    if (cache.size > 100) cache.delete(cache.keys().next().value!);
+    return items;
+  }
   const first = await readPhoto(shortcode, 1);
   // Only read the service's leading stats paragraph, never numbers in the caption.
   const indicator = first.content.match(/^<p><b>🖼️\s+1\s*\/\s*(\d+)\b/u);
