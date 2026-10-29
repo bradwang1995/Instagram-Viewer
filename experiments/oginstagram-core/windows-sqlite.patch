@@ -1,0 +1,17 @@
+diff --git a/server/storage.go b/server/storage.go
+index 5d49dc2..e4c1b58 100644
+--- a/server/storage.go
++++ b/server/storage.go
+@@ -128,7 +128,11 @@ func openSQLite(path string) (*sql.DB, error) {
+ 		params.Add("_pragma", pragma)
+ 	}
+ 	params.Set("_txlock", "immediate")
+-	dsn := (&url.URL{Scheme: "file", Path: abs, RawQuery: params.Encode()}).String()
++	sqlitePath := filepath.ToSlash(abs)
++	if filepath.VolumeName(abs) != "" {
++		sqlitePath = "/" + sqlitePath
++	}
++	dsn := (&url.URL{Scheme: "file", Path: sqlitePath, RawQuery: params.Encode()}).String()
+ 	db, err := sql.Open("sqlite", dsn)
+ 	if err != nil {
+ 		return nil, err

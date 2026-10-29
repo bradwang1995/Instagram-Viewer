@@ -371,4 +371,6 @@ The ZIP importer and some richer components still exist in the codebase as reusa
 
 ## Current Status
 
+Self-hosting preparation: [Oracle free-tier execution plan](./ORACLE-DEPLOYMENT.md) and [local OGInstagram core experiment](./experiments/oginstagram-core/README.md). The experiment is separate from the deployed website; no Oracle backend has been provisioned yet.
+
 The accepted MVP is a responsive one-page Saved-post viewer with one default compatibility preview per ordinary saved post, one-screen-ahead iframe activation, one-screen-behind retention, a four-column desktop grid, discrete wheel/arrow navigation, a neighboring-frame-preloaded full-viewport slideshow with browser history, persistent browser-local storage and image caching, and automated GitHub Pages deployment. See [PROGRESS.md](./PROGRESS.md) for the internal tracker.

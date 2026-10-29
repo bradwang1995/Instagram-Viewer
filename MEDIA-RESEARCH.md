@@ -148,3 +148,9 @@ node node_modules/vite/bin/vite.js --host 127.0.0.1 --port 5175 --strictPort
 本文是核心浏览机制的研究与维护参考，不替代 [EXPERIENCE.md](./EXPERIENCE.md) 的正式体验基线或 [PROGRESS.md](./PROGRESS.md) 的产品进度。正式接入需要另行实施和验证。
 
 本轮仍遵守会话中的本地验证范围，不推送或部署。仓库的 `.github/workflows/deploy-pages.yml` 会在推送 `main` 时触发部署；以后发布本文所在提交时，应先检查是否同时包含尚未发布的实验页提交，不应仅凭“文档改动”假定不会部署。
+
+## 2026-10-28 自托管核心验证与发布更新
+
+后续实验已验证原始 Go 核心的本机直连、完整媒体清单和持久缓存；结果与限制见 [实验记录及源码](./experiments/oginstagram-core/README.md)。这补充了前文“尚未测试”的历史状态，不代表云端可用性已验证。4 个获取失败样本尚未证实为私密或删除，不能直接作为永久隐藏依据。
+
+[Oracle 免费试运行执行计划](./ORACLE-DEPLOYMENT.md) 记录注册资料、Home Region、免费实例建议配置和接入顺序。用户已授权将研究源码和计划推送，并重新部署现有网站；个人收藏 JSON、缓存、临时 CDN 地址、下载图片和工具链继续只留本地。Oracle 后端尚未创建，现有生产媒体来源不在本轮切换。
