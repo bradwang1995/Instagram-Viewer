@@ -13,12 +13,16 @@ export function personalUrl(path: string): string {
   if (token) url.searchParams.set("session", token);
   return url.href;
 }
-export async function connectLocalService(): Promise<boolean> {
-  const response = await fetch(`${LOCAL_SERVICE}/api/personal/connect`, {
+export async function connectLocalService(timeoutMs = 5000): Promise<boolean> {
+  const options: RequestInit & { targetAddressSpace: "loopback" } = {
     method: "POST",
     headers: { "X-Viewer-Connect": "1" },
     credentials: "omit",
-    signal: AbortSignal.timeout(5000),
+    signal: AbortSignal.timeout(timeoutMs),
+    targetAddressSpace: "loopback",
+  };
+  const response = await fetch(`${LOCAL_SERVICE}/api/personal/connect`, {
+    ...options,
   });
   if (!response.ok) throw new Error("Local service unavailable.");
   const data = await response.json();

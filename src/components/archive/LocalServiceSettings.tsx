@@ -72,7 +72,7 @@ export function LocalServiceSettings() {
       "Connecting… If your browser asks for local network access, allow it.",
     );
     try {
-      await connectLocalService();
+      await connectLocalService(30_000);
       setLocalService(true);
       window.location.reload();
     } catch {
