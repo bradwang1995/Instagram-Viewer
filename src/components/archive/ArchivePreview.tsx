@@ -782,10 +782,18 @@ export const ArchivePreview = memo(function ArchivePreview({
                 />
               );
             })}
-          {!visibleOrderedItems.length && hasFilters ? (
+          {!visibleOrderedItems.length ? (
             <div className="archive-empty-field">
-              <strong>No photos match.</strong>
-              <span>Widen the date range to bring photos back.</span>
+              <strong>
+                {hasFilters
+                  ? "No photos match."
+                  : "No photos to display this visit."}
+              </strong>
+              <span>
+                {hasFilters
+                  ? "Widen the date range to bring photos back."
+                  : "You can return later to load your posts again."}
+              </span>
             </div>
           ) : null}
         </div>

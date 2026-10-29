@@ -10,6 +10,11 @@ import {
 } from "react";
 import { resolveMediaUrl } from "../../features/media/instagramMedia";
 import {
+  errorFailure,
+  recordImageFailure,
+  recordLoadOutcome,
+} from "../../features/media/loadReport";
+import {
   mediaSource,
   usesPersonalMedia,
 } from "../../features/media/personalMedia";
@@ -108,6 +113,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
           return;
         setHasFailed(true);
         setIsLoading(false);
+        recordLoadOutcome(item, "failed", errorFailure(error));
       });
     return () => controller.abort();
   }, [loadMedia, visuallyHidden, directUrl, item, attempt]);
@@ -130,6 +136,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     }
     setIsLoading(false);
     setHasFailed(true);
+    void recordImageFailure(item);
     reportUnavailable();
   }
 
@@ -190,6 +197,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 crossOrigin={usesPersonalMedia(item) ? "anonymous" : undefined}
                 draggable={false}
                 onLoad={() => {
+                  recordLoadOutcome(item, "loaded");
                   if (resolvedCandidateByRevision.size > 200)
                     resolvedCandidateByRevision.delete(
                       resolvedCandidateByRevision.keys().next().value!,

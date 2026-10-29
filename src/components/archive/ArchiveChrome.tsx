@@ -79,6 +79,15 @@ export function ArchiveHeader({
         >
           <LocalServiceButton />
           <button
+            className="viewer-control"
+            type="button"
+            onClick={() =>
+              window.dispatchEvent(new Event("viewer:show-load-report"))
+            }
+          >
+            Load report
+          </button>
+          <button
             className="viewer-control archive-import-link"
             type="button"
             onClick={onImport}

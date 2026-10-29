@@ -79,6 +79,7 @@ export function createPersonalMedia({
     );
   }
   const cooldowns = new Map();
+  const failures = new Map();
   let blockedUntil = 0;
   let active = 0;
   const waiting = [];
@@ -160,7 +161,9 @@ export function createPersonalMedia({
           /* Cache loss or corruption is recoverable. */
         }
       }
-      if (Date.now() < blockedUntil || Date.now() < (cooldowns.get(code) || 0))
+      const cooldown = cooldowns.get(code);
+      if (cooldown && Date.now() < cooldown.until) throw cooldown.error;
+      if (Date.now() < blockedUntil)
         throw failure(
           429,
           "Instagram is temporarily unavailable. Retry in a minute.",
@@ -171,11 +174,25 @@ export function createPersonalMedia({
             `${coreOrigin}/post/${code}${refresh ? "?refresh=1" : ""}`,
             { signal: AbortSignal.timeout(40_000), redirect: "error" },
           );
-          if (!response.ok)
-            throw failure(
-              response.status,
-              "Instagram could not load this post.",
+          if (!response.ok) {
+            let errorCode = `http_${response.status}`;
+            try {
+              const body = JSON.parse(
+                (await boundedBody(response, 8192)).toString(),
+              );
+              if (
+                typeof body.errorCode === "string" &&
+                /^[a-z_]{1,60}$/.test(body.errorCode)
+              )
+                errorCode = body.errorCode;
+            } catch {
+              /* Preserve the HTTP status even without a JSON body. */
+            }
+            throw Object.assign(
+              failure(response.status, "Instagram could not load this post."),
+              { errorCode, stage: "metadata" },
             );
+          }
           return JSON.parse(
             (await boundedBody(response, 512 * 1024)).toString(),
           );
@@ -209,7 +226,8 @@ export function createPersonalMedia({
         cooldowns.delete(code);
         return result;
       } catch (error) {
-        cooldowns.set(code, Date.now() + 60_000);
+        error.stage ??= "metadata";
+        cooldowns.set(code, { until: Date.now() + 60_000, error });
         if (cooldowns.size > 500)
           cooldowns.delete(cooldowns.keys().next().value);
         if (error.status === 429) blockedUntil = Date.now() + 60_000;
@@ -263,9 +281,16 @@ export function createPersonalMedia({
         if (!response.ok) {
           await response.body?.cancel();
           if (response.status === 429) blockedUntil = Date.now() + 60_000;
-          throw failure(
-            response.status === 429 ? 429 : 502,
-            "The image source is temporarily unavailable.",
+          throw Object.assign(
+            failure(
+              response.status === 429 ? 429 : 502,
+              "The image source is temporarily unavailable.",
+            ),
+            {
+              errorCode: `http_${response.status}`,
+              upstreamStatus: response.status,
+              stage: "image",
+            },
           );
         }
         const type = imageType(bytes);
@@ -351,12 +376,22 @@ export function createPersonalMedia({
         );
       }
       const match =
-        /^\/api\/personal\/(posts|images)\/([A-Za-z0-9_-]+)(?:\/(\d+))?$/.exec(
+        /^\/api\/personal\/(posts|images|diagnostics)\/([A-Za-z0-9_-]+)(?:\/(\d+))?$/.exec(
           url.pathname,
         );
       if (!match || !codePattern.test(match[2]) || url.search)
         return reply(400, "Invalid media request.");
       const [, kind, code, rawIndex] = match;
+      if (
+        kind === "diagnostics" &&
+        /^(?:[0-9]|[1-4][0-9])$/.test(rawIndex || "")
+      ) {
+        return reply(
+          200,
+          JSON.stringify(failures.get(`${code}:${rawIndex}`) ?? {}),
+          { "Content-Type": "application/json" },
+        );
+      }
       if (kind === "posts" && rawIndex === undefined) {
         const data = await manifest(code);
         return reply(
@@ -377,21 +412,46 @@ export function createPersonalMedia({
       if (kind !== "images" || !/^(?:[0-9]|[1-4][0-9])$/.test(rawIndex || ""))
         return reply(400, "Invalid photo index.");
       const data = await image(code, Number(rawIndex));
+      failures.delete(`${code}:${rawIndex}`);
       return reply(200, data.bytes, {
         "Content-Type": imageTypes[data.type],
         "X-Personal-Cache": data.cached ? "HIT" : "MISS",
         "Cache-Control": "private, max-age=3600",
       });
     } catch (error) {
-      const status = [403, 404, 410, 429, 502, 503].includes(error.status)
+      const status = [
+        400, 401, 403, 404, 410, 429, 451, 502, 503, 504,
+      ].includes(error.status)
         ? error.status
         : 502;
+      const diagnostic = {
+        status: error.upstreamStatus ?? status,
+        code:
+          error.errorCode ??
+          (error.name === "TimeoutError" ? "timeout" : `http_${status}`),
+        stage: error.stage ?? "image",
+      };
+      const imageMatch =
+        /^\/api\/personal\/images\/([A-Za-z0-9_-]+)\/(\d+)$/.exec(url.pathname);
+      if (imageMatch) {
+        const key = `${imageMatch[1]}:${imageMatch[2]}`;
+        failures.delete(key);
+        failures.set(key, diagnostic);
+        if (failures.size > 1000) failures.delete(failures.keys().next().value);
+      }
       return reply(
         status,
-        status === 502 && !error.status
-          ? "Local media service unavailable. Check the local core log."
-          : error.message,
-        status === 429 ? { "Retry-After": "60" } : {},
+        JSON.stringify({
+          errorCode: diagnostic.code,
+          message:
+            status === 502 && !error.status
+              ? "Local media service unavailable. Check the local core log."
+              : error.message,
+        }),
+        {
+          "Content-Type": "application/json",
+          ...(status === 429 ? { "Retry-After": "60" } : {}),
+        },
       );
     }
   };

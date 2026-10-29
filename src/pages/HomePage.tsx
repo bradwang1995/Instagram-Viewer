@@ -2,7 +2,7 @@ import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ArchiveTab } from "../components/archive/ArchiveChrome";
 import { ArchiveLanding } from "../components/archive/ArchiveLanding";
-import { LocalServiceSettings } from '../components/archive/LocalServiceSettings';
+import { LocalServiceSettings } from "../components/archive/LocalServiceSettings";
 import {
   ArchivePreview,
   type ArchiveViewMode,
@@ -18,6 +18,7 @@ import {
   type MediaQueueItem,
 } from "../features/media/mediaQueue";
 import { useMediaLibrary } from "../hooks/useMediaLibrary";
+import { LoadReport } from "../components/archive/LoadReport";
 
 const FILTER_DEBOUNCE_MS = 300;
 const MIN_SLIDESHOW_DWELL_MS = 3_000;
@@ -54,6 +55,9 @@ export function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { posts, queue, isLoading, error, refresh } = useMediaLibrary();
   const postQueue = useMemo(() => firstPhotoPerPost(queue), [queue]);
+  const [failedMediaIds, setFailedMediaIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   const [openedPost, setOpenedPost] = useState<MediaQueueItem>();
   const [selectedMediaId, setSelectedMediaId] = useState<string>();
   const [viewMode, setViewMode] = useState<ArchiveViewMode>(getViewModeFromUrl);
@@ -146,19 +150,22 @@ export function HomePage() {
     return () => window.clearTimeout(timer);
   }, [dateEndMonth, dateStartMonth]);
 
-  const sessionItems = postQueue;
+  const sessionItems = useMemo(
+    () => postQueue.filter((item) => !failedMediaIds.has(item.media.id)),
+    [postQueue, failedMediaIds],
+  );
   const dateMonths = useMemo(
     () =>
       Array.from(
         new Set(
-          sessionItems
+          postQueue
             .map((item) =>
               getMonthStart(item.post.savedAt ?? item.post.importedAt),
             )
             .filter((value): value is number => value !== undefined),
         ),
       ).sort((a, b) => a - b),
-    [sessionItems],
+    [postQueue],
   );
   const startMonthCandidate =
     dateStartMonth === undefined
@@ -205,7 +212,7 @@ export function HomePage() {
     : "";
   const visibleItems = useMemo(
     () =>
-      filterMediaQueue(postQueue, {
+      filterMediaQueue(sessionItems, {
         query: "",
         creator: "",
         collection: "",
@@ -213,7 +220,7 @@ export function HomePage() {
         dateTo,
         includeHidden: true,
       }),
-    [dateFrom, dateTo, postQueue],
+    [dateFrom, dateTo, sessionItems],
   );
   const visibleItemIds = useMemo(
     () => new Set(visibleItems.map((item) => item.media.id)),
@@ -322,8 +329,12 @@ export function HomePage() {
     setSlideshowRoute(true);
   }, [setSlideshowRoute]);
 
-  // Failed covers keep their positions; removing them causes scroll jumps and request cascades.
-  const keepFailedMedia = useCallback((_mediaId: string) => {}, []);
+  // Session-only: reloading the page gives every post another chance.
+  const hideFailedMedia = useCallback((mediaId: string) => {
+    setFailedMediaIds((previous) =>
+      previous.has(mediaId) ? previous : new Set(previous).add(mediaId),
+    );
+  }, []);
 
   function persistPlayback(patch: Parameters<typeof updateSettings>[0]) {
     void updateSettings(patch).catch(() => {
@@ -399,7 +410,7 @@ export function HomePage() {
             if (item) setOpenedPost(item);
           }}
           onSelect={handleArchiveSelect}
-          onMediaUnavailable={keepFailedMedia}
+          onMediaUnavailable={hideFailedMedia}
           onImport={requestArchiveImport}
           onViewModeChange={setViewModeRoute}
           onStartSlideshow={openSlideshow}
@@ -436,7 +447,7 @@ export function HomePage() {
               setTransitionPreset(value);
               persistPlayback({ slideshowTransitionPreset: value });
             }}
-            onUnavailable={keepFailedMedia}
+            onUnavailable={hideFailedMedia}
           />
         ) : null}
       </AnimatePresence>
@@ -447,8 +458,13 @@ export function HomePage() {
           initialDwellMs={dwellMs}
           initialPreset={transitionPreset}
           onClose={() => setOpenedPost(undefined)}
+          onUnavailable={() => {
+            hideFailedMedia(openedPost.media.id);
+            setOpenedPost(undefined);
+          }}
         />
       ) : null}
+      <LoadReport />
     </div>
   );
 }

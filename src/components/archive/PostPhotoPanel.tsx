@@ -6,6 +6,10 @@ import type { MediaQueueItem } from "../../features/media/mediaQueue";
 import type { ArchiveTab } from "./ArchiveChrome";
 import { ArchivePreview } from "./ArchivePreview";
 import { ArchiveSlideshow } from "./ArchiveSlideshow";
+import {
+  errorFailure,
+  recordLoadOutcome,
+} from "../../features/media/loadReport";
 
 export function PostPhotoPanel({
   item,
@@ -13,17 +17,18 @@ export function PostPhotoPanel({
   initialDwellMs,
   initialPreset,
   onClose,
+  onUnavailable,
 }: {
   item: MediaQueueItem;
   knownItems: MediaQueueItem[];
   initialDwellMs: number;
   initialPreset: TransitionPreset;
   onClose: () => void;
+  onUnavailable?: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
-  const [items, setItems] = useState<MediaQueueItem[]>([]);
+  const [loadedItems, setItems] = useState<MediaQueueItem[]>([]);
   const [error, setError] = useState("");
-  const [attempt, setAttempt] = useState(0);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<ArchiveTab>("ribbon");
   const [selectedId, setSelectedId] = useState<string>();
@@ -31,6 +36,10 @@ export function PostPhotoPanel({
   const [dwellMs, setDwellMs] = useState(initialDwellMs);
   const [preset, setPreset] = useState(initialPreset);
   const [failedIds, setFailedIds] = useState<Set<string>>(() => new Set());
+  const items = useMemo(
+    () => loadedItems.filter((entry) => !failedIds.has(entry.media.id)),
+    [loadedItems, failedIds],
+  );
   const visibleIds = useMemo(
     () => new Set(items.map((entry) => entry.media.id)),
     [items],
@@ -66,6 +75,8 @@ export function PostPhotoPanel({
       })
       .catch((reason: unknown) => {
         if (!active) return;
+        recordLoadOutcome(item, "failed", errorFailure(reason));
+        onUnavailable?.();
         setError(
           reason instanceof Error
             ? reason.message
@@ -76,7 +87,7 @@ export function PostPhotoPanel({
     return () => {
       active = false;
     };
-  }, [item, knownItems, attempt]);
+  }, [item, knownItems, onUnavailable]);
 
   const move = useCallback(
     (step: 1 | -1) => {
@@ -93,7 +104,7 @@ export function PostPhotoPanel({
     const timer = window.setTimeout(() => move(1), dwellMs);
     return () => window.clearTimeout(timer);
   }, [tab, dwellMs, move]);
-  const onUnavailable = useCallback((id: string) => {
+  const onPhotoUnavailable = useCallback((id: string) => {
     setFailedIds((previous) => new Set(previous).add(id));
   }, []);
 
@@ -133,14 +144,6 @@ export function PostPhotoPanel({
               ? "Loading post photos…"
               : error || "No photos in this post."}
           </strong>
-          {error ? (
-            <button
-              className="viewer-control"
-              onClick={() => setAttempt((value) => value + 1)}
-            >
-              Retry
-            </button>
-          ) : null}
         </div>
       ) : (
         <>
@@ -155,7 +158,7 @@ export function PostPhotoPanel({
               keyboardNavigationEnabled
               photoLevel
               onSelect={setSelectedId}
-              onMediaUnavailable={onUnavailable}
+              onMediaUnavailable={onPhotoUnavailable}
               onImport={() => {}}
               onViewModeChange={setTab}
               onStartSlideshow={() => setTab("slideshow")}
@@ -185,26 +188,12 @@ export function PostPhotoPanel({
               onImport={() => {}}
               onDwellChange={setDwellMs}
               onTransitionPresetChange={setPreset}
-              onUnavailable={onUnavailable}
+              onUnavailable={onPhotoUnavailable}
             />
           )}
           <span className="post-photo-count">
             {selectedIndex + 1} / {items.length} photos
           </span>
-          {failedIds.size ? (
-            <div className="post-panel-error" role="alert">
-              Some photos could not load.{" "}
-              <button
-                className="viewer-control"
-                onClick={() => {
-                  setItems([]);
-                  setAttempt((value) => value + 1);
-                }}
-              >
-                Retry
-              </button>
-            </div>
-          ) : null}
         </>
       )}
     </dialog>

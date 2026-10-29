@@ -254,7 +254,7 @@ describe("personal disk media gateway", () => {
     );
     expect(metadata).toBe(2);
   });
-  it("limits failed post retries without permanently caching unavailability", async () => {
+  it("limits failed post retries while retaining the original failure reason", async () => {
     const { middleware, fetcher } = await setup();
     fetcher.mockResolvedValue(new Response("", { status: 502 }));
     expect(
@@ -262,9 +262,55 @@ describe("personal disk media gateway", () => {
     ).toBe(502);
     expect(
       (await request(middleware, "/api/personal/posts/Example")).status,
-    ).toBe(429);
+    ).toBe(502);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
+  it.each([
+    [403, "restricted"],
+    [404, "media_not_found"],
+    [410, "not_found"],
+    [429, "rate_limited"],
+    [451, "geo_block_required"],
+    [502, "graphql_error"],
+  ])(
+    "retains metadata diagnostics for HTTP %s without another upstream request",
+    async (status, errorCode) => {
+      const { middleware, fetcher } = await setup();
+      fetcher.mockImplementation(
+        async () => new Response(JSON.stringify({ errorCode }), { status }),
+      );
+      expect(
+        (await request(middleware, "/api/personal/images/Example/0")).status,
+      ).toBe(status);
+      const diagnostic = await request(
+        middleware,
+        "/api/personal/diagnostics/Example/0",
+      );
+      expect(JSON.parse(diagnostic.body)).toEqual({
+        status,
+        code: errorCode,
+        stage: "metadata",
+      });
+      expect(
+        (await request(middleware, "/api/personal/images/Example/0")).status,
+      ).toBe(status);
+      expect(fetcher).toHaveBeenCalledTimes(1);
+      expect(
+        (
+          await request(middleware, "/api/personal/diagnostics/Example/0", {
+            origin: "https://evil.example",
+          })
+        ).status,
+      ).toBe(403);
+      expect(
+        (
+          await request(middleware, "/api/personal/diagnostics/Example/0", {
+            origin: "https://bradwang1995.github.io",
+          })
+        ).status,
+      ).toBe(401);
+    },
+  );
   it("bounds disk usage instead of retaining every downloaded file", async () => {
     const { middleware, directory } = await setup({ maxBytes: 7, maxFiles: 1 });
     expect(

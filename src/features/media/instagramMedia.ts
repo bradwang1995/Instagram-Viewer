@@ -1,6 +1,7 @@
 import type { MediaQueueItem } from "./mediaQueue";
 import { createRequestQueue } from "./requestQueue";
 import { mediaSource, usesPersonalMedia, personalUrl } from "./personalMedia";
+import { MediaLoadError, responseFailure } from "./loadReport";
 
 const metadataOrigin =
   import.meta.env.VITE_INSTAGRAM_METADATA_ORIGIN ||
@@ -14,9 +15,11 @@ const notes = new Map<string, { expires: number; note: Note }>();
 const pendingNotes = new Map<string, Promise<Note>>();
 let blockedUntil = 0;
 
-export class MediaRateLimitError extends Error {
+export class MediaRateLimitError extends MediaLoadError {
   constructor() {
-    super("The media service is busy. Please wait a minute before retrying.");
+    super({ status: 429, code: "rate_limited", stage: "metadata" });
+    this.message =
+      "The media service is busy. Please wait a minute before retrying.";
   }
 }
 
@@ -91,7 +94,7 @@ async function fetchPhoto(shortcode: string, index: number): Promise<Note> {
     throw new MediaRateLimitError();
   }
   if (!response.ok)
-    throw new Error(`Photo list request failed (${response.status}).`);
+    throw new MediaLoadError(await responseFailure(response, "metadata"));
   const note = (await response.json()) as Note;
   if (
     note.type !== "Note" ||
@@ -149,7 +152,7 @@ async function fetchPostPhotos(
     );
     if (response.status === 429) throw new MediaRateLimitError();
     if (!response.ok)
-      throw new Error(`Local photo list request failed (${response.status}).`);
+      throw new MediaLoadError(await responseFailure(response, "metadata"));
     const data = await response.json();
     if (
       !Array.isArray(data.photos) ||

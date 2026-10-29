@@ -895,8 +895,8 @@ describe("Photo archive preview", () => {
     );
   });
 
-  it("keeps a failed cover and its scroll geometry stable until explicit retry", async () => {
-    render(<HomePage />);
+  it("hides a failed cover for this visit and tries it again on the next visit", async () => {
+    const view = render(<HomePage />);
     await act(async () => undefined);
     const image = document.querySelector(
       'img[data-media-id="' + testState.queue[0].media.id + '"]',
@@ -906,10 +906,38 @@ describe("Photo archive preview", () => {
       document.querySelector(
         'article[data-media-id="' + testState.queue[0].media.id + '"]',
       ),
-    ).toBeInTheDocument();
-    expect(screen.getByText("Photo could not load.")).toBeInTheDocument();
-    expect(screen.getAllByTestId("archive-media-card")).toHaveLength(3);
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Photo could not load.")).not.toBeInTheDocument();
+    expect(screen.getAllByTestId("archive-media-card")).toHaveLength(2);
     expect(testState.getInstagramEmbedAvailability).not.toHaveBeenCalled();
+    expect(testState.setMediaVisibility).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("tab", { name: "Grid View" }));
+    expect(screen.getAllByTestId("archive-media-card")).toHaveLength(2);
+    fireEvent.click(screen.getByRole("tab", { name: "Slideshow" }));
+    expect(
+      document.querySelector(
+        '.archive-slideshow img[data-media-id="' +
+          testState.queue[0].media.id +
+          '"]',
+      ),
+    ).toBeNull();
+    view.unmount();
+    window.history.replaceState({}, "", "/");
+    render(<HomePage />);
+    await waitFor(() =>
+      expect(screen.getAllByTestId("archive-media-card")).toHaveLength(3),
+    );
+  });
+
+  it("shows a calm empty state when all covers fail", async () => {
+    render(<HomePage />);
+    await act(async () => undefined);
+    for (const image of [...document.querySelectorAll("img[data-media-id]")])
+      fireEvent.error(image);
+    expect(
+      screen.getByText("No photos to display this visit."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
   });
 });
 
