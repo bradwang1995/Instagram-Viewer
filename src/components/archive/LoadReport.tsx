@@ -3,12 +3,15 @@ import { readLoadReport } from "../../features/media/loadReport";
 
 export function LoadReport() {
   const dialog = useRef<HTMLDialogElement>(null);
+  const title = useRef<HTMLHeadingElement>(null);
   const [rows, setRows] = useState(readLoadReport);
   useEffect(() => {
     const update = () => setRows(readLoadReport());
     const show = () => {
       update();
       dialog.current?.showModal();
+      title.current?.focus();
+      if (dialog.current) dialog.current.scrollTop = 0;
     };
     window.addEventListener("viewer:show-load-report", show);
     window.addEventListener("viewer:load-report-updated", update);
@@ -31,7 +34,7 @@ export function LoadReport() {
       aria-label="Media load report"
       onKeyDown={(event) => event.stopPropagation()}
     >
-      <h2>Load report</h2>
+      <h2 ref={title} tabIndex={-1}>Load report</h2>
       <p>
         Latest result for up to 1,000 photos in this browser. Updated when a
         photo is tried again. Stored locally; no report is uploaded.
