@@ -2,6 +2,7 @@ import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ArchiveTab } from "../components/archive/ArchiveChrome";
 import { ArchiveLanding } from "../components/archive/ArchiveLanding";
+import { LocalServiceSettings } from '../components/archive/LocalServiceSettings';
 import {
   ArchivePreview,
   type ArchiveViewMode,
@@ -351,6 +352,7 @@ export function HomePage() {
 
   return (
     <div className="archive-app">
+      <LocalServiceSettings />
       <input
         ref={fileInputRef}
         className="sr-only"

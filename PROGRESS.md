@@ -825,6 +825,12 @@ Remaining architectural work is intentionally not hidden by this checkpoint:
 
 ## Notes
 
+### 2026-10-29: Production browser opt-in to PC media service
+
+- Added browser-local connection settings, authenticated loopback media URLs, and production-origin CORS/preflight handling.
+- Default media source remains unchanged until explicitly connected. Local service disconnects show startup guidance without switching sources.
+- Tests cover allowed/denied origins, session handshake, unauthenticated access, browser-local preference and failed connection guidance.
+
 ### 2026-10-29: Personal PC hosting
 
 - Added one-click Windows start/stop for a loopback-only viewer on 5178 and pinned OG core on 18081.

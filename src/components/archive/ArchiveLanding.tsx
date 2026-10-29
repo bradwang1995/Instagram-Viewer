@@ -3,6 +3,7 @@ import { ArrowRight, ShieldCheck, Upload } from "lucide-react";
 import { motion } from "motion/react";
 import { useRef, useState } from "react";
 import gsap from "gsap";
+import { LocalServiceButton } from "./LocalServiceSettings";
 
 type ArchiveLandingProps = {
   isImporting: boolean;
@@ -83,7 +84,10 @@ export function ArchiveLanding({
         <div className="archive-logo">
           <strong>Instagram Viewer</strong>
         </div>
-        <span className="landing-step">01 — Import</span>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <LocalServiceButton />
+          <span className="landing-step">01 — Import</span>
+        </div>
       </header>
 
       <h1 className="landing-wordmark" aria-label="Instagram Viewer">

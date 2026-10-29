@@ -2,6 +2,7 @@ import { Grid2X2, MoveHorizontal, Play, Upload } from "lucide-react";
 import type { CSSProperties } from "react";
 import type { TransitionPreset } from "../../db/schema";
 import type { ArchiveViewMode } from "./ArchivePreview";
+import { LocalServiceButton } from "./LocalServiceSettings";
 
 export type ArchiveTab = ArchiveViewMode | "slideshow";
 
@@ -68,14 +69,24 @@ export function ArchiveHeader({
       {photoLevel ? (
         <span />
       ) : (
-        <button
-          className="viewer-control archive-import-link"
-          type="button"
-          onClick={onImport}
+        <div
+          style={{
+            display: "flex",
+            gap: 8,
+            justifySelf: "end",
+            alignItems: "center",
+          }}
         >
-          <Upload size={18} aria-hidden="true" />
-          {isImporting ? "Importing…" : "Import JSON"}
-        </button>
+          <LocalServiceButton />
+          <button
+            className="viewer-control archive-import-link"
+            type="button"
+            onClick={onImport}
+          >
+            <Upload size={18} aria-hidden="true" />
+            {isImporting ? "Importing…" : "Import JSON"}
+          </button>
+        </div>
       )}
     </header>
   );

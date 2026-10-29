@@ -49,10 +49,10 @@ async function setup(options = {}) {
   const middleware = createPersonalMedia({ directory, fetcher, ...options });
   return { directory, fetcher, middleware };
 }
-async function request(middleware, url, headers = {}) {
+async function request(middleware, url, headers = {}, method = "GET") {
   let status, body, responseHeaders;
   await middleware(
-    { url, method: "GET", headers: { host: "127.0.0.1:5178", ...headers } },
+    { url, method, headers: { host: "127.0.0.1:5178", ...headers } },
     {
       writeHead(s, h) {
         status = s;
@@ -69,6 +69,72 @@ async function request(middleware, url, headers = {}) {
   return { status, body, headers: responseHeaders };
 }
 describe("personal disk media gateway", () => {
+  it("allows a preflight and explicit session handshake only for the production origin", async () => {
+    const { middleware } = await setup();
+    const remote = {
+      origin: "https://bradwang1995.github.io",
+      "sec-fetch-site": "cross-site",
+    };
+    const preflight = await request(
+      middleware,
+      "/api/personal/connect",
+      remote,
+      "OPTIONS",
+    );
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers["Access-Control-Allow-Origin"]).toBe(
+      remote.origin,
+    );
+    expect(preflight.headers["Access-Control-Allow-Private-Network"]).toBe(
+      "true",
+    );
+    expect(
+      (await request(middleware, "/api/personal/posts/Example", remote)).status,
+    ).toBe(401);
+    expect(
+      (await request(middleware, "/api/personal/connect", remote, "POST"))
+        .status,
+    ).toBe(403);
+    const connected = await request(
+      middleware,
+      "/api/personal/connect",
+      { ...remote, "x-viewer-connect": "1" },
+      "POST",
+    );
+    const { session } = JSON.parse(connected.body);
+    expect(session).toMatch(/^[a-f0-9]{64}$/);
+    const photos = await request(
+      middleware,
+      "/api/personal/posts/Example?session=" + session,
+      remote,
+    );
+    expect(photos.status).toBe(200);
+    const image = await request(
+      middleware,
+      "/api/personal/images/Example/0?session=" + session,
+      remote,
+    );
+    expect(image.status).toBe(200);
+    expect(image.headers["Access-Control-Allow-Origin"]).toBe(remote.origin);
+    expect(
+      (
+        await request(
+          middleware,
+          "/api/personal/images/Example/0?session=" + session,
+          { origin: "https://evil.example", "sec-fetch-site": "cross-site" },
+        )
+      ).status,
+    ).toBe(403);
+    expect(
+      (
+        await request(
+          middleware,
+          "/api/personal/posts/Example?session=" + "é".repeat(64),
+          remote,
+        )
+      ).status,
+    ).toBe(401);
+  });
   it("deduplicates a complete post and preserves original indices while excluding videos", async () => {
     const { middleware, fetcher } = await setup();
     const responses = await Promise.all([

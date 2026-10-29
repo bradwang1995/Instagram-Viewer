@@ -187,6 +187,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 loading="eager"
                 decoding="async"
                 referrerPolicy="no-referrer"
+                crossOrigin={usesPersonalMedia(item) ? "anonymous" : undefined}
                 draggable={false}
                 onLoad={() => {
                   if (resolvedCandidateByRevision.size > 200)

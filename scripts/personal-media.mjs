@@ -9,6 +9,7 @@ import {
   utimes,
 } from "node:fs/promises";
 import path from "node:path";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 
 const codePattern = /^[A-Za-z0-9_-]{1,24}$/;
 const imageTypes = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
@@ -68,6 +69,15 @@ export function createPersonalMedia({
   maxFiles = 2000,
 }) {
   const flights = new Map();
+  const browserOrigin = "https://bradwang1995.github.io";
+  const session = randomBytes(32).toString("hex");
+  function validSession(value) {
+    return (
+      typeof value === "string" &&
+      /^[a-f0-9]{64}$/.test(value) &&
+      timingSafeEqual(Buffer.from(value), Buffer.from(session))
+    );
+  }
   const cooldowns = new Map();
   let blockedUntil = 0;
   let active = 0;
@@ -268,24 +278,68 @@ export function createPersonalMedia({
   return async function middleware(req, res, next) {
     const url = new URL(req.url, "http://127.0.0.1");
     if (!url.pathname.startsWith("/api/personal/")) return next();
+    const origin = req.headers.origin;
+    const remote = origin === browserOrigin;
+    const cors = remote
+      ? {
+          "Access-Control-Allow-Origin": browserOrigin,
+          "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+          "Access-Control-Allow-Headers": "X-Viewer-Connect",
+          "Access-Control-Allow-Private-Network": "true",
+          Vary: "Origin",
+        }
+      : {};
     const reply = (status, body, headers = {}) => {
       res.writeHead(status, {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-store",
         "X-Content-Type-Options": "nosniff",
+        ...cors,
         ...headers,
       });
       res.end(body);
     };
+    const sameOrigin = !origin || origin === `http://${req.headers.host}`;
+    const crossSite = req.headers["sec-fetch-site"] === "cross-site";
+    const authorizedImage =
+      !origin &&
+      crossSite &&
+      /^\/api\/personal\/images\//.test(url.pathname) &&
+      validSession(url.searchParams.get("session"));
     if (
       !/^127\.0\.0\.1:\d+$/.test(req.headers.host || "") ||
-      (req.headers["sec-fetch-site"] &&
-        !["same-origin", "none"].includes(req.headers["sec-fetch-site"])) ||
-      (req.headers.origin &&
-        req.headers.origin !== `http://${req.headers.host}`)
+      (!sameOrigin && !remote) ||
+      (crossSite && !remote && !authorizedImage)
     )
       return reply(403, "Local requests only.");
+    if (req.method === "OPTIONS" && remote) return reply(204, "");
+    if (url.pathname === "/api/personal/connect") {
+      if (
+        !remote ||
+        req.method !== "POST" ||
+        req.headers["x-viewer-connect"] !== "1"
+      )
+        return reply(403, "Connection not allowed.");
+      try {
+        const health = await fetcher(coreOrigin + "/health", {
+          signal: AbortSignal.timeout(3000),
+        });
+        if (!health.ok) return reply(503, "Core unavailable");
+        await health.body?.cancel();
+        return reply(200, JSON.stringify({ session }), {
+          "Content-Type": "application/json",
+        });
+      } catch {
+        return reply(503, "Core unavailable");
+      }
+    }
     if (req.method !== "GET") return reply(405, "GET only.");
+    if (
+      (remote || authorizedImage) &&
+      !validSession(url.searchParams.get("session"))
+    )
+      return reply(401, "Reconnect to the local service.");
+    url.searchParams.delete("session");
     try {
       if (url.pathname === "/api/personal/health") {
         const response = await fetcher(coreOrigin + "/health", {

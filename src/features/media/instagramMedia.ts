@@ -1,6 +1,6 @@
 import type { MediaQueueItem } from "./mediaQueue";
 import { createRequestQueue } from "./requestQueue";
-import { mediaSource, usesPersonalMedia } from "./personalMedia";
+import { mediaSource, usesPersonalMedia, personalUrl } from "./personalMedia";
 
 const metadataOrigin =
   import.meta.env.VITE_INSTAGRAM_METADATA_ORIGIN ||
@@ -144,7 +144,7 @@ async function fetchPostPhotos(
 ): Promise<MediaQueueItem[]> {
   if (usesPersonalMedia(item)) {
     const response = await fetch(
-      `/api/personal/posts/${encodeURIComponent(shortcode)}`,
+      personalUrl(`/api/personal/posts/${encodeURIComponent(shortcode)}`),
       { signal: AbortSignal.timeout(45_000) },
     );
     if (response.status === 429) throw new MediaRateLimitError();
@@ -179,7 +179,7 @@ async function fetchPostPhotos(
           sourceIndex: photo.sourceIndex,
           type: "image",
           sourceKind: "remote",
-          assetUrl: photo.url,
+          assetUrl: personalUrl(photo.url),
           previewUrl: undefined,
           width: photo.width,
           height: photo.height,
