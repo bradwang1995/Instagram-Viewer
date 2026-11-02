@@ -13,6 +13,8 @@ import {
 type ArchiveSlideshowProps = {
   open: boolean;
   active?: boolean;
+  loadGeneration?: number;
+  loadScope?: string;
   item?: MediaQueueItem;
   previousItem?: MediaQueueItem;
   nextItem?: MediaQueueItem;
@@ -43,6 +45,8 @@ const TRANSITION_DURATION_SECONDS = 0.36;
 export function ArchiveSlideshow({
   open,
   active = true,
+  loadGeneration = 0,
+  loadScope = "",
   item,
   previousItem,
   nextItem,
@@ -94,6 +98,14 @@ export function ArchiveSlideshow({
     direction,
     previousCurrentIdRef.current,
   );
+  const admittedFrames = useRef<{ key: string; ids: Set<string> }>();
+  const key = `${loadGeneration}:${loadScope}`;
+  if (frames.length && admittedFrames.current?.key !== key) {
+    admittedFrames.current = {
+      key,
+      ids: new Set(frames.map((frame) => frame.item.media.id)),
+    };
+  }
 
   useEffect(() => {
     previousCurrentIdRef.current = item?.media.id;
@@ -139,7 +151,10 @@ export function ArchiveSlideshow({
                   item={frame.item}
                   index={0}
                   selected={false}
-                  loadMedia={active}
+                  loadMedia={
+                    active &&
+                    !!admittedFrames.current?.ids.has(frame.item.media.id)
+                  }
                   layoutStyle={{ width: "100%", height: "100%" }}
                   onSelect={onOpenPost ?? (() => {})}
                   onUnavailable={onUnavailable}

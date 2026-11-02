@@ -929,6 +929,62 @@ describe("Photo archive preview", () => {
     );
   });
 
+  it.each(["Horizontal View", "Grid View"])(
+    "does not refill %s with unvisited posts after failures until scrolling",
+    async (tab) => {
+      testState.queue = Array.from({ length: 120 }, (_, index) =>
+        createQueueItem(createPost(`BOUND${index}`, "@test", "Saved"), 0, 1),
+      );
+      render(<HomePage />);
+      await act(async () => undefined);
+      if (tab === "Grid View")
+        fireEvent.click(screen.getByRole("tab", { name: tab }));
+      const initial = [
+        ...document.querySelectorAll<HTMLImageElement>("img[data-media-id]"),
+      ];
+      expect(initial.length).toBeGreaterThan(0);
+      expect(initial.length).toBeLessThan(50);
+      for (const image of initial) fireEvent.error(image);
+      await act(async () => undefined);
+      expect(document.querySelectorAll("img[data-media-id]")).toHaveLength(0);
+      // Neither opening the report nor settling the unchanged viewport starts work.
+      fireEvent.click(screen.getByRole("button", { name: "Load report" }));
+      await act(async () => undefined);
+      expect(document.querySelectorAll("img[data-media-id]")).toHaveLength(0);
+      const scroller = screen.getByTestId("archive-scroller");
+      fireEvent.scroll(scroller, {
+        target:
+          tab === "Grid View" ? { scrollTop: 1800 } : { scrollLeft: 1800 },
+      });
+      await waitFor(() =>
+        expect(
+          document.querySelectorAll("img[data-media-id]").length,
+        ).toBeGreaterThan(0),
+      );
+      expect(
+        document.querySelectorAll("img[data-media-id]").length,
+      ).toBeLessThan(50);
+    },
+  );
+
+  it("does not drain a slideshow's queue when its preloaded frames fail", async () => {
+    testState.queue = Array.from({ length: 120 }, (_, index) =>
+      createQueueItem(createPost(`SLIDE${index}`, "@test", "Saved"), 0, 1),
+    );
+    render(<HomePage />);
+    await act(async () => undefined);
+    fireEvent.click(screen.getByRole("tab", { name: "Slideshow" }));
+    const initial = [...document.querySelectorAll(".archive-slideshow img")];
+    expect(initial).toHaveLength(3);
+    for (const image of initial) fireEvent.error(image);
+    await act(async () => undefined);
+    expect(document.querySelectorAll(".archive-slideshow img")).toHaveLength(0);
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(
+      document.querySelectorAll(".archive-slideshow img").length,
+    ).toBeGreaterThan(0);
+  });
+
   it("shows a calm empty state when all covers fail", async () => {
     render(<HomePage />);
     await act(async () => undefined);

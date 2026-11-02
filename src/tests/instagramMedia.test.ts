@@ -115,14 +115,12 @@ describe("post photo source", () => {
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
   it("stops queued metadata traffic during a rate-limit cooldown", async () => {
-    const fetcher = vi
-      .fn()
-      .mockResolvedValue(
-        new Response("limited", {
-          status: 429,
-          headers: { "Retry-After": "120" },
-        }),
-      );
+    const fetcher = vi.fn().mockResolvedValue(
+      new Response("limited", {
+        status: 429,
+        headers: { "Retry-After": "120" },
+      }),
+    );
     vi.stubGlobal("fetch", fetcher);
     const result = await Promise.allSettled(
       Array.from({ length: 12 }, (_, index) =>
@@ -130,6 +128,13 @@ describe("post photo source", () => {
       ),
     );
     expect(result.every((entry) => entry.status === "rejected")).toBe(true);
+    expect(
+      result.filter(
+        (entry) =>
+          entry.status === "rejected" &&
+          entry.reason.failure?.deferred === true,
+      ).length,
+    ).toBeGreaterThanOrEqual(10);
     expect(fetcher.mock.calls.length).toBeLessThanOrEqual(2);
     await expect(loadPostPhotos(item("LimitedLater"), [])).rejects.toThrow(
       "wait a minute",

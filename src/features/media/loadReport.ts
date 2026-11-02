@@ -5,14 +5,18 @@ export type LoadFailure = {
   status?: number;
   code: string;
   stage: string;
+  deferred?: boolean;
 };
 export type LoadOutcome = LoadFailure & {
   shortcode: string;
   sourceIndex: number;
-  outcome: "loaded" | "failed";
+  outcome: "loaded" | "failed" | "deferred";
+  source: "local" | "default";
   time: string;
 };
-const KEY = "instagram-viewer:load-report:v1";
+const KEY = "instagram-viewer:load-report:v2";
+export const reportStartedAt = new Date().toISOString();
+const sessionId = `${reportStartedAt}:${Math.random()}`;
 const LIMIT = 1000;
 let fallback: LoadOutcome[] = [];
 let memoryOnly = false;
@@ -20,7 +24,8 @@ let memoryOnly = false;
 export function readLoadReport(): LoadOutcome[] {
   if (memoryOnly) return fallback;
   try {
-    const data: unknown = JSON.parse(localStorage.getItem(KEY) ?? "[]");
+    const stored = JSON.parse(localStorage.getItem(KEY) ?? "null");
+    const data: unknown = stored?.sessionId === sessionId ? stored.rows : [];
     return Array.isArray(data)
       ? data
           .filter(
@@ -31,7 +36,8 @@ export function readLoadReport(): LoadOutcome[] {
               typeof entry.code === "string" &&
               typeof entry.stage === "string" &&
               typeof entry.time === "string" &&
-              (entry.outcome === "loaded" || entry.outcome === "failed"),
+              (entry.source === "local" || entry.source === "default") &&
+              ["loaded", "failed", "deferred"].includes(entry.outcome),
           )
           .slice(-LIMIT)
       : [];
@@ -45,21 +51,26 @@ export function recordLoadOutcome(
   outcome: "loaded" | "failed",
   failure: LoadFailure = { code: "loaded", stage: "image" },
 ) {
+  if (item.media.sourceKind === "demo") return;
+  const source = usesPersonalMedia(item) ? "local" : "default";
   const shortcode = item.post.shortcode ?? item.post.id;
   const rows = readLoadReport().filter(
     (row) =>
-      row.shortcode !== shortcode || row.sourceIndex !== item.media.sourceIndex,
+      row.shortcode !== shortcode ||
+      row.sourceIndex !== item.media.sourceIndex ||
+      row.source !== source,
   );
   rows.push({
     ...failure,
     shortcode,
     sourceIndex: item.media.sourceIndex,
-    outcome,
+    outcome: failure.deferred ? "deferred" : outcome,
+    source,
     time: new Date().toISOString(),
   });
   fallback = rows.slice(-LIMIT);
   try {
-    localStorage.setItem(KEY, JSON.stringify(fallback));
+    localStorage.setItem(KEY, JSON.stringify({ sessionId, rows: fallback }));
   } catch {
     memoryOnly = true;
     /* Browsing works without storage. */
@@ -72,8 +83,10 @@ export async function responseFailure(
   stage: string,
 ): Promise<LoadFailure> {
   let code = `http_${response.status}`;
+  let deferred = false;
   try {
     const body = await response.json();
+    deferred = body.deferred === true;
     if (
       typeof body.errorCode === "string" &&
       /^[a-z_]{1,60}$/.test(body.errorCode)
@@ -82,7 +95,12 @@ export async function responseFailure(
   } catch {
     /* Some services return plain text or HTML. */
   }
-  return { status: response.status, code, stage };
+  return {
+    status: response.status,
+    code,
+    stage,
+    ...(deferred ? { deferred: true } : {}),
+  };
 }
 
 export function errorFailure(error: unknown): LoadFailure {
@@ -133,7 +151,12 @@ export async function recordImageFailure(item: MediaQueueItem) {
         data.status >= 400 &&
         data.status <= 599
       ) {
-        failure = { status: data.status, code: data.code, stage: data.stage };
+        failure = {
+          status: data.status,
+          code: data.code,
+          stage: data.stage,
+          ...(data.deferred === true ? { deferred: true } : {}),
+        };
       }
     }
   } catch {

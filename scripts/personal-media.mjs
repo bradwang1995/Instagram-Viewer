@@ -16,6 +16,16 @@ const imageTypes = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
 function failure(status, message) {
   return Object.assign(new Error(message), { status });
 }
+function cooldownFailure(stage) {
+  return Object.assign(
+    failure(429, "Instagram is temporarily unavailable. Retry in a minute."),
+    {
+      errorCode: "cooldown",
+      stage,
+      deferred: true,
+    },
+  );
+}
 function imageType(bytes) {
   if (bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255) return "jpeg";
   if (
@@ -162,18 +172,19 @@ export function createPersonalMedia({
         }
       }
       const cooldown = cooldowns.get(code);
-      if (cooldown && Date.now() < cooldown.until) throw cooldown.error;
-      if (Date.now() < blockedUntil)
-        throw failure(
-          429,
-          "Instagram is temporarily unavailable. Retry in a minute.",
-        );
+      if (cooldown && Date.now() < cooldown.until)
+        throw Object.assign(new Error(cooldown.error.message), cooldown.error, {
+          deferred: true,
+        });
+      if (Date.now() < blockedUntil) throw cooldownFailure("metadata");
       try {
         const data = await limited(async () => {
+          if (Date.now() < blockedUntil) throw cooldownFailure("metadata");
           const response = await fetcher(
             `${coreOrigin}/post/${code}${refresh ? "?refresh=1" : ""}`,
             { signal: AbortSignal.timeout(40_000), redirect: "error" },
           );
+          if (response.status === 429) blockedUntil = Date.now() + 60_000;
           if (!response.ok) {
             let errorCode = `http_${response.status}`;
             try {
@@ -227,10 +238,12 @@ export function createPersonalMedia({
         return result;
       } catch (error) {
         error.stage ??= "metadata";
-        cooldowns.set(code, { until: Date.now() + 60_000, error });
+        if (!error.deferred)
+          cooldowns.set(code, { until: Date.now() + 60_000, error });
         if (cooldowns.size > 500)
           cooldowns.delete(cooldowns.keys().next().value);
-        if (error.status === 429) blockedUntil = Date.now() + 60_000;
+        if (error.status === 429 && !error.deferred)
+          blockedUntil = Date.now() + 60_000;
         throw error;
       }
     });
@@ -247,11 +260,7 @@ export function createPersonalMedia({
       } catch {
         /* Read through on missing or invalid cache entries. */
       }
-      if (Date.now() < blockedUntil)
-        throw failure(
-          429,
-          "Instagram is temporarily unavailable. Retry in a minute.",
-        );
+      if (Date.now() < blockedUntil) throw cooldownFailure("image");
       let post = await manifest(code);
       for (let attempt = 0; attempt < 2; attempt++) {
         const attachment = post.attachments[index];
@@ -262,10 +271,12 @@ export function createPersonalMedia({
         )
           throw failure(404, "This photo is unavailable.");
         const { response, bytes } = await limited(async () => {
+          if (Date.now() < blockedUntil) throw cooldownFailure("image");
           const response = await fetcher(attachment.url, {
             redirect: "error",
             signal: AbortSignal.timeout(30_000),
           });
+          if (response.status === 429) blockedUntil = Date.now() + 60_000;
           return {
             response,
             bytes: response.ok
@@ -430,6 +441,7 @@ export function createPersonalMedia({
           error.errorCode ??
           (error.name === "TimeoutError" ? "timeout" : `http_${status}`),
         stage: error.stage ?? "image",
+        ...(error.deferred ? { deferred: true } : {}),
       };
       const imageMatch =
         /^\/api\/personal\/images\/([A-Za-z0-9_-]+)\/(\d+)$/.exec(url.pathname);
@@ -443,6 +455,7 @@ export function createPersonalMedia({
         status,
         JSON.stringify({
           errorCode: diagnostic.code,
+          ...(error.deferred ? { deferred: true } : {}),
           message:
             status === 502 && !error.status
               ? "Local media service unavailable. Check the local core log."

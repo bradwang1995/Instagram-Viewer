@@ -76,3 +76,30 @@ it("keeps browser failures unknown and preserves typed metadata codes", async ()
     ).code,
   ).toBe("graphql_error");
 });
+it("ignores previous visits and demo results, and identifies the actual source", () => {
+  localStorage.setItem(
+    "instagram-viewer:load-report:v1",
+    JSON.stringify(Array(1000).fill({ outcome: "failed" })),
+  );
+  localStorage.setItem(
+    "instagram-viewer:load-report:v2",
+    JSON.stringify({ sessionId: "old visit", rows: [{ outcome: "failed" }] }),
+  );
+  expect(readLoadReport()).toEqual([]);
+  recordLoadOutcome(
+    { ...item, media: { ...item.media, sourceKind: "demo" } },
+    "loaded",
+  );
+  expect(readLoadReport()).toEqual([]);
+  recordLoadOutcome(item, "loaded");
+  expect(readLoadReport()[0].source).toBe("default");
+});
+it("records an unrequested cooldown separately from a failed upstream request", () => {
+  recordLoadOutcome(item, "failed", {
+    code: "cooldown",
+    status: 429,
+    stage: "metadata",
+    deferred: true,
+  });
+  expect(readLoadReport()[0].outcome).toBe("deferred");
+});

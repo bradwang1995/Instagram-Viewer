@@ -16,8 +16,13 @@ const pendingNotes = new Map<string, Promise<Note>>();
 let blockedUntil = 0;
 
 export class MediaRateLimitError extends MediaLoadError {
-  constructor() {
-    super({ status: 429, code: "rate_limited", stage: "metadata" });
+  constructor(deferred = false) {
+    super({
+      status: 429,
+      code: deferred ? "cooldown" : "rate_limited",
+      stage: "metadata",
+      ...(deferred ? { deferred: true } : {}),
+    });
     this.message =
       "The media service is busy. Please wait a minute before retrying.";
   }
@@ -65,7 +70,7 @@ async function readPhoto(shortcode: string, index: number): Promise<Note> {
   const inFlight = pendingNotes.get(key);
   if (inFlight) return inFlight;
   const task = requestMetadata(async () => {
-    if (Date.now() < blockedUntil) throw new MediaRateLimitError();
+    if (Date.now() < blockedUntil) throw new MediaRateLimitError(true);
     const note = await fetchPhoto(shortcode, index);
     notes.set(key, { expires: Date.now() + 300_000, note });
     if (notes.size > 300) notes.delete(notes.keys().next().value!);

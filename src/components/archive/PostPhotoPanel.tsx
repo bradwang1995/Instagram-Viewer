@@ -33,6 +33,7 @@ export function PostPhotoPanel({
   const [tab, setTab] = useState<ArchiveTab>("ribbon");
   const [selectedId, setSelectedId] = useState<string>();
   const [direction, setDirection] = useState<1 | -1>(1);
+  const [slideGeneration, setSlideGeneration] = useState(0);
   const [dwellMs, setDwellMs] = useState(initialDwellMs);
   const [preset, setPreset] = useState(initialPreset);
   const [failedIds, setFailedIds] = useState<Set<string>>(() => new Set());
@@ -93,6 +94,7 @@ export function PostPhotoPanel({
     (step: 1 | -1) => {
       if (items.length < 2) return;
       setDirection(step);
+      setSlideGeneration((value) => value + 1);
       setSelectedId(
         items[(selectedIndex + step + items.length) % items.length].media.id,
       );
@@ -165,6 +167,7 @@ export function PostPhotoPanel({
             />
           ) : (
             <ArchiveSlideshow
+              loadGeneration={slideGeneration}
               open
               photoLevel
               item={selected}

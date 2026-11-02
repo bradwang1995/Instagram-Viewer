@@ -59,6 +59,8 @@ export function HomePage() {
     () => new Set(),
   );
   const [openedPost, setOpenedPost] = useState<MediaQueueItem>();
+  const [loadGeneration, setLoadGeneration] = useState(0);
+  const [slideGeneration, setSlideGeneration] = useState(0);
   const [selectedMediaId, setSelectedMediaId] = useState<string>();
   const [viewMode, setViewMode] = useState<ArchiveViewMode>(getViewModeFromUrl);
   const [isSlideshowOpen, setIsSlideshowOpen] = useState(() =>
@@ -282,6 +284,7 @@ export function HomePage() {
       const targetIndex =
         (currentIndex + direction + visibleItems.length) % visibleItems.length;
       setSlideshowDirection(direction);
+      setSlideGeneration((value) => value + 1);
       setSelectedMediaId(visibleItems[targetIndex].media.id);
     },
     [selectedItem, visibleItems],
@@ -309,6 +312,7 @@ export function HomePage() {
     const job = await importSavedPostsJsonFile(file);
     setIsImporting(false);
     if (job.status === "completed") {
+      setLoadGeneration((value) => value + 1);
       await refresh();
       setSelectedMediaId(undefined);
       setLandingDismissed(true);
@@ -396,6 +400,8 @@ export function HomePage() {
 
       {!isLoading && !showLanding ? (
         <ArchivePreview
+          loadGeneration={loadGeneration}
+          loadScope={`${dateFrom}:${dateTo}`}
           items={sessionItems}
           visibleItemIds={visibleItemIds}
           selectedId={selectedItem?.media.id}
@@ -420,6 +426,8 @@ export function HomePage() {
       <AnimatePresence>
         {isSlideshowOpen ? (
           <ArchiveSlideshow
+            loadGeneration={slideGeneration}
+            loadScope={`${dateFrom}:${dateTo}`}
             open
             active={!openedPost}
             keyboardNavigationEnabled={!openedPost}

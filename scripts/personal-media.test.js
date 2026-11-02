@@ -319,4 +319,33 @@ describe("personal disk media gateway", () => {
     const files = await readdir(directory);
     expect(files).toEqual(["Example-0.image"]);
   });
+  it("stops queued upstream work after rate limiting and labels unrequested photos as deferred", async () => {
+    const { middleware, fetcher } = await setup();
+    fetcher.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return new Response(JSON.stringify({ errorCode: "rate_limited" }), {
+        status: 429,
+      });
+    });
+    const results = await Promise.all(
+      Array.from({ length: 20 }, (_, index) =>
+        request(middleware, `/api/personal/images/Limited${index}/0`),
+      ),
+    );
+    expect(results.every((entry) => entry.status === 429)).toBe(true);
+    expect(fetcher.mock.calls.length).toBeLessThanOrEqual(2);
+    const deferred = results.filter(
+      (entry) => JSON.parse(entry.body).deferred === true,
+    );
+    expect(deferred.length).toBeGreaterThanOrEqual(18);
+    const diagnostic = await request(
+      middleware,
+      "/api/personal/diagnostics/Limited19/0",
+    );
+    expect(JSON.parse(diagnostic.body)).toMatchObject({
+      status: 429,
+      code: "cooldown",
+      deferred: true,
+    });
+  });
 });

@@ -31,6 +31,8 @@ export type ArchiveViewMode = "ribbon" | "grid";
 type ArchivePreviewProps = {
   items: MediaQueueItem[];
   active?: boolean;
+  loadGeneration?: number;
+  loadScope?: string;
   visibleItemIds: ReadonlySet<string>;
   selectedId?: string;
   viewMode: ArchiveViewMode;
@@ -68,6 +70,8 @@ const ARROW_KEYS = new Set(["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"]);
 export const ArchivePreview = memo(function ArchivePreview({
   items,
   active = true,
+  loadGeneration = 0,
+  loadScope = "",
   visibleItemIds,
   selectedId,
   viewMode,
@@ -99,6 +103,7 @@ export const ArchivePreview = memo(function ArchivePreview({
   const mediaObserverRef = useRef<IntersectionObserver>();
   const cardShellsRef = useRef(new Map<string, HTMLElement>());
   const activatedMediaIdsRef = useRef(new Set<string>());
+  const admittedWindowRef = useRef<{ key: string; ids: Set<string> }>();
   const activeViewMode = useRef(viewMode);
   const pendingViewMode = useRef<ArchiveViewMode>();
   const scrollPositions = useRef<Record<ArchiveViewMode, number>>({
@@ -195,6 +200,7 @@ export const ArchivePreview = memo(function ArchivePreview({
   const activateMedia = useCallback((itemIds: Iterable<string>) => {
     let changed = false;
     for (const itemId of itemIds) {
+      if (!admittedWindowRef.current?.ids.has(itemId)) continue;
       if (activatedMediaIdsRef.current.has(itemId)) continue;
       activatedMediaIdsRef.current.add(itemId);
       changed = true;
@@ -238,6 +244,16 @@ export const ArchivePreview = memo(function ArchivePreview({
         retainedIds.add(item.media.id);
       });
 
+      // Hiding a failed card changes geometry, but is not a scroll gesture.
+      // Freeze this window's request cohort until navigation actually changes.
+      const key = `${viewMode}:${viewport.width}:${viewport.height}:${offset}:${loadGeneration}:${loadScope}`;
+      if (retainedIds.size && admittedWindowRef.current?.key !== key) {
+        admittedWindowRef.current = { key, ids: new Set(retainedIds) };
+      }
+      for (const id of retainedIds) {
+        if (!admittedWindowRef.current?.ids.has(id)) retainedIds.delete(id);
+      }
+
       let pruned = false;
       if (pruneOutsideWindow) {
         for (const itemId of activatedMediaIdsRef.current) {
@@ -258,6 +274,8 @@ export const ArchivePreview = memo(function ArchivePreview({
       viewport.width,
       visibleItemIds,
       visibleOrderedItems,
+      loadGeneration,
+      loadScope,
     ],
   );
 
@@ -794,6 +812,12 @@ export const ArchivePreview = memo(function ArchivePreview({
                   ? "Widen the date range to bring photos back."
                   : "You can return later to load your posts again."}
               </span>
+            </div>
+          ) : null}
+          {visibleOrderedItems.length > 0 &&
+          activatedMediaIdsRef.current.size === 0 ? (
+            <div className="archive-empty-field">
+              <span>Scroll to load more photos.</span>
             </div>
           ) : null}
         </div>
