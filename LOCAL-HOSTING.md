@@ -35,6 +35,8 @@ Chrome 等浏览器的本地网络权限可能因版本或企业策略受限；�
 
 ## 本机准备与维护
 
+图片质量门槛：图片最长边不足 640 像素时拒绝展示和缓存，不再缩小兜底。Node 同时检查元数据和 JPEG/PNG/WebP 实际尺寸；浏览器再次检查解码尺寸。本机封面遇到低清首图时优先使用同帖合格照片，保留原照片索引；一次封面加载最多尝试两张合格候选，仍按原来的视窗懒加载。新版图片 URL 和浏览器媒体缓存版本会避开旧图片缓存。可运行 `node scripts/purge-low-quality-cache.mjs` 清理本机低清图片缓存及引用低清图的清单，保留高清图片与原始导入数据。
+
 当前电脑已经准备 Node/npm、依赖、Go 和上游 checkout。启动脚本固定校验上游提交 `a92f5372880b61da9c2ba72e539a64ae4ef0350c`，编译 `scripts/personal_core_test.go` 中的专用回环 API（无公共 OG 转发）。它与旧 `/lab/` 报告服务独立，核心端口为 18081。
 
 新电脑需要自行准备 Node 和 `npm ci`、兼容的 Go 工具链（当前使用 1.27.3，目录 `embed-lab.local/toolchains/go`），并将固定版本上游放到 `embed-lab.local/oginstagram-selfhost`。Windows 上按 [实验说明](./experiments/oginstagram-core/README.md) 应用 SQLite 路径补丁。启动入口不是自动安装程序，缺少这些文件时会报错。

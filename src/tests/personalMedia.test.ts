@@ -28,7 +28,8 @@ it("enables loopback URLs only in this browser and carries the session without t
   expect(await module.connectLocalService()).toBe(true);
   module.setLocalService(true);
   expect(module.mediaSource(item)).toBe(
-    "http://127.0.0.1:5178/api/personal/images/Example/0?session=" + token,
+    "http://127.0.0.1:5178/api/personal/images/Example/0?quality=2&cover=1&session=" +
+      token,
   );
   expect(localStorage.getItem(module.LOCAL_SERVICE_KEY)).toBe("enabled");
   module.setLocalService(false);
@@ -38,7 +39,9 @@ it("enables loopback URLs only in this browser and carries the session without t
 it("routes personal covers through stable local image URLs and leaves demo sources intact", async () => {
   vi.stubEnv("MODE", "personal");
   const { mediaSource } = await import("../features/media/personalMedia");
-  expect(mediaSource(item)).toBe("/api/personal/images/Example/0");
+  expect(mediaSource(item)).toBe(
+    "/api/personal/images/Example/0?quality=2&cover=1",
+  );
   expect(
     mediaSource({ ...item, media: { ...item.media, sourceKind: "demo" } }),
   ).toBe(item.media.assetUrl);
@@ -50,8 +53,8 @@ it("uses one local manifest call for a carousel and preserves video gaps", async
     new Response(
       JSON.stringify({
         photos: [
-          { sourceIndex: 0, url: "/api/personal/images/Example/0" },
-          { sourceIndex: 2, url: "/api/personal/images/Example/2" },
+          { sourceIndex: 0, url: "/api/personal/images/Example/0?quality=2" },
+          { sourceIndex: 2, url: "/api/personal/images/Example/2?quality=2" },
         ],
       }),
     ),

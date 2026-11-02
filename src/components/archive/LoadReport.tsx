@@ -98,6 +98,8 @@ export function LoadReport() {
         restricted: audience / age restriction; media_not_found / not_found:
         unavailable; graphql_error: Instagram could not resolve the post.
         Unknown image errors may include network or browser access failures.
+        low_resolution: rejected because the longest image edge is below 640
+        pixels.
       </p>
       <div className="local-server-actions">
         <button

@@ -73,18 +73,9 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     candidateUrls.length > 0 && !cachedCandidate,
   );
   const [hasFailed, setHasFailed] = useState(false);
-  const [decodedSize, setDecodedSize] = useState<{
-    url: string;
-    width: number;
-    height: number;
-  }>();
   const unavailableReportedRef = useRef(false);
   const imageRef = useRef<HTMLImageElement>(null);
   const resolvedUrl = candidateUrls[candidateIndex];
-  const lowResolution =
-    decodedSize &&
-    decodedSize.url === resolvedUrl &&
-    Math.max(decodedSize.width, decodedSize.height) < 640;
   const shellRef = useCallback(
     (node: HTMLElement | null) => registerShell?.(media.id, node),
     [media.id, registerShell],
@@ -198,12 +189,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 ref={imageRef}
                 key={resolvedUrl}
                 src={resolvedUrl}
-                className={lowResolution ? "is-low-resolution" : undefined}
-                data-source-size={
-                  decodedSize && decodedSize.url === resolvedUrl
-                    ? `${decodedSize.width}x${decodedSize.height}`
-                    : undefined
-                }
+                style={{ visibility: isLoading ? "hidden" : undefined }}
                 data-media-id={media.id}
                 alt={media.caption ?? `${creator} saved photo`}
                 loading="eager"
@@ -213,12 +199,25 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 draggable={false}
                 onLoad={(event) => {
                   const image = event.currentTarget;
-                  if (image.naturalWidth > 0 && image.naturalHeight > 0) {
-                    setDecodedSize({
-                      url: resolvedUrl,
-                      width: image.naturalWidth,
-                      height: image.naturalHeight,
+                  if (
+                    image.naturalWidth > 0 &&
+                    image.naturalHeight > 0 &&
+                    Math.max(image.naturalWidth, image.naturalHeight) < 640
+                  ) {
+                    if (candidateIndex + 1 < candidateUrls.length) {
+                      setCandidateIndex((value) => value + 1);
+                      setIsLoading(true);
+                      return;
+                    }
+                    setHasFailed(true);
+                    setIsLoading(false);
+                    recordLoadOutcome(item, "failed", {
+                      status: 422,
+                      code: "low_resolution",
+                      stage: "image",
                     });
+                    reportUnavailable();
+                    return;
                   }
                   recordLoadOutcome(item, "loaded");
                   if (resolvedCandidateByRevision.size > 200)

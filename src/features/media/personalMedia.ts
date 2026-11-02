@@ -52,7 +52,7 @@ export function usesPersonalMedia(item: MediaQueueItem): boolean {
 export function mediaSource(item: MediaQueueItem): string | undefined {
   if (usesPersonalMedia(item)) {
     return personalUrl(
-      `/api/personal/images/${encodeURIComponent(item.post.shortcode!)}/${item.media.sourceIndex}`,
+      `/api/personal/images/${encodeURIComponent(item.post.shortcode!)}/${item.media.sourceIndex}?quality=2${item.media.sourceIndex === 0 ? "&cover=1" : ""}`,
     );
   }
   return item.media.assetUrl ?? item.media.previewUrl;

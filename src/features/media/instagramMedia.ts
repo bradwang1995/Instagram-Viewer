@@ -169,7 +169,7 @@ async function fetchPostPhotos(
           photo.sourceIndex < 0 ||
           photo.sourceIndex > 49 ||
           photo.url !==
-            `/api/personal/images/${shortcode}/${photo.sourceIndex}`,
+            `/api/personal/images/${shortcode}/${photo.sourceIndex}?quality=2`,
       )
     )
       throw new Error("Invalid local photo list.");

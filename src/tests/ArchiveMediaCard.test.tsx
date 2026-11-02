@@ -18,39 +18,19 @@ function card(item: MediaQueueItem, onUnavailable = vi.fn(), loadMedia = true) {
   );
 }
 describe("ArchiveMediaCard direct images", () => {
-  it("caps a genuinely small source without changing card geometry and clears the cap for a new high-resolution URL", () => {
+  it("rejects a low-resolution source instead of displaying a small fallback", () => {
     const item = createItem("resolution");
-    const view = render(card(item));
-    const small = view.container.querySelector("img")!;
-    Object.defineProperties(small, {
-      naturalWidth: { configurable: true, value: 320 },
-      naturalHeight: { configurable: true, value: 341 },
+    item.media.previewUrl = undefined;
+    const onUnavailable = vi.fn();
+    const view = render(card(item, onUnavailable));
+    const image = view.container.querySelector("img")!;
+    Object.defineProperties(image, {
+      naturalWidth: { value: 320 },
+      naturalHeight: { value: 341 },
     });
-    fireEvent.load(small);
-    expect(small).toHaveClass("is-low-resolution");
-    expect(small).toHaveAttribute("data-source-size", "320x341");
-    expect(view.container.querySelector("article")).toHaveStyle({
-      width: "400px",
-      height: "500px",
-    });
-    view.rerender(
-      card({
-        ...item,
-        media: {
-          ...item.media,
-          assetUrl: "https://example.com/high-resolution.jpg",
-        },
-      }),
-    );
-    const large = view.container.querySelector("img")!;
-    expect(large).not.toHaveClass("is-low-resolution");
-    Object.defineProperties(large, {
-      naturalWidth: { configurable: true, value: 1080 },
-      naturalHeight: { configurable: true, value: 1350 },
-    });
-    fireEvent.load(large);
-    expect(large).not.toHaveClass("is-low-resolution");
-    expect(large).toHaveAttribute("data-source-size", "1080x1350");
+    fireEvent.load(image);
+    expect(view.container.querySelector("img")).toBeNull();
+    expect(onUnavailable).toHaveBeenCalledTimes(1);
   });
   it("tries the asset then the preview and reports a terminal failure once", () => {
     const onUnavailable = vi.fn();

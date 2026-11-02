@@ -16,6 +16,7 @@ function setup() {
       .mockResolvedValue([
         "instagram-viewer-media-v1",
         "instagram-viewer-media-v2",
+        "instagram-viewer-media-v3",
       ]),
     delete: vi.fn(),
     open: vi.fn().mockResolvedValue(cache),
@@ -41,7 +42,8 @@ describe("image service worker cache", () => {
     events.activate({ waitUntil: (promise) => (activation = promise) });
     await activation;
     expect(caches.delete).toHaveBeenCalledWith("instagram-viewer-media-v1");
-    expect(caches.delete).not.toHaveBeenCalledWith("instagram-viewer-media-v2");
+    expect(caches.delete).toHaveBeenCalledWith("instagram-viewer-media-v2");
+    expect(caches.delete).not.toHaveBeenCalledWith("instagram-viewer-media-v3");
   });
   it("does not intercept cross-origin images or persist their hidden failures", () => {
     const { events, fetcher } = setup();

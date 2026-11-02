@@ -598,18 +598,8 @@ input:not([type="range"]):not([type="checkbox"]),
   object-fit: cover;
 }
 
-/* Some posts only provide a small original. Do not stretch it into a full-size photo. */
-.archive-media-surface > img.is-low-resolution,
-.archive-preview.is-ribbon .archive-media-surface > img.is-low-resolution {
-  object-fit: scale-down;
-}
-
 .archive-card:hover .archive-media-surface > img {
   transform: scale(1.025);
-}
-
-.archive-card:hover .archive-media-surface > img.is-low-resolution {
-  transform: none;
 }
 
 .archive-image-loading {

@@ -4,6 +4,17 @@ import { mkdtemp, rm, readdir } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { createPersonalMedia, isInstagramCdn } from "./personal-media.mjs";
+import { writeFile } from "node:fs/promises";
+
+function sizedJpeg(width, height) {
+  const bytes = Buffer.from([
+    255, 216, 255, 192, 0, 17, 8, 0, 0, 0, 0, 3, 1, 17, 0, 2, 17, 0, 3, 17, 0,
+    255, 217,
+  ]);
+  bytes.writeUInt16BE(height, 7);
+  bytes.writeUInt16BE(width, 9);
+  return bytes;
+}
 
 const dirs = [];
 afterEach(async () => {
@@ -69,6 +80,85 @@ async function request(middleware, url, headers = {}, method = "GET") {
   return { status, body, headers: responseHeaders };
 }
 describe("personal disk media gateway", () => {
+  it("filters a low-resolution first photo and uses the next good image as the cover", async () => {
+    const { middleware, fetcher, directory } = await setup();
+    fetcher.mockImplementation(async (url) =>
+      url.includes("/post/")
+        ? new Response(
+            JSON.stringify({
+              complete: true,
+              post: {
+                Shortcode: "Example",
+                Attachments: [
+                  {
+                    Kind: "image",
+                    URL: "https://scontent.cdninstagram.com/low.jpg",
+                    Width: 320,
+                    Height: 341,
+                  },
+                  {
+                    Kind: "image",
+                    URL: "https://scontent.cdninstagram.com/high.jpg",
+                    Width: 1080,
+                    Height: 1350,
+                  },
+                ],
+              },
+            }),
+          )
+        : new Response(sizedJpeg(1080, 1350)),
+    );
+    const photos = JSON.parse(
+      (await request(middleware, "/api/personal/posts/Example")).body,
+    ).photos;
+    expect(photos.map((p) => p.sourceIndex)).toEqual([1]);
+    const cover = await request(
+      middleware,
+      "/api/personal/images/Example/0?quality=2&cover=1",
+    );
+    expect(cover.status).toBe(200);
+    expect(fetcher.mock.calls.some(([url]) => url.endsWith("low.jpg"))).toBe(
+      false,
+    );
+    expect((await readdir(directory)).includes("Example-0.image")).toBe(false);
+  });
+  it("removes a low-resolution cache hit and refuses to persist a newly downloaded low-resolution image", async () => {
+    const { middleware, fetcher, directory } = await setup();
+    await writeFile(
+      path.join(directory, "Example-0.image"),
+      sizedJpeg(320, 341),
+    );
+    expect(
+      (await request(middleware, "/api/personal/images/Example/0?quality=2"))
+        .status,
+    ).toBe(422);
+    expect(fetcher).not.toHaveBeenCalled();
+    fetcher.mockImplementation(async (url) =>
+      url.includes("/post/")
+        ? new Response(
+            JSON.stringify({
+              complete: true,
+              post: {
+                Shortcode: "Example",
+                Attachments: [
+                  {
+                    Kind: "image",
+                    URL: "https://scontent.cdninstagram.com/low.jpg",
+                    Width: 1080,
+                    Height: 1350,
+                  },
+                ],
+              },
+            }),
+          )
+        : new Response(sizedJpeg(320, 341)),
+    );
+    expect(
+      (await request(middleware, "/api/personal/images/Example/0?quality=2"))
+        .status,
+    ).toBe(422);
+    expect((await readdir(directory)).includes("Example-0.image")).toBe(false);
+  });
   it("allows a preflight and explicit session handshake only for the production origin", async () => {
     const { middleware } = await setup();
     const remote = {

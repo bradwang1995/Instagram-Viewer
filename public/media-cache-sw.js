@@ -1,4 +1,4 @@
-const MEDIA_CACHE = "instagram-viewer-media-v2";
+const MEDIA_CACHE = "instagram-viewer-media-v3";
 const MAX_IMAGES = 80;
 
 self.addEventListener("install", () => {

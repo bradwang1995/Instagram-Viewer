@@ -10,6 +10,14 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import { imageDimensions, isLowResolution } from "./image-quality.mjs";
+
+function qualityFailure() {
+  return Object.assign(failure(422, "Low-resolution photo rejected."), {
+    errorCode: "low_resolution",
+    stage: "image",
+  });
+}
 
 const codePattern = /^[A-Za-z0-9_-]{1,24}$/;
 const imageTypes = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
@@ -255,15 +263,21 @@ export function createPersonalMedia({
       try {
         const bytes = await readFile(file);
         const type = imageType(bytes);
+        if (isLowResolution(imageDimensions(bytes))) {
+          await unlink(file);
+          throw qualityFailure();
+        }
         await utimes(file, new Date(), new Date()).catch(() => {});
         return { bytes, type, cached: true };
-      } catch {
+      } catch (error) {
+        if (error.errorCode === "low_resolution") throw error;
         /* Read through on missing or invalid cache entries. */
       }
       if (Date.now() < blockedUntil) throw cooldownFailure("image");
       let post = await manifest(code);
       for (let attempt = 0; attempt < 2; attempt++) {
         const attachment = post.attachments[index];
+        if (isLowResolution(attachment)) throw qualityFailure();
         if (
           !attachment ||
           attachment.kind !== "image" ||
@@ -305,6 +319,7 @@ export function createPersonalMedia({
           );
         }
         const type = imageType(bytes);
+        if (isLowResolution(imageDimensions(bytes))) throw qualityFailure();
         await atomic(file, bytes);
         await prune();
         return { bytes, type, cached: false };
@@ -390,6 +405,10 @@ export function createPersonalMedia({
         /^\/api\/personal\/(posts|images|diagnostics)\/([A-Za-z0-9_-]+)(?:\/(\d+))?$/.exec(
           url.pathname,
         );
+      const quality = url.searchParams.get("quality");
+      const cover = url.searchParams.get("cover");
+      if (quality === "2") url.searchParams.delete("quality");
+      if (cover === "1") url.searchParams.delete("cover");
       if (!match || !codePattern.test(match[2]) || url.search)
         return reply(400, "Invalid media request.");
       const [, kind, code, rawIndex] = match;
@@ -409,12 +428,12 @@ export function createPersonalMedia({
           200,
           JSON.stringify({
             photos: data.attachments
-              .filter((a) => a.kind === "image")
+              .filter((a) => a.kind === "image" && !isLowResolution(a))
               .map((a) => ({
                 sourceIndex: a.index,
                 width: a.width,
                 height: a.height,
-                url: `/api/personal/images/${code}/${a.index}`,
+                url: `/api/personal/images/${code}/${a.index}?quality=2`,
               })),
           }),
           { "Content-Type": "application/json" },
@@ -422,7 +441,35 @@ export function createPersonalMedia({
       }
       if (kind !== "images" || !/^(?:[0-9]|[1-4][0-9])$/.test(rawIndex || ""))
         return reply(400, "Invalid photo index.");
-      const data = await image(code, Number(rawIndex));
+      let data;
+      if (cover === "1" && rawIndex === "0") {
+        // Keep good cached covers available even when the upstream is offline.
+        const file = path.join(directory, `${code}-0.image`);
+        try {
+          const size = imageDimensions(await readFile(file));
+          if (isLowResolution(size)) await unlink(file);
+          else if (size) data = await image(code, 0);
+        } catch (error) {
+          if (error.code !== "ENOENT") throw error;
+        }
+        if (!data) {
+          const post = await manifest(code);
+          const candidates = post.attachments
+            .filter((a) => a.kind === "image" && !isLowResolution(a))
+            .slice(0, 2);
+          for (const candidate of candidates) {
+            try {
+              data = await image(code, candidate.index);
+              break;
+            } catch (error) {
+              if (error.errorCode !== "low_resolution") throw error;
+            }
+          }
+          if (!data) throw qualityFailure();
+        }
+      } else {
+        data = await image(code, Number(rawIndex));
+      }
       failures.delete(`${code}:${rawIndex}`);
       return reply(200, data.bytes, {
         "Content-Type": imageTypes[data.type],
@@ -431,7 +478,7 @@ export function createPersonalMedia({
       });
     } catch (error) {
       const status = [
-        400, 401, 403, 404, 410, 429, 451, 502, 503, 504,
+        400, 401, 403, 404, 410, 422, 429, 451, 502, 503, 504,
       ].includes(error.status)
         ? error.status
         : 502;
