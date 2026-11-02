@@ -15,6 +15,7 @@
   color: #ebe9e2;
   --ui-font: "Pacifico", Arial, sans-serif;
   --display-font: var(--ui-font);
+  --body-font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --black: #050606;
   --ink: #090a0a;
   --olive-black: #120d13;
@@ -163,6 +164,32 @@ h1,
 h2,
 p {
   margin: 0;
+}
+
+/* Keep decorative type for the main controls, and prose easy to read. */
+p,
+li,
+table,
+dl,
+textarea,
+input:not([type="range"]):not([type="checkbox"]),
+.local-server-dialog,
+.local-server-notice,
+.archive-photo-error,
+.archive-empty-field,
+.slideshow-empty,
+.post-panel-message,
+.post-panel-error,
+.landing-manifesto,
+.landing-upload-copy > span,
+.landing-error,
+.landing-drop-state,
+.archive-import-notice,
+.archive-undo,
+.archive-loading strong,
+.warning-item,
+.empty-state > .muted {
+  font-family: var(--body-font);
 }
 
 .sr-only {

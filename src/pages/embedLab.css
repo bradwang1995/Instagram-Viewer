@@ -3,6 +3,11 @@
   margin: auto;
   padding: 40px 24px;
   color: #ececf1;
+  font-family: var(--body-font);
+}
+.embed-lab button,
+.embed-lab input,
+.embed-lab select {
   font-family: inherit;
 }
 .embed-lab header {
