@@ -64,4 +64,35 @@ it("uses one local manifest call for a carousel and preserves video gaps", async
   const photos = await loadPostPhotos(item, []);
   expect(photos.map((photo) => photo.media.sourceIndex)).toEqual([0, 2]);
   expect(fetcher).toHaveBeenCalledTimes(1);
+  const { mediaSource } = await import("../features/media/personalMedia");
+  expect(mediaSource(photos[0])).toBe(
+    "/api/personal/images/Example/0?quality=2",
+  );
+  expect(mediaSource(photos[1])).toBe(
+    "/api/personal/images/Example/2?quality=2",
+  );
+});
+it("preserves local cooldown diagnostics instead of counting a deferred manifest as an upstream failure", async () => {
+  vi.stubEnv("MODE", "personal");
+  vi.resetModules();
+  vi.stubGlobal(
+    "fetch",
+    vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ errorCode: "cooldown", deferred: true }),
+          { status: 429 },
+        ),
+      ),
+  );
+  const { loadPostPhotos } = await import("../features/media/instagramMedia");
+  await expect(loadPostPhotos(item, [])).rejects.toMatchObject({
+    failure: {
+      status: 429,
+      code: "cooldown",
+      stage: "metadata",
+      deferred: true,
+    },
+  });
 });

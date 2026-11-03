@@ -196,7 +196,6 @@ async function fetchPostPhotos(
       personalUrl(`/api/personal/posts/${encodeURIComponent(shortcode)}`),
       { signal: AbortSignal.any([signal, AbortSignal.timeout(45_000)]) },
     );
-    if (response.status === 429) throw new MediaRateLimitError();
     if (!response.ok)
       throw new MediaLoadError(await responseFailure(response, "metadata"));
     const data = await response.json();

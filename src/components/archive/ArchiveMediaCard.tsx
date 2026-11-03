@@ -3,6 +3,7 @@ import {
   memo,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -48,7 +49,16 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   onLoadStateChange,
 }: ArchiveMediaCardProps) {
   const { media, post } = item;
-  const [proxyUrl, setProxyUrl] = useState<string>();
+  const sourceRevision = `${media.id}\u0000${post.shortcode ?? ""}\u0000${media.sourceIndex}`;
+  const [proxy, setProxy] = useState<{
+    revision: string;
+    url: string;
+    expires: number;
+  }>();
+  const proxyUrl =
+    proxy?.revision === sourceRevision && proxy.expires > Date.now()
+      ? proxy.url
+      : undefined;
   const [attempt, setAttempt] = useState(0);
   const directUrl = mediaSource(item);
   const previewUrl = usesPersonalMedia(item) ? undefined : media.previewUrl;
@@ -69,9 +79,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   const [candidateIndex, setCandidateIndex] = useState(() =>
     Math.max(0, cachedCandidate ? candidateUrls.indexOf(cachedCandidate) : 0),
   );
-  const [isLoading, setIsLoading] = useState(
-    candidateUrls.length > 0 && !cachedCandidate,
-  );
+  const [isLoading, setIsLoading] = useState(candidateUrls.length > 0);
   const [hasFailed, setHasFailed] = useState(false);
   const unavailableReportedRef = useRef(false);
   const imageRef = useRef<HTMLImageElement>(null);
@@ -81,7 +89,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     [media.id, registerShell],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const cached = resolvedCandidateByRevision.get(mediaRevision);
     const nextIndex = cached ? candidateUrls.indexOf(cached) : 0;
     setCandidateIndex(Math.max(0, nextIndex));
@@ -89,21 +97,27 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     const alreadyLoaded =
       image?.complete &&
       image.naturalWidth > 0 &&
+      image.naturalHeight > 0 &&
+      Math.max(image.naturalWidth, image.naturalHeight) >= 640 &&
       image.getAttribute("src") === candidateUrls[Math.max(0, nextIndex)];
-    setIsLoading(candidateUrls.length > 0 && !cached && !alreadyLoaded);
+    setIsLoading(candidateUrls.length > 0 && !alreadyLoaded);
     setHasFailed(false);
     unavailableReportedRef.current = false;
-  }, [candidateUrls, mediaRevision]);
+  }, [candidateUrls, mediaRevision, loadMedia]);
 
   useEffect(() => {
-    if (!loadMedia || visuallyHidden || directUrl) return;
+    if (!loadMedia || visuallyHidden || directUrl || proxyUrl) return;
     const controller = new AbortController();
     setHasFailed(false);
     setIsLoading(!imageRef.current?.complete || !imageRef.current.naturalWidth);
     void resolveMediaUrl(item, controller.signal)
       .then((source) => {
         if (controller.signal.aborted) return;
-        setProxyUrl(source);
+        setProxy({
+          revision: sourceRevision,
+          url: source,
+          expires: Date.now() + 300_000,
+        });
       })
       .catch((error: unknown) => {
         if (
@@ -116,7 +130,15 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
         recordLoadOutcome(item, "failed", errorFailure(error));
       });
     return () => controller.abort();
-  }, [loadMedia, visuallyHidden, directUrl, item, attempt]);
+  }, [
+    loadMedia,
+    visuallyHidden,
+    directUrl,
+    proxyUrl,
+    sourceRevision,
+    item,
+    attempt,
+  ]);
 
   const reportUnavailable = useCallback(() => {
     if (unavailableReportedRef.current) return;
@@ -202,6 +224,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                   unavailableReportedRef.current = false;
                   setHasFailed(false);
                   setIsLoading(true);
+                  setProxy(undefined);
                   setAttempt((value) => value + 1);
                 }}
               >

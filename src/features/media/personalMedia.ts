@@ -51,8 +51,12 @@ export function usesPersonalMedia(item: MediaQueueItem): boolean {
 
 export function mediaSource(item: MediaQueueItem): string | undefined {
   if (usesPersonalMedia(item)) {
+    const indexedPath = `/api/personal/images/${encodeURIComponent(item.post.shortcode!)}/${item.media.sourceIndex}?quality=2`;
+    const indexedUrl = personalUrl(indexedPath);
+    // A validated manifest entry identifies an exact photo, including index zero.
+    if (item.media.assetUrl === indexedUrl) return indexedUrl;
     return personalUrl(
-      `/api/personal/images/${encodeURIComponent(item.post.shortcode!)}/${item.media.sourceIndex}?quality=2${item.media.sourceIndex === 0 ? "&cover=1" : ""}`,
+      `${indexedPath}${item.media.sourceIndex === 0 ? "&cover=1" : ""}`,
     );
   }
   return item.media.assetUrl ?? item.media.previewUrl;
