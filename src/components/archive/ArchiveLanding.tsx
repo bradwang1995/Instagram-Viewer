@@ -41,11 +41,11 @@ export function ArchiveLanding({
     >
       <header className="collection-header">
         <a
-          className="collection-brand"
+          className="collection-brand archive-logo"
           href={import.meta.env.BASE_URL}
           aria-label="Instagram Viewer home"
         >
-          <Images size={22} /> <span>Instagram Viewer</span>
+          <Images size={22} /> <strong>Instagram Viewer</strong>
         </a>
         <LocalServiceButton />
       </header>
@@ -70,7 +70,7 @@ export function ArchiveLanding({
           <div className="collection-actions">
             <button
               type="button"
-              className="collection-primary"
+              className="viewer-control is-active"
               onClick={onDemo}
               disabled={isImporting}
             >
@@ -78,7 +78,7 @@ export function ArchiveLanding({
             </button>
             <button
               type="button"
-              className="collection-import"
+              className="viewer-control"
               onClick={onChooseFile}
               disabled={isImporting}
               aria-label="Choose Instagram saved posts JSON file"
@@ -127,6 +127,7 @@ export function ArchiveLanding({
               type="button"
               onClick={onDemo}
               disabled={isImporting}
+              className="viewer-control"
               aria-label="Explore demo collection"
             >
               <ArrowRight size={20} />
