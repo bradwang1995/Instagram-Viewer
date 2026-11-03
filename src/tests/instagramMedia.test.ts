@@ -178,6 +178,24 @@ describe("post photo source", () => {
       },
     );
   });
+  it("does not misclassify a video-only post as a low-resolution photo", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            type: "Note",
+            id: "https://oginstagram.com/p/VideoOnlyAudit/1",
+            content: "",
+            attachment: [{ mediaType: "video/mp4", width: 320, height: 400 }],
+          }),
+        ),
+      ),
+    );
+    await expect(loadPostPhotos(item("VideoOnlyAudit"), [])).rejects.toThrow(
+      "No photos are available",
+    );
+  });
   it("stops queued metadata traffic during a rate-limit cooldown", async () => {
     const fetcher = vi.fn().mockResolvedValue(
       new Response("limited", {

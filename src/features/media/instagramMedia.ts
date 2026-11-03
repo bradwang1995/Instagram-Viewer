@@ -256,7 +256,15 @@ async function fetchPostPhotos(
     ];
   });
   if (!items.length) {
-    if (notes.some((note) => note.attachment.some(isLowResolution)))
+    if (
+      notes.some((note) =>
+        note.attachment.some(
+          (attachment) =>
+            attachment.mediaType?.startsWith("image/") &&
+            isLowResolution(attachment),
+        ),
+      )
+    )
       throw lowResolutionError();
     throw new Error("No photos are available in this post.");
   }
