@@ -1,4 +1,5 @@
-import { Grid2X2, MoveHorizontal, Play, Upload } from "lucide-react";
+import { Focus, Grid2X2, MoveHorizontal, Play, Upload } from "lucide-react";
+import { usePersonFocus } from "../../features/media/personFocus";
 import type { CSSProperties } from "react";
 import type { TransitionPreset } from "../../db/schema";
 import type { ArchiveViewMode } from "./ArchivePreview";
@@ -124,6 +125,7 @@ export function ArchiveControlBar({
   dateRange,
   slideshow,
 }: ArchiveControlBarProps) {
+  const { enabled, toggle } = usePersonFocus();
   const { months, startIndex, endIndex, onStartChange, onEndChange } =
     dateRange ?? {
       months: [],
@@ -218,7 +220,19 @@ export function ArchiveControlBar({
             <output>{formatDuration(slideshow.dwellMs)}</output>
           </label>
         </div>
-      ) : null}
+      ) : (
+        <div className="slideshow-settings-placeholder" />
+      )}
+      <button
+        type="button"
+        className={`viewer-control person-focus-toggle${enabled ? " is-active" : ""}`}
+        aria-pressed={enabled}
+        onClick={toggle}
+        title="Detect and zoom in on the main person. Photos are processed on this device."
+      >
+        <Focus size={18} aria-hidden="true" />
+        Focus on person
+      </button>
     </footer>
   );
 }

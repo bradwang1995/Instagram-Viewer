@@ -823,16 +823,14 @@ export const ArchivePreview = memo(function ArchivePreview({
         </div>
       </div>
 
-      {dateRange ? (
-        <motion.div
-          className="archive-dock-motion"
-          initial={{ y: "110%" }}
-          animate={{ y: 0 }}
-          transition={{ duration: 0.7, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <ArchiveControlBar dateRange={dateRange} />
-        </motion.div>
-      ) : null}
+      <motion.div
+        className="archive-dock-motion"
+        initial={{ y: "110%" }}
+        animate={{ y: 0 }}
+        transition={{ duration: 0.7, delay: 0.25, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <ArchiveControlBar dateRange={dateRange} />
+      </motion.div>
     </section>
   );
 });

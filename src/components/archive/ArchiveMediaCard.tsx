@@ -1,4 +1,5 @@
 import { LoaderCircle } from "lucide-react";
+import { usePersonFocusStyle } from "../../hooks/usePersonFocusStyle";
 import {
   memo,
   useCallback,
@@ -84,6 +85,11 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   const unavailableReportedRef = useRef(false);
   const imageRef = useRef<HTMLImageElement>(null);
   const resolvedUrl = candidateUrls[candidateIndex];
+  const focusStyle = usePersonFocusStyle(
+    imageRef,
+    resolvedUrl,
+    loadMedia && !visuallyHidden && !isLoading && !hasFailed,
+  );
   const shellRef = useCallback(
     (node: HTMLElement | null) => registerShell?.(media.id, node),
     [media.id, registerShell],
@@ -237,7 +243,10 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 ref={imageRef}
                 key={resolvedUrl}
                 src={resolvedUrl}
-                style={{ visibility: isLoading ? "hidden" : undefined }}
+                style={{
+                  ...focusStyle,
+                  visibility: isLoading ? "hidden" : undefined,
+                }}
                 data-media-id={media.id}
                 alt={media.caption ?? `${creator} saved photo`}
                 loading="eager"
