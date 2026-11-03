@@ -1,9 +1,7 @@
-import { useGSAP } from "@gsap/react";
-import { ArrowRight, ShieldCheck, Upload } from "lucide-react";
-import { motion } from "motion/react";
-import { useRef, useState } from "react";
-import gsap from "gsap";
+import { ArrowRight, Images, ShieldCheck, Upload } from "lucide-react";
+import { useState } from "react";
 import { LocalServiceButton } from "./LocalServiceSettings";
+import "./ArchiveLanding.css";
 
 type ArchiveLandingProps = {
   isImporting: boolean;
@@ -20,124 +18,133 @@ export function ArchiveLanding({
   onFile,
   onDemo,
 }: ArchiveLandingProps) {
-  const rootRef = useRef<HTMLElement>(null);
   const [isDragging, setIsDragging] = useState(false);
-
-  useGSAP(
-    () => {
-      gsap.fromTo(
-        ".landing-wordmark span",
-        { yPercent: 112 },
-        {
-          yPercent: 0,
-          duration: 1.15,
-          ease: "power4.out",
-          stagger: 0.07,
-        },
-      );
-      gsap.fromTo(
-        ".landing-portrait",
-        { clipPath: "inset(100% 0 0 0)", scale: 1.08 },
-        {
-          clipPath: "inset(0% 0 0 0)",
-          scale: 1,
-          duration: 1.4,
-          ease: "power4.inOut",
-          delay: 0.25,
-        },
-      );
-      gsap.to(".landing-portrait img", {
-        yPercent: -2.2,
-        scale: 1.035,
-        duration: 5.8,
-        ease: "sine.inOut",
-        repeat: -1,
-        yoyo: true,
-      });
-    },
-    { scope: rootRef },
-  );
-
-  function acceptFile(file?: File) {
-    if (file?.name.toLowerCase().endsWith(".json")) onFile(file);
-  }
-
   return (
     <section
-      ref={rootRef}
-      className={`archive-landing${isDragging ? " is-dragging" : ""}`}
+      className={`collection-landing${isDragging ? " is-dragging" : ""}`}
       onDragEnter={(event) => {
         event.preventDefault();
         setIsDragging(true);
       }}
       onDragOver={(event) => event.preventDefault()}
       onDragLeave={(event) => {
-        if (event.currentTarget === event.target) setIsDragging(false);
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setIsDragging(false);
       }}
       onDrop={(event) => {
         event.preventDefault();
         setIsDragging(false);
-        acceptFile(event.dataTransfer.files[0]);
+        const file = event.dataTransfer.files[0];
+        if (!isImporting && file?.name.toLowerCase().endsWith(".json"))
+          onFile(file);
       }}
     >
-      <header className="landing-header">
-        <div className="archive-logo">
-          <strong>Instagram Viewer</strong>
-        </div>
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <LocalServiceButton />
-          <span className="landing-step">01 — Import</span>
-        </div>
+      <header className="collection-header">
+        <a
+          className="collection-brand"
+          href={import.meta.env.BASE_URL}
+          aria-label="Instagram Viewer home"
+        >
+          <Images size={22} /> <span>Instagram Viewer</span>
+        </a>
+        <LocalServiceButton />
       </header>
-
-      <h1 className="landing-wordmark" aria-label="Instagram Viewer">
-        <span>Instagram</span>
-        <span>Viewer</span>
-      </h1>
-
-      <motion.button
-        type="button"
-        className="landing-portrait"
-        onClick={onChooseFile}
-        whileHover={{ scale: 1.015 }}
-        whileTap={{ scale: 0.99 }}
-        aria-label="Choose Instagram saved posts JSON file"
-      >
-        <img
-          src={`${import.meta.env.BASE_URL}demo/warm-interior.webp`}
-          alt="A quiet interior preview representing the local photo collection"
-        />
-        <span className="landing-image-wash" aria-hidden="true" />
-        <span className="landing-upload-copy">
-          <span>
-            {isImporting ? "Preparing your photos" : "Drop JSON or click"}
+      <main className="collection-hero">
+        <div className="collection-intro">
+          <span className="collection-eyebrow">
+            <span /> A SPACE FOR YOUR SAVED FINDS
           </span>
-          <strong>
-            {isImporting ? "Building preview…" : "Import saved posts"}
-            <Upload size={18} aria-hidden="true" />
-          </strong>
+          <h1 aria-label="Instagram Viewer">
+            <span>Instagram</span>
+            <span>Viewer</span>
+          </h1>
+          <p className="collection-tagline">
+            Less scrolling.
+            <br />
+            More inspiration.
+          </p>
+          <p className="collection-description">
+            Give your saved posts a little room. Turn your Instagram collection
+            into a photo gallery made for getting lost in.
+          </p>
+          <div className="collection-actions">
+            <button
+              type="button"
+              className="collection-primary"
+              onClick={onDemo}
+              disabled={isImporting}
+            >
+              View demo <ArrowRight size={18} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
+              className="collection-import"
+              onClick={onChooseFile}
+              disabled={isImporting}
+              aria-label="Choose Instagram saved posts JSON file"
+            >
+              <Upload size={17} aria-hidden="true" />
+              {isImporting ? "Building preview…" : "Import saved posts"}
+            </button>
+          </div>
+          <p className="collection-hint">
+            Or drop your saved posts JSON anywhere here.
+          </p>
+          {error ? (
+            <p className="collection-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </div>
+        <div
+          className="collection-preview"
+          aria-label="Sample photo collection"
+        >
+          <div className="collection-preview-top">
+            <span>
+              <span className="collection-dot" /> THE DEMO COLLECTION
+            </span>
+            <span>01 / 10</span>
+          </div>
+          <div className="collection-photo-grid">
+            <img
+              className="collection-photo-main"
+              src={`${import.meta.env.BASE_URL}demo/warm-interior.webp`}
+              alt="Books stacked beside a sunlit window"
+            />
+            <img
+              src={`${import.meta.env.BASE_URL}demo/mountain-light.webp`}
+              alt="Mountain scenery from the demo collection"
+            />
+            <img
+              src={`${import.meta.env.BASE_URL}demo/editorial-street.webp`}
+              alt="A street scene from the demo collection"
+            />
+          </div>
+          <div className="collection-preview-bottom">
+            <span>A few things worth saving.</span>
+            <button
+              type="button"
+              onClick={onDemo}
+              disabled={isImporting}
+              aria-label="Explore demo collection"
+            >
+              <ArrowRight size={20} />
+            </button>
+          </div>
+        </div>
+      </main>
+      <footer className="collection-footer">
+        <span>
+          <ShieldCheck size={15} aria-hidden="true" /> Imported JSON stays in
+          this browser.
         </span>
-      </motion.button>
-
-      <div className="landing-manifesto">
-        <p>
-          Your saved Instagram references become one private, scrollable image
-          field. Imported JSON stays in this browser.
-        </p>
-        <span>JSON only · local browser storage</span>
-      </div>
-
-      <button className="landing-demo" type="button" onClick={onDemo}>
-        View demo <ArrowRight size={18} aria-hidden="true" />
-      </button>
-
-      <span className="landing-private">
-        <ShieldCheck size={14} aria-hidden="true" /> Local by design
-      </span>
-
-      {error ? <div className="landing-error">{error}</div> : null}
+        <span>Horizontal · Grid · Slideshow</span>
+      </footer>
       {isDragging ? (
-        <div className="landing-drop-state">Release to build your preview</div>
+        <div className="collection-drop">
+          Drop your JSON to start your collection
+        </div>
       ) : null}
     </section>
   );
