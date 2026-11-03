@@ -1,5 +1,6 @@
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useSlideshowPlayback } from "../../hooks/useSlideshowPlayback";
 import type { TransitionPreset } from "../../db/schema";
 import { ArchiveMediaCard } from "./ArchiveMediaCard";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
@@ -67,6 +68,25 @@ export function ArchiveSlideshow({
   onUnavailable,
 }: ArchiveSlideshowProps) {
   const previousCurrentIdRef = useRef<string>();
+  const [readyIds, setReadyIds] = useState<string[]>([]);
+  const onLoadStateChange = useCallback((id: string, ready: boolean) => {
+    setReadyIds((previous) =>
+      ready
+        ? previous.includes(id)
+          ? previous
+          : [...previous.slice(-7), id]
+        : previous.includes(id)
+          ? previous.filter((value) => value !== id)
+          : previous,
+    );
+  }, []);
+  const visible = useSlideshowPlayback(
+    open && active,
+    item?.media.id,
+    !!item && readyIds.includes(item.media.id),
+    dwellMs,
+    onNext,
+  );
 
   useEffect(() => {
     if (!open || !keyboardNavigationEnabled) return;
@@ -99,6 +119,7 @@ export function ArchiveSlideshow({
     previousCurrentIdRef.current,
   );
   const admittedFrames = useRef<{ key: string; ids: Set<string> }>();
+  const [, refreshAdmission] = useState(0);
   const key = `${loadGeneration}:${loadScope}`;
   if (frames.length && admittedFrames.current?.key !== key) {
     admittedFrames.current = {
@@ -106,6 +127,26 @@ export function ArchiveSlideshow({
       ids: new Set(frames.map((frame) => frame.item.media.id)),
     };
   }
+
+  useEffect(() => {
+    const id = item?.media.id;
+    if (
+      !open ||
+      !active ||
+      !visible ||
+      !id ||
+      admittedFrames.current?.ids.has(id)
+    )
+      return;
+    // A failed cohort must not stall playback or trigger a rapid replacement cascade.
+    // Admit just the replacement current card after one dwell, leaving neighbors paused.
+    const timer = window.setTimeout(() => {
+      if (admittedFrames.current?.key !== key) return;
+      admittedFrames.current.ids = new Set([id]);
+      refreshAdmission((value) => value + 1);
+    }, dwellMs);
+    return () => window.clearTimeout(timer);
+  }, [open, active, visible, item?.media.id, key, dwellMs]);
 
   useEffect(() => {
     previousCurrentIdRef.current = item?.media.id;
@@ -153,11 +194,13 @@ export function ArchiveSlideshow({
                   selected={false}
                   loadMedia={
                     active &&
+                    visible &&
                     !!admittedFrames.current?.ids.has(frame.item.media.id)
                   }
                   layoutStyle={{ width: "100%", height: "100%" }}
                   onSelect={onOpenPost ?? (() => {})}
                   onUnavailable={onUnavailable}
+                  onLoadStateChange={onLoadStateChange}
                 />
               </motion.div>
             );

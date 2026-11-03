@@ -6,10 +6,13 @@ import type { MediaQueueItem } from "../../features/media/mediaQueue";
 import type { ArchiveTab } from "./ArchiveChrome";
 import { ArchivePreview } from "./ArchivePreview";
 import { ArchiveSlideshow } from "./ArchiveSlideshow";
+import { usesPersonalMedia } from "../../features/media/personalMedia";
 import {
   errorFailure,
   recordLoadOutcome,
 } from "../../features/media/loadReport";
+
+const failedPhotosThisVisit = new Map<string, Set<string>>();
 
 export function PostPhotoPanel({
   item,
@@ -17,18 +20,16 @@ export function PostPhotoPanel({
   initialDwellMs,
   initialPreset,
   onClose,
-  onUnavailable,
 }: {
   item: MediaQueueItem;
   knownItems: MediaQueueItem[];
   initialDwellMs: number;
   initialPreset: TransitionPreset;
   onClose: () => void;
-  onUnavailable?: () => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const failureKey = `${usesPersonalMedia(item) ? "local" : "default"}:${item.post.id}:${item.post.updatedAt}`;
   const [loadedItems, setItems] = useState<MediaQueueItem[]>([]);
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<ArchiveTab>("ribbon");
   const [selectedId, setSelectedId] = useState<string>();
@@ -63,32 +64,28 @@ export function PostPhotoPanel({
   }, []);
 
   useEffect(() => {
-    let active = true;
+    const controller = new AbortController();
     setLoading(true);
-    setError("");
-    setFailedIds(new Set());
-    void loadPostPhotos(item, knownItems)
+    setFailedIds(new Set(failedPhotosThisVisit.get(failureKey)));
+    void loadPostPhotos(item, knownItems, controller.signal)
       .then((photos) => {
-        if (!active) return;
+        if (controller.signal.aborted) return;
         setItems(photos);
         setSelectedId(photos[0]?.media.id);
         setLoading(false);
       })
       .catch((reason: unknown) => {
-        if (!active) return;
+        if (controller.signal.aborted) return;
         recordLoadOutcome(item, "failed", errorFailure(reason));
-        onUnavailable?.();
-        setError(
-          reason instanceof Error
-            ? reason.message
-            : "Could not load this post's photos.",
-        );
+        // A manifest failure must not discard a cover that already loaded successfully.
+        setItems([item]);
+        setSelectedId(item.media.id);
         setLoading(false);
       });
     return () => {
-      active = false;
+      controller.abort();
     };
-  }, [item, knownItems, onUnavailable]);
+  }, [item, knownItems, failureKey]);
 
   const move = useCallback(
     (step: 1 | -1) => {
@@ -101,14 +98,16 @@ export function PostPhotoPanel({
     },
     [items, selectedIndex],
   );
-  useEffect(() => {
-    if (tab !== "slideshow" || items.length < 2) return;
-    const timer = window.setTimeout(() => move(1), dwellMs);
-    return () => window.clearTimeout(timer);
-  }, [tab, dwellMs, move]);
-  const onPhotoUnavailable = useCallback((id: string) => {
-    setFailedIds((previous) => new Set(previous).add(id));
-  }, []);
+  const onPhotoUnavailable = useCallback(
+    (id: string) => {
+      const failures =
+        failedPhotosThisVisit.get(failureKey) ?? new Set<string>();
+      failures.add(id);
+      failedPhotosThisVisit.set(failureKey, failures);
+      setFailedIds(new Set(failures));
+    },
+    [failureKey],
+  );
 
   return (
     <dialog
@@ -139,12 +138,10 @@ export function PostPhotoPanel({
       >
         <X size={22} />
       </button>
-      {loading || error || !items.length ? (
-        <div className="post-panel-message" role={error ? "alert" : "status"}>
+      {loading || !items.length ? (
+        <div className="post-panel-message" role="status">
           <strong>
-            {loading
-              ? "Loading post photos…"
-              : error || "No photos in this post."}
+            {loading ? "Loading post photos…" : "No photos in this post."}
           </strong>
         </div>
       ) : (

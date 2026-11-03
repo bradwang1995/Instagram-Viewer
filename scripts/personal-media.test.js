@@ -1,8 +1,9 @@
 // @vitest-environment node
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, rm, readdir } from "node:fs/promises";
+import { mkdtemp, rm, readdir, stat } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { EventEmitter } from "node:events";
 import { createPersonalMedia, isInstagramCdn } from "./personal-media.mjs";
 import { writeFile } from "node:fs/promises";
 
@@ -60,10 +61,17 @@ async function setup(options = {}) {
   const middleware = createPersonalMedia({ directory, fetcher, ...options });
   return { directory, fetcher, middleware };
 }
-async function request(middleware, url, headers = {}, method = "GET") {
+async function request(middleware, url, headers = {}, method = "GET", signal) {
   let status, body, responseHeaders;
+  const req = Object.assign(new EventEmitter(), {
+    url,
+    method,
+    headers: { host: "127.0.0.1:5178", ...headers },
+  });
+  const abort = () => req.emit("aborted");
+  signal?.addEventListener("abort", abort, { once: true });
   await middleware(
-    { url, method, headers: { host: "127.0.0.1:5178", ...headers } },
+    req,
     {
       writeHead(s, h) {
         status = s;
@@ -77,9 +85,82 @@ async function request(middleware, url, headers = {}, method = "GET") {
       throw Error("unexpected next");
     },
   );
+  signal?.removeEventListener("abort", abort);
   return { status, body, headers: responseHeaders };
 }
 describe("personal disk media gateway", () => {
+  it("cancels abandoned upstream work without poisoning retries or cancelling another client", async () => {
+    const { middleware, fetcher } = await setup();
+    let finish;
+    let upstreamSignal;
+    fetcher.mockImplementation((_url, options) => {
+      upstreamSignal = options.signal;
+      return new Promise((resolve, reject) => {
+        finish = resolve;
+        options.signal.addEventListener(
+          "abort",
+          () => reject(options.signal.reason),
+          { once: true },
+        );
+      });
+    });
+    const cancelled = new AbortController();
+    const first = request(
+      middleware,
+      "/api/personal/posts/Example",
+      {},
+      "GET",
+      cancelled.signal,
+    );
+    const second = request(middleware, "/api/personal/posts/Example");
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    cancelled.abort();
+    await first;
+    expect(upstreamSignal.aborted).toBe(false);
+    finish(
+      new Response(
+        JSON.stringify({
+          complete: true,
+          post: {
+            Shortcode: "Example",
+            Attachments: [
+              { Kind: "image", URL: "https://scontent.cdninstagram.com/a.jpg" },
+            ],
+          },
+        }),
+      ),
+    );
+    expect((await second).status).toBe(200);
+    const abandoned = new AbortController();
+    const only = request(
+      middleware,
+      "/api/personal/posts/Abandoned",
+      {},
+      "GET",
+      abandoned.signal,
+    );
+    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+    abandoned.abort();
+    await only;
+    expect(upstreamSignal.aborted).toBe(true);
+    fetcher.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          complete: true,
+          post: {
+            Shortcode: "Abandoned",
+            Attachments: [
+              { Kind: "image", URL: "https://scontent.cdninstagram.com/b.jpg" },
+            ],
+          },
+        }),
+      ),
+    );
+    expect(
+      (await request(middleware, "/api/personal/posts/Abandoned")).status,
+    ).toBe(200);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
   it("serves a validated cached cover without fetching a manifest or the upstream image", async () => {
     const { middleware, fetcher, directory } = await setup();
     const bytes = sizedJpeg(1080, 1350);
@@ -421,6 +502,63 @@ describe("personal disk media gateway", () => {
     ).toBe(200);
     const files = await readdir(directory);
     expect(files).toEqual(["Example-0.image"]);
+  });
+  it("keeps concurrent cache writes within both quotas and recovers the index on restart", async () => {
+    const { middleware, fetcher, directory } = await setup({
+      maxBytes: 100,
+      maxFiles: 4,
+    });
+    await writeFile(path.join(directory, "keep.txt"), "unrelated");
+    fetcher.mockImplementation(async (url) =>
+      url.includes("/post/")
+        ? new Response(
+            JSON.stringify({
+              complete: true,
+              post: {
+                Shortcode: url.split("/post/")[1],
+                Attachments: [
+                  {
+                    Kind: "image",
+                    URL: "https://scontent.cdninstagram.com/concurrent.jpg",
+                  },
+                ],
+              },
+            }),
+          )
+        : new Response(new Uint8Array([255, 216, 255, 1])),
+    );
+    const results = await Promise.all(
+      Array.from({ length: 12 }, (_, i) =>
+        request(middleware, `/api/personal/images/Concurrent${i}/0`),
+      ),
+    );
+    expect(results.every((result) => result.status === 200)).toBe(true);
+    const files = (await readdir(directory)).filter(
+      (name) => name.endsWith(".image") || name.endsWith(".json"),
+    );
+    expect(files.length).toBeLessThanOrEqual(4);
+    expect(
+      (
+        await Promise.all(files.map((name) => stat(path.join(directory, name))))
+      ).reduce((sum, entry) => sum + entry.size, 0),
+    ).toBeLessThanOrEqual(100);
+    expect(await readdir(directory)).toContain("keep.txt");
+    const offline = vi.fn().mockRejectedValue(new Error("offline"));
+    const restarted = createPersonalMedia({
+      directory,
+      fetcher: offline,
+      maxBytes: 100,
+      maxFiles: 4,
+    });
+    const code = files
+      .find((name) => name.endsWith(".image"))
+      .replace("-0.image", "");
+    expect(
+      (await request(restarted, `/api/personal/images/${code}/0`)).headers[
+        "X-Personal-Cache"
+      ],
+    ).toBe("HIT");
+    expect(offline).not.toHaveBeenCalled();
   });
   it("stops queued upstream work after rate limiting and labels unrequested photos as deferred", async () => {
     const { middleware, fetcher } = await setup();

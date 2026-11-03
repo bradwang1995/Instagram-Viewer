@@ -156,6 +156,62 @@ describe("Photo archive preview", () => {
     expect(document.querySelector("iframe")).toBeNull();
   });
 
+  it("hides only a failed carousel photo while keeping the post and its other photos", async () => {
+    const post = createPost("PARTIAL-FAILURE", "@partial", "Saved");
+    testState.posts = [post];
+    testState.queue = [0, 1, 2].map((index) => createQueueItem(post, index, 3));
+    render(<HomePage />);
+    await act(async () => undefined);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open post PARTIAL-FAILURE" }),
+    );
+    const panel = await screen.findByRole("dialog");
+    await waitFor(() => expect(panel.querySelectorAll("img")).toHaveLength(3));
+    const failed = panel.querySelectorAll("img")[1];
+    const failedId = failed.getAttribute("data-media-id");
+    fireEvent.error(failed);
+    await waitFor(() => expect(panel.querySelectorAll("img")).toHaveLength(2));
+    expect(panel.querySelector(`[data-media-id="${failedId}"]`)).toBeNull();
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "Close post photos" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Open post PARTIAL-FAILURE" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open post PARTIAL-FAILURE" }),
+    );
+    const reopened = await screen.findByRole("dialog");
+    await waitFor(() =>
+      expect(reopened.querySelectorAll("img")).toHaveLength(2),
+    );
+    expect(reopened.querySelector(`[data-media-id="${failedId}"]`)).toBeNull();
+  });
+
+  it("keeps a working cover and the post when its metadata list fails", async () => {
+    const post = createPost("MANIFEST-FAILURE", "@manifest", "Saved");
+    testState.posts = [post];
+    testState.queue = [createUnresolvedQueueItem(post, 0)];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockRejectedValue(new Error("metadata offline")),
+    );
+    render(<HomePage />);
+    await act(async () => undefined);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open post MANIFEST-FAILURE" }),
+    );
+    const panel = await screen.findByRole("dialog");
+    await waitFor(() => expect(panel.querySelectorAll("img")).toHaveLength(1));
+    expect(within(panel).queryByRole("alert")).toBeNull();
+    fireEvent.click(
+      within(panel).getByRole("button", { name: "Close post photos" }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Open post MANIFEST-FAILURE" }),
+    ).toBeInTheDocument();
+  });
+
   it("keeps view tabs synchronized with URL history navigation", async () => {
     window.history.replaceState({}, "", "/?view=grid");
     render(<HomePage />);
@@ -813,6 +869,40 @@ describe("Photo archive preview", () => {
     expect(window.location.search).toBe("?view=grid");
   });
 
+  it("starts automatic playback only after the actual current image loads", async () => {
+    testState.posts = ["CLOCK-A", "CLOCK-B", "CLOCK-C"].map((id) =>
+      createPost(id, "@clock", "Saved"),
+    );
+    testState.queue = testState.posts.map((post) =>
+      createQueueItem(post, 0, 1),
+    );
+    render(<HomePage />);
+    await act(async () => undefined);
+    fireEvent.click(screen.getByRole("tab", { name: "Slideshow" }));
+    const currentId = () =>
+      document
+        .querySelector('[data-slideshow-slot="0"]')
+        ?.getAttribute("data-media-id");
+    const firstId = currentId();
+    vi.useFakeTimers();
+    act(() => vi.advanceTimersByTime(DEFAULT_SETTINGS.slideshowIntervalMs * 2));
+    expect(currentId()).toBe(firstId);
+    const image = document.querySelector('[data-slideshow-slot="0"] img')!;
+    Object.defineProperties(image, {
+      complete: { configurable: true, value: true },
+      naturalWidth: { configurable: true, value: 1080 },
+      naturalHeight: { configurable: true, value: 1350 },
+    });
+    fireEvent.load(image);
+    act(() => vi.advanceTimersByTime(DEFAULT_SETTINGS.slideshowIntervalMs - 1));
+    expect(currentId()).toBe(firstId);
+    act(() => vi.advanceTimersByTime(1));
+    const secondId = currentId();
+    expect(secondId).not.toBe(firstId);
+    act(() => vi.advanceTimersByTime(DEFAULT_SETTINGS.slideshowIntervalMs * 5));
+    expect(currentId()).toBe(secondId);
+  });
+
   it("opens a post from the main slideshow and pauses background playback", async () => {
     render(<HomePage />);
     await act(async () => undefined);
@@ -976,9 +1066,15 @@ describe("Photo archive preview", () => {
     fireEvent.click(screen.getByRole("tab", { name: "Slideshow" }));
     const initial = [...document.querySelectorAll(".archive-slideshow img")];
     expect(initial).toHaveLength(3);
+    vi.useFakeTimers();
     for (const image of initial) fireEvent.error(image);
     await act(async () => undefined);
     expect(document.querySelectorAll(".archive-slideshow img")).toHaveLength(0);
+    act(() => vi.advanceTimersByTime(DEFAULT_SETTINGS.slideshowIntervalMs));
+    expect(document.querySelectorAll(".archive-slideshow img")).toHaveLength(1);
+    act(() => vi.advanceTimersByTime(DEFAULT_SETTINGS.slideshowIntervalMs * 5));
+    expect(document.querySelectorAll(".archive-slideshow img")).toHaveLength(1);
+    vi.useRealTimers();
     fireEvent.keyDown(window, { key: "ArrowRight" });
     expect(
       document.querySelectorAll(".archive-slideshow img").length,

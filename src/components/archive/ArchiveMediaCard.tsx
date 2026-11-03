@@ -18,11 +18,9 @@ import {
   mediaSource,
   usesPersonalMedia,
 } from "../../features/media/personalMedia";
-import { createRequestQueue } from "../../features/media/requestQueue";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
 
 const resolvedCandidateByRevision = new Map<string, string>();
-const resolveCover = createRequestQueue(2);
 
 type ArchiveMediaCardProps = {
   item: MediaQueueItem;
@@ -34,6 +32,7 @@ type ArchiveMediaCardProps = {
   registerShell?: (itemId: string, node: HTMLElement | null) => void;
   onSelect: (mediaId: string) => void;
   onUnavailable: (mediaId: string) => void;
+  onLoadStateChange?: (mediaId: string, ready: boolean) => void;
 };
 
 export const ArchiveMediaCard = memo(function ArchiveMediaCard({
@@ -46,6 +45,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   registerShell,
   onSelect,
   onUnavailable,
+  onLoadStateChange,
 }: ArchiveMediaCardProps) {
   const { media, post } = item;
   const [proxyUrl, setProxyUrl] = useState<string>();
@@ -100,7 +100,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     const controller = new AbortController();
     setHasFailed(false);
     setIsLoading(!imageRef.current?.complete || !imageRef.current.naturalWidth);
-    void resolveCover(() => resolveMediaUrl(item), controller.signal)
+    void resolveMediaUrl(item, controller.signal)
       .then((source) => {
         if (controller.signal.aborted) return;
         setProxyUrl(source);
@@ -123,6 +123,31 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     unavailableReportedRef.current = true;
     onUnavailable(media.id);
   }, [media.id, onUnavailable]);
+
+  useEffect(() => {
+    const image = imageRef.current;
+    onLoadStateChange?.(
+      media.id,
+      Boolean(
+        loadMedia &&
+        !hasFailed &&
+        !isLoading &&
+        image?.complete &&
+        image.naturalWidth > 0 &&
+        image.naturalHeight > 0 &&
+        Math.max(image.naturalWidth, image.naturalHeight) >= 640 &&
+        image.getAttribute("src") === resolvedUrl,
+      ),
+    );
+  }, [
+    loadMedia,
+    hasFailed,
+    isLoading,
+    mediaRevision,
+    media.id,
+    resolvedUrl,
+    onLoadStateChange,
+  ]);
 
   useEffect(() => {
     if (hasFailed) reportUnavailable();
@@ -226,6 +251,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                     );
                   resolvedCandidateByRevision.set(mediaRevision, resolvedUrl);
                   setIsLoading(false);
+                  onLoadStateChange?.(media.id, true);
                 }}
                 onError={handleImageError}
               />

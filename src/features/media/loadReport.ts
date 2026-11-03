@@ -18,33 +18,39 @@ const KEY = "instagram-viewer:load-report:v2";
 export const reportStartedAt = new Date().toISOString();
 const sessionId = `${reportStartedAt}:${Math.random()}`;
 const LIMIT = 1000;
-let fallback: LoadOutcome[] = [];
+const rows = new Map<string, LoadOutcome>();
 let memoryOnly = false;
+let flushTimer: ReturnType<typeof setTimeout> | undefined;
+let dirty = false;
 
 export function readLoadReport(): LoadOutcome[] {
-  if (memoryOnly) return fallback;
-  try {
-    const stored = JSON.parse(localStorage.getItem(KEY) ?? "null");
-    const data: unknown = stored?.sessionId === sessionId ? stored.rows : [];
-    return Array.isArray(data)
-      ? data
-          .filter(
-            (entry): entry is LoadOutcome =>
-              entry &&
-              typeof entry.shortcode === "string" &&
-              Number.isInteger(entry.sourceIndex) &&
-              typeof entry.code === "string" &&
-              typeof entry.stage === "string" &&
-              typeof entry.time === "string" &&
-              (entry.source === "local" || entry.source === "default") &&
-              ["loaded", "failed", "deferred"].includes(entry.outcome),
-          )
-          .slice(-LIMIT)
-      : [];
-  } catch {
-    return fallback;
-  }
+  // Each module instance is one visit. Storage from an older visit is never a data source.
+  return [...rows.values()];
 }
+
+export function flushLoadReport() {
+  if (flushTimer !== undefined) clearTimeout(flushTimer);
+  flushTimer = undefined;
+  if (!dirty) return;
+  dirty = false;
+  if (!memoryOnly) {
+    try {
+      localStorage.setItem(
+        KEY,
+        JSON.stringify({ sessionId, rows: readLoadReport() }),
+      );
+    } catch {
+      memoryOnly = true;
+      /* Browsing and the current report continue without storage. */
+    }
+  }
+  window.dispatchEvent(new Event("viewer:load-report-updated"));
+}
+
+window.addEventListener("pagehide", flushLoadReport);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") flushLoadReport();
+});
 
 export function recordLoadOutcome(
   item: MediaQueueItem,
@@ -54,13 +60,9 @@ export function recordLoadOutcome(
   if (item.media.sourceKind === "demo") return;
   const source = usesPersonalMedia(item) ? "local" : "default";
   const shortcode = item.post.shortcode ?? item.post.id;
-  const rows = readLoadReport().filter(
-    (row) =>
-      row.shortcode !== shortcode ||
-      row.sourceIndex !== item.media.sourceIndex ||
-      row.source !== source,
-  );
-  rows.push({
+  const key = `${source}:${shortcode}:${item.media.sourceIndex}`;
+  rows.delete(key);
+  rows.set(key, {
     ...failure,
     shortcode,
     sourceIndex: item.media.sourceIndex,
@@ -68,14 +70,10 @@ export function recordLoadOutcome(
     source,
     time: new Date().toISOString(),
   });
-  fallback = rows.slice(-LIMIT);
-  try {
-    localStorage.setItem(KEY, JSON.stringify({ sessionId, rows: fallback }));
-  } catch {
-    memoryOnly = true;
-    /* Browsing works without storage. */
-  }
-  window.dispatchEvent(new Event("viewer:load-report-updated"));
+  if (rows.size > LIMIT) rows.delete(rows.keys().next().value!);
+  dirty = true;
+  // One bounded write/notification per burst, with synchronous reads remaining current.
+  flushTimer ??= setTimeout(flushLoadReport, 250);
 }
 
 export async function responseFailure(
@@ -126,11 +124,13 @@ export class MediaLoadError extends Error {
 export async function recordImageFailure(item: MediaQueueItem) {
   let failure: LoadFailure = { code: "image_load_error", stage: "image" };
   recordLoadOutcome(item, "failed", failure);
-  const recordedAt = readLoadReport().find(
+  const source = usesPersonalMedia(item) ? "local" : "default";
+  const recorded = readLoadReport().find(
     (row) =>
       row.shortcode === (item.post.shortcode ?? item.post.id) &&
-      row.sourceIndex === item.media.sourceIndex,
-  )?.time;
+      row.sourceIndex === item.media.sourceIndex &&
+      row.source === source,
+  );
   if (!usesPersonalMedia(item)) return;
   try {
     const response = await fetch(
@@ -165,8 +165,9 @@ export async function recordImageFailure(item: MediaQueueItem) {
   const current = readLoadReport().find(
     (row) =>
       row.shortcode === (item.post.shortcode ?? item.post.id) &&
-      row.sourceIndex === item.media.sourceIndex,
+      row.sourceIndex === item.media.sourceIndex &&
+      row.source === source,
   );
-  if (current?.outcome === "failed" && current.time === recordedAt)
+  if (current?.outcome === "failed" && current === recorded)
     recordLoadOutcome(item, "failed", failure);
 }

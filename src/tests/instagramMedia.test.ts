@@ -41,7 +41,7 @@ describe("post photo source", () => {
       ),
     ).toEqual(["A:0", "B:0"]);
   });
-  it("discovers all seven entries from the explicit total, excludes videos, and caches metadata", async () => {
+  it("discovers the count immediately, resolves only requested cards, and caches shared metadata", async () => {
     const fetcher = vi.fn(async (url: string) => {
       const index = Number(
         new URL(url, "https://local.test").searchParams.get("img_index"),
@@ -68,15 +68,18 @@ describe("post photo source", () => {
       loadPostPhotos(item("Seven"), []),
     ]);
     expect(concurrent).toBe(photos);
-    expect(fetcher).toHaveBeenCalledTimes(7);
+    expect(fetcher).toHaveBeenCalledTimes(1);
     expect(photos.map((entry) => entry.media.sourceIndex)).toEqual([
-      0, 1, 2, 4, 5, 6,
+      0, 1, 2, 3, 4, 5, 6,
     ]);
-    expect(photos[5].media.assetUrl).toBe(
+    expect(photos[6].media.assetUrl).toBeUndefined();
+    expect(await resolveMediaUrl(photos[6])).toBe(
       "https://scontent.cdninstagram.com/photo-7.jpg",
     );
     expect(await loadPostPhotos(item("Seven"), [])).toBe(photos);
-    expect(fetcher).toHaveBeenCalledTimes(7);
+    await expect(resolveMediaUrl(photos[3])).rejects.toThrow("unavailable");
+    expect(await resolveMediaUrl(photos[1])).toContain("photo-2.jpg");
+    expect(fetcher).toHaveBeenCalledTimes(4);
   });
   it("rejects clamped or unexpected responses instead of duplicating photos", async () => {
     vi.stubGlobal(
@@ -142,6 +145,8 @@ describe("post photo source", () => {
     });
     const photos = await loadPostPhotos(item("QualityAudit"), []);
     expect(photos.map((photo) => photo.media.sourceIndex)).toEqual([1, 2]);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    await Promise.all(photos.map((photo) => resolveMediaUrl(photo)));
     expect(fetcher).toHaveBeenCalledTimes(3);
     expect(fetcher.mock.calls.every(([url]) => url.includes("resolve=1"))).toBe(
       true,

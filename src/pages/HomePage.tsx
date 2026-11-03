@@ -290,21 +290,6 @@ export function HomePage() {
     [selectedItem, visibleItems],
   );
 
-  useEffect(() => {
-    if (openedPost || !isSlideshowOpen || visibleItems.length < 2) {
-      return undefined;
-    }
-    const timer = window.setTimeout(() => move(1), dwellMs);
-    return () => window.clearTimeout(timer);
-  }, [
-    dwellMs,
-    isSlideshowOpen,
-    openedPost,
-    move,
-    selectedItem?.media.id,
-    visibleItems.length,
-  ]);
-
   async function handleImport(file?: File) {
     if (!file) return;
     setIsImporting(true);
@@ -466,10 +451,6 @@ export function HomePage() {
           initialDwellMs={dwellMs}
           initialPreset={transitionPreset}
           onClose={() => setOpenedPost(undefined)}
-          onUnavailable={() => {
-            hideFailedMedia(openedPost.media.id);
-            setOpenedPost(undefined);
-          }}
         />
       ) : null}
       <LoadReport />

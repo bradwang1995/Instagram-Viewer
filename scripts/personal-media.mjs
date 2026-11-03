@@ -11,6 +11,7 @@ import {
 import path from "node:path";
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { imageDimensions, isLowResolution } from "./image-quality.mjs";
+import { createSharedRequests } from "../src/features/media/sharedRequests.mjs";
 
 function qualityFailure() {
   return Object.assign(failure(422, "Low-resolution photo rejected."), {
@@ -86,7 +87,7 @@ export function createPersonalMedia({
   maxBytes = 2 * 1024 ** 3,
   maxFiles = 2000,
 }) {
-  const flights = new Map();
+  const single = createSharedRequests();
   const browserOrigin = "https://bradwang1995.github.io";
   const session = randomBytes(32).toString("hex");
   function validSession(value) {
@@ -101,13 +102,52 @@ export function createPersonalMedia({
   let blockedUntil = 0;
   let active = 0;
   const waiting = [];
-  const ready = mkdir(directory, { recursive: true });
-  async function limited(work) {
+  const cacheEntries = new Map();
+  let cacheBytes = 0;
+  let mutations = Promise.resolve();
+  // Scan once per gateway lifetime. Writes and touches keep this index current.
+  const ready = mkdir(directory, { recursive: true }).then(async () => {
+    const files = await readdir(directory);
+    await Promise.all(
+      files
+        .filter((name) => /^[\w-]+\.(json|image)$/.test(name))
+        .map(async (name) => {
+          try {
+            const info = await stat(path.join(directory, name));
+            cacheEntries.set(name, {
+              name,
+              size: info.size,
+              time: info.mtimeMs,
+            });
+            cacheBytes += info.size;
+          } catch {
+            /* A concurrent cleanup may already have removed an entry. */
+          }
+        }),
+    );
+    await prune();
+  });
+  async function limited(work, signal) {
+    signal?.throwIfAborted();
     if (waiting.length >= 64)
       throw failure(503, "Local media queue is full. Please retry shortly.");
-    if (active >= 2) await new Promise((resolve) => waiting.push(resolve));
+    if (active >= 2)
+      await new Promise((resolve, reject) => {
+        const abort = () => {
+          const index = waiting.indexOf(start);
+          if (index >= 0) waiting.splice(index, 1);
+          reject(new DOMException("Cancelled", "AbortError"));
+        };
+        const start = () => {
+          signal?.removeEventListener("abort", abort);
+          resolve();
+        };
+        waiting.push(start);
+        signal?.addEventListener("abort", abort, { once: true });
+      });
     else active++;
     try {
+      signal?.throwIfAborted();
       return await work();
     } finally {
       const next = waiting.shift();
@@ -115,220 +155,252 @@ export function createPersonalMedia({
       else active--;
     }
   }
-  async function single(key, work) {
-    if (flights.has(key)) return flights.get(key);
-    const task = work();
-    flights.set(key, task);
-    try {
-      return await task;
-    } finally {
-      flights.delete(key);
-    }
-  }
   async function atomic(file, bytes) {
-    await writeFile(file + ".tmp", bytes);
-    await rename(file + ".tmp", file);
-  }
-  let eviction = Promise.resolve();
-  function prune() {
-    eviction = eviction
+    const task = mutations
       .catch(() => {})
       .then(async () => {
-        const files = await readdir(directory);
-        const entries = (
-          await Promise.all(
-            files
-              .filter((name) => /\.(json|image)$/.test(name))
-              .map(async (name) => {
-                try {
-                  const info = await stat(path.join(directory, name));
-                  return { name, size: info.size, time: info.mtimeMs };
-                } catch {
-                  return undefined;
-                }
-              }),
-          )
-        )
-          .filter(Boolean)
-          .sort((a, b) => a.time - b.time);
-        let bytes = entries.reduce((sum, entry) => sum + entry.size, 0);
-        let count = entries.length;
-        for (const entry of entries) {
-          if (bytes <= maxBytes && count <= maxFiles) break;
-          await unlink(path.join(directory, entry.name)).catch(() => {});
-          bytes -= entry.size;
-          count--;
-        }
-      });
-    return eviction;
-  }
-  async function manifest(code, refresh = false) {
-    return single("post:" + code, async () => {
-      await ready;
-      const file = path.join(directory, code + ".json");
-      if (!refresh) {
-        try {
-          const cached = JSON.parse(await readFile(file, "utf8"));
-          if (
-            cached.code === code &&
-            cached.expires > Date.now() &&
-            Array.isArray(cached.attachments)
-          )
-            return cached;
-        } catch {
-          /* Cache loss or corruption is recoverable. */
-        }
-      }
-      const cooldown = cooldowns.get(code);
-      if (cooldown && Date.now() < cooldown.until)
-        throw Object.assign(new Error(cooldown.error.message), cooldown.error, {
-          deferred: true,
-        });
-      if (Date.now() < blockedUntil) throw cooldownFailure("metadata");
-      try {
-        const data = await limited(async () => {
-          if (Date.now() < blockedUntil) throw cooldownFailure("metadata");
-          const response = await fetcher(
-            `${coreOrigin}/post/${code}${refresh ? "?refresh=1" : ""}`,
-            { signal: AbortSignal.timeout(40_000), redirect: "error" },
-          );
-          if (response.status === 429) blockedUntil = Date.now() + 60_000;
-          if (!response.ok) {
-            let errorCode = `http_${response.status}`;
-            try {
-              const body = JSON.parse(
-                (await boundedBody(response, 8192)).toString(),
-              );
-              if (
-                typeof body.errorCode === "string" &&
-                /^[a-z_]{1,60}$/.test(body.errorCode)
-              )
-                errorCode = body.errorCode;
-            } catch {
-              /* Preserve the HTTP status even without a JSON body. */
-            }
-            throw Object.assign(
-              failure(response.status, "Instagram could not load this post."),
-              { errorCode, stage: "metadata" },
-            );
-          }
-          return JSON.parse(
-            (await boundedBody(response, 512 * 1024)).toString(),
-          );
-        });
-        if (
-          !data.complete ||
-          data.post?.Shortcode !== code ||
-          !Array.isArray(data.post.Attachments) ||
-          data.post.Attachments.length > 50
-        )
-          throw failure(502, "The post did not return a complete media list.");
-        const attachments = data.post.Attachments.map((entry, index) => ({
-          index,
-          kind: entry.Kind,
-          url: entry.URL,
-          width: entry.Width,
-          height: entry.Height,
-        }));
-        if (
-          !attachments.length ||
-          attachments.some((entry) => !isInstagramCdn(entry.url))
-        )
-          throw failure(502, "Invalid media source.");
-        const result = {
-          code,
-          expires: Date.now() + 6 * 3600_000,
-          attachments,
-        };
-        await atomic(file, JSON.stringify(result));
+        await ready;
+        await writeFile(file + ".tmp", bytes);
+        await rename(file + ".tmp", file);
+        const name = path.basename(file);
+        cacheBytes -= cacheEntries.get(name)?.size ?? 0;
+        const size = Buffer.byteLength(bytes);
+        cacheEntries.set(name, { name, size, time: Date.now() });
+        cacheBytes += size;
         await prune();
-        cooldowns.delete(code);
-        return result;
-      } catch (error) {
-        error.stage ??= "metadata";
-        if (!error.deferred)
-          cooldowns.set(code, { until: Date.now() + 60_000, error });
-        if (cooldowns.size > 500)
-          cooldowns.delete(cooldowns.keys().next().value);
-        if (error.status === 429 && !error.deferred)
-          blockedUntil = Date.now() + 60_000;
-        throw error;
-      }
-    });
+      });
+    mutations = task;
+    return task;
   }
-  async function image(code, index) {
-    return single(`image:${code}:${index}`, async () => {
-      await ready;
-      const file = path.join(directory, `${code}-${index}.image`);
+  async function touch(file) {
+    const time = new Date();
+    const entry = cacheEntries.get(path.basename(file));
+    if (entry) entry.time = time.getTime();
+    await utimes(file, time, time).catch(() => {});
+  }
+  function forget(file) {
+    const name = path.basename(file);
+    const entry = cacheEntries.get(name);
+    if (entry) {
+      cacheBytes -= entry.size;
+      cacheEntries.delete(name);
+    }
+  }
+  async function prune() {
+    if (cacheBytes <= maxBytes && cacheEntries.size <= maxFiles) return;
+    const entries = [...cacheEntries.values()].sort((a, b) => a.time - b.time);
+    for (const entry of entries) {
+      if (cacheBytes <= maxBytes && cacheEntries.size <= maxFiles) break;
+      const file = path.join(directory, entry.name);
       try {
-        const bytes = await readFile(file);
-        const type = imageType(bytes);
-        if (isLowResolution(imageDimensions(bytes))) {
-          await unlink(file);
-          throw qualityFailure();
-        }
-        await utimes(file, new Date(), new Date()).catch(() => {});
-        return { bytes, type, cached: true };
+        await unlink(file);
       } catch (error) {
-        if (error.errorCode === "low_resolution") throw error;
-        /* Read through on missing or invalid cache entries. */
+        if (error.code !== "ENOENT") continue;
       }
-      if (Date.now() < blockedUntil) throw cooldownFailure("image");
-      let post = await manifest(code);
-      for (let attempt = 0; attempt < 2; attempt++) {
-        const attachment = post.attachments[index];
-        if (isLowResolution(attachment)) throw qualityFailure();
-        if (
-          !attachment ||
-          attachment.kind !== "image" ||
-          !isInstagramCdn(attachment.url)
-        )
-          throw failure(404, "This photo is unavailable.");
-        const { response, bytes } = await limited(async () => {
-          if (Date.now() < blockedUntil) throw cooldownFailure("image");
-          const response = await fetcher(attachment.url, {
-            redirect: "error",
-            signal: AbortSignal.timeout(30_000),
-          });
-          if (response.status === 429) blockedUntil = Date.now() + 60_000;
-          return {
-            response,
-            bytes: response.ok
-              ? await boundedBody(response, 20 * 1024 ** 2)
-              : undefined,
-          };
-        });
-        if ([403, 404, 410].includes(response.status) && attempt === 0) {
-          await response.body?.cancel();
-          post = await manifest(code, true);
-          continue;
+      forget(file);
+    }
+  }
+  async function manifest(code, refresh = false, signal) {
+    return single(
+      "post:" + code,
+      async (sharedSignal) => {
+        await ready;
+        sharedSignal.throwIfAborted();
+        const file = path.join(directory, code + ".json");
+        if (!refresh) {
+          try {
+            const cached = JSON.parse(await readFile(file, "utf8"));
+            if (
+              cached.code === code &&
+              cached.expires > Date.now() &&
+              Array.isArray(cached.attachments)
+            )
+              return cached;
+          } catch {
+            /* Cache loss or corruption is recoverable. */
+          }
         }
-        if (!response.ok) {
-          await response.body?.cancel();
-          if (response.status === 429) blockedUntil = Date.now() + 60_000;
+        const cooldown = cooldowns.get(code);
+        if (cooldown && Date.now() < cooldown.until)
           throw Object.assign(
-            failure(
-              response.status === 429 ? 429 : 502,
-              "The image source is temporarily unavailable.",
-            ),
+            new Error(cooldown.error.message),
+            cooldown.error,
             {
-              errorCode: `http_${response.status}`,
-              upstreamStatus: response.status,
-              stage: "image",
+              deferred: true,
             },
           );
+        if (Date.now() < blockedUntil) throw cooldownFailure("metadata");
+        try {
+          const data = await limited(async () => {
+            if (Date.now() < blockedUntil) throw cooldownFailure("metadata");
+            const response = await fetcher(
+              `${coreOrigin}/post/${code}${refresh ? "?refresh=1" : ""}`,
+              {
+                signal: AbortSignal.any([
+                  sharedSignal,
+                  AbortSignal.timeout(40_000),
+                ]),
+                redirect: "error",
+              },
+            );
+            if (response.status === 429) blockedUntil = Date.now() + 60_000;
+            if (!response.ok) {
+              let errorCode = `http_${response.status}`;
+              try {
+                const body = JSON.parse(
+                  (await boundedBody(response, 8192)).toString(),
+                );
+                if (
+                  typeof body.errorCode === "string" &&
+                  /^[a-z_]{1,60}$/.test(body.errorCode)
+                )
+                  errorCode = body.errorCode;
+              } catch {
+                /* Preserve the HTTP status even without a JSON body. */
+              }
+              throw Object.assign(
+                failure(response.status, "Instagram could not load this post."),
+                { errorCode, stage: "metadata" },
+              );
+            }
+            return JSON.parse(
+              (await boundedBody(response, 512 * 1024)).toString(),
+            );
+          }, sharedSignal);
+          sharedSignal.throwIfAborted();
+          if (
+            !data.complete ||
+            data.post?.Shortcode !== code ||
+            !Array.isArray(data.post.Attachments) ||
+            data.post.Attachments.length > 50
+          )
+            throw failure(
+              502,
+              "The post did not return a complete media list.",
+            );
+          const attachments = data.post.Attachments.map((entry, index) => ({
+            index,
+            kind: entry.Kind,
+            url: entry.URL,
+            width: entry.Width,
+            height: entry.Height,
+          }));
+          if (
+            !attachments.length ||
+            attachments.some((entry) => !isInstagramCdn(entry.url))
+          )
+            throw failure(502, "Invalid media source.");
+          const result = {
+            code,
+            expires: Date.now() + 6 * 3600_000,
+            attachments,
+          };
+          await atomic(file, JSON.stringify(result));
+          cooldowns.delete(code);
+          return result;
+        } catch (error) {
+          if (sharedSignal.aborted) throw error;
+          error.stage ??= "metadata";
+          if (!error.deferred)
+            cooldowns.set(code, { until: Date.now() + 60_000, error });
+          if (cooldowns.size > 500)
+            cooldowns.delete(cooldowns.keys().next().value);
+          if (error.status === 429 && !error.deferred)
+            blockedUntil = Date.now() + 60_000;
+          throw error;
         }
-        const type = imageType(bytes);
-        if (isLowResolution(imageDimensions(bytes))) throw qualityFailure();
-        await atomic(file, bytes);
-        await prune();
-        return { bytes, type, cached: false };
-      }
-    });
+      },
+      signal,
+    );
+  }
+  async function image(code, index, signal) {
+    return single(
+      `image:${code}:${index}`,
+      async (sharedSignal) => {
+        await ready;
+        sharedSignal.throwIfAborted();
+        const file = path.join(directory, `${code}-${index}.image`);
+        try {
+          const bytes = await readFile(file);
+          const type = imageType(bytes);
+          if (isLowResolution(imageDimensions(bytes))) {
+            await unlink(file);
+            forget(file);
+            throw qualityFailure();
+          }
+          await touch(file);
+          return { bytes, type, cached: true };
+        } catch (error) {
+          if (error.errorCode === "low_resolution") throw error;
+          /* Read through on missing or invalid cache entries. */
+        }
+        if (Date.now() < blockedUntil) throw cooldownFailure("image");
+        let post = await manifest(code, false, sharedSignal);
+        for (let attempt = 0; attempt < 2; attempt++) {
+          const attachment = post.attachments[index];
+          if (isLowResolution(attachment)) throw qualityFailure();
+          if (
+            !attachment ||
+            attachment.kind !== "image" ||
+            !isInstagramCdn(attachment.url)
+          )
+            throw failure(404, "This photo is unavailable.");
+          const { response, bytes } = await limited(async () => {
+            if (Date.now() < blockedUntil) throw cooldownFailure("image");
+            const response = await fetcher(attachment.url, {
+              redirect: "error",
+              signal: AbortSignal.any([
+                sharedSignal,
+                AbortSignal.timeout(30_000),
+              ]),
+            });
+            if (response.status === 429) blockedUntil = Date.now() + 60_000;
+            return {
+              response,
+              bytes: response.ok
+                ? await boundedBody(response, 20 * 1024 ** 2)
+                : undefined,
+            };
+          }, sharedSignal);
+          sharedSignal.throwIfAborted();
+          if ([403, 404, 410].includes(response.status) && attempt === 0) {
+            await response.body?.cancel();
+            post = await manifest(code, true, sharedSignal);
+            continue;
+          }
+          if (!response.ok) {
+            await response.body?.cancel();
+            if (response.status === 429) blockedUntil = Date.now() + 60_000;
+            throw Object.assign(
+              failure(
+                response.status === 429 ? 429 : 502,
+                "The image source is temporarily unavailable.",
+              ),
+              {
+                errorCode: `http_${response.status}`,
+                upstreamStatus: response.status,
+                stage: "image",
+              },
+            );
+          }
+          const type = imageType(bytes);
+          if (isLowResolution(imageDimensions(bytes))) throw qualityFailure();
+          await atomic(file, bytes);
+          return { bytes, type, cached: false };
+        }
+      },
+      signal,
+    );
   }
   return async function middleware(req, res, next) {
     const url = new URL(req.url, "http://127.0.0.1");
     if (!url.pathname.startsWith("/api/personal/")) return next();
+    const controller = new AbortController();
+    req.once?.("aborted", () => controller.abort());
+    res.once?.("close", () => {
+      if (!res.writableEnded) controller.abort();
+    });
+    const signal = controller.signal;
     const origin = req.headers.origin;
     const remote = origin === browserOrigin;
     const cors = remote
@@ -341,6 +413,7 @@ export function createPersonalMedia({
         }
       : {};
     const reply = (status, body, headers = {}) => {
+      if (signal.aborted || res.destroyed) return;
       res.writeHead(status, {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "no-store",
@@ -423,7 +496,7 @@ export function createPersonalMedia({
         );
       }
       if (kind === "posts" && rawIndex === undefined) {
-        const data = await manifest(code);
+        const data = await manifest(code, false, signal);
         return reply(
           200,
           JSON.stringify({
@@ -441,6 +514,7 @@ export function createPersonalMedia({
       }
       if (kind !== "images" || !/^(?:[0-9]|[1-4][0-9])$/.test(rawIndex || ""))
         return reply(400, "Invalid photo index.");
+      await ready;
       let data;
       if (cover === "1" && rawIndex === "0") {
         // Keep good cached covers available even when the upstream is offline.
@@ -448,23 +522,25 @@ export function createPersonalMedia({
         try {
           const bytes = await readFile(file);
           const size = imageDimensions(bytes);
-          if (isLowResolution(size)) await unlink(file);
-          else if (size) {
+          if (isLowResolution(size)) {
+            await unlink(file);
+            forget(file);
+          } else if (size) {
             const type = imageType(bytes);
-            await utimes(file, new Date(), new Date()).catch(() => {});
+            await touch(file);
             data = { bytes, type, cached: true };
           }
         } catch (error) {
           if (error.code !== "ENOENT") throw error;
         }
         if (!data) {
-          const post = await manifest(code);
+          const post = await manifest(code, false, signal);
           const candidates = post.attachments
             .filter((a) => a.kind === "image" && !isLowResolution(a))
             .slice(0, 2);
           for (const candidate of candidates) {
             try {
-              data = await image(code, candidate.index);
+              data = await image(code, candidate.index, signal);
               break;
             } catch (error) {
               if (error.errorCode !== "low_resolution") throw error;
@@ -473,7 +549,7 @@ export function createPersonalMedia({
           if (!data) throw qualityFailure();
         }
       } else {
-        data = await image(code, Number(rawIndex));
+        data = await image(code, Number(rawIndex), signal);
       }
       failures.delete(`${code}:${rawIndex}`);
       return reply(200, data.bytes, {
@@ -482,6 +558,7 @@ export function createPersonalMedia({
         "Cache-Control": "private, max-age=3600",
       });
     } catch (error) {
+      if (signal.aborted) return;
       const status = [
         400, 401, 403, 404, 410, 422, 429, 451, 502, 503, 504,
       ].includes(error.status)
