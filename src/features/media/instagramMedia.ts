@@ -36,6 +36,7 @@ export async function resolveMediaUrl(item: MediaQueueItem): Promise<string> {
   const url = note.attachment[0]?.url;
   if (!url || !note.attachment[0]?.mediaType.startsWith("image/"))
     throw new Error("This photo is unavailable.");
+  if (isLowResolution(note.attachment[0])) throw lowResolutionError();
   return url;
 }
 
@@ -62,6 +63,24 @@ type Note = {
   content: string;
   attachment: Attachment[];
 };
+
+function isLowResolution(attachment: Attachment): boolean {
+  return (
+    typeof attachment.width === "number" &&
+    typeof attachment.height === "number" &&
+    attachment.width > 0 &&
+    attachment.height > 0 &&
+    Math.max(attachment.width, attachment.height) < 640
+  );
+}
+
+function lowResolutionError() {
+  return new MediaLoadError({
+    status: 422,
+    code: "low_resolution",
+    stage: "image",
+  });
+}
 
 async function readPhoto(shortcode: string, index: number): Promise<Note> {
   const key = `${shortcode}:${index}`;
@@ -218,6 +237,7 @@ async function fetchPostPhotos(
   const items = notes.flatMap((note, offset): MediaQueueItem[] => {
     const attachment = note.attachment[0];
     if (!attachment || !attachment.mediaType?.startsWith("image/")) return [];
+    if (isLowResolution(attachment)) return [];
     return [
       {
         post: item.post,
@@ -235,7 +255,11 @@ async function fetchPostPhotos(
       },
     ];
   });
-  if (!items.length) throw new Error("No photos are available in this post.");
+  if (!items.length) {
+    if (notes.some((note) => note.attachment.some(isLowResolution)))
+      throw lowResolutionError();
+    throw new Error("No photos are available in this post.");
+  }
   cache.delete(shortcode);
   cache.set(shortcode, { expires: Date.now() + 10 * 60_000, items });
   if (cache.size > 100) cache.delete(cache.keys().next().value!);

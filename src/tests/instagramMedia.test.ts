@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   firstPhotoPerPost,
   loadPostPhotos,
+  resolveMediaUrl,
 } from "../features/media/instagramMedia";
 import type { MediaQueueItem } from "../features/media/mediaQueue";
 
@@ -113,6 +114,69 @@ describe("post photo source", () => {
     await expect(loadPostPhotos(item("Single"), [])).rejects.toThrow("offline");
     expect(await loadPostPhotos(item("Single"), [])).toHaveLength(1);
     expect(fetcher).toHaveBeenCalledTimes(2);
+  });
+  it("rejects known low-quality covers before downloading and preserves good carousel source indexes", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const index = Number(
+        new URL(url, "https://local.test").searchParams.get("img_index"),
+      );
+      return new Response(
+        JSON.stringify({
+          type: "Note",
+          id: `https://oginstagram.com/p/QualityAudit/${index}`,
+          content: `<p><b>🖼️ ${index} / 3  ❤️ 42</b></p>`,
+          attachment: [
+            {
+              mediaType: "image/jpeg",
+              url: `https://scontent.cdninstagram.com/quality-${index}.jpg`,
+              width: index === 1 ? 320 : 1080,
+              height: index === 1 ? 341 : 1350,
+            },
+          ],
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetcher);
+    await expect(resolveMediaUrl(item("QualityAudit"))).rejects.toMatchObject({
+      failure: { status: 422, code: "low_resolution", stage: "image" },
+    });
+    const photos = await loadPostPhotos(item("QualityAudit"), []);
+    expect(photos.map((photo) => photo.media.sourceIndex)).toEqual([1, 2]);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+    expect(fetcher.mock.calls.every(([url]) => url.includes("resolve=1"))).toBe(
+      true,
+    );
+  });
+  it("keeps the 640-pixel boundary and reports an all-low-quality post accurately", async () => {
+    const fetcher = vi.fn(async (url: string) => {
+      const code = url.includes("BoundaryAudit")
+        ? "BoundaryAudit"
+        : "AllLowAudit";
+      return new Response(
+        JSON.stringify({
+          type: "Note",
+          id: `https://oginstagram.com/p/${code}/1`,
+          content: "",
+          attachment: [
+            {
+              mediaType: "image/jpeg",
+              url: "https://scontent.cdninstagram.com/boundary.jpg",
+              width: code === "BoundaryAudit" ? 640 : 639,
+              height: 400,
+            },
+          ],
+        }),
+      );
+    });
+    vi.stubGlobal("fetch", fetcher);
+    expect(await resolveMediaUrl(item("BoundaryAudit"))).toContain(
+      "boundary.jpg",
+    );
+    await expect(loadPostPhotos(item("AllLowAudit"), [])).rejects.toMatchObject(
+      {
+        failure: { status: 422, code: "low_resolution", stage: "image" },
+      },
+    );
   });
   it("stops queued metadata traffic during a rate-limit cooldown", async () => {
     const fetcher = vi.fn().mockResolvedValue(

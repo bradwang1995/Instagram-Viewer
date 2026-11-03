@@ -10,9 +10,12 @@ export function LoadReport() {
   const title = useRef<HTMLHeadingElement>(null);
   const [rows, setRows] = useState(readLoadReport);
   useEffect(() => {
-    const update = () => setRows(readLoadReport());
+    // Keep recording in the background, but only render statistics on demand.
+    const update = () => {
+      if (dialog.current?.open) setRows(readLoadReport());
+    };
     const show = () => {
-      update();
+      setRows(readLoadReport());
       dialog.current?.showModal();
       title.current?.focus();
       if (dialog.current) dialog.current.scrollTop = 0;
