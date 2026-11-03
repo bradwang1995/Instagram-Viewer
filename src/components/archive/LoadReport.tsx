@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   readLoadReport,
   reportStartedAt,
+  summarizeLoadReport,
 } from "../../features/media/loadReport";
 import { localServiceEnabled } from "../../features/media/personalMedia";
 
@@ -36,6 +37,8 @@ export function LoadReport() {
   const loaded = rows.filter((row) => row.outcome === "loaded").length;
   const deferred = rows.filter((row) => row.outcome === "deferred").length;
   const attempted = loaded + failed.length;
+  const summary = summarizeLoadReport(rows);
+  const postsAttempted = summary.posts.loaded + summary.posts.failed;
   return (
     <dialog
       ref={dialog}
@@ -63,6 +66,23 @@ export function LoadReport() {
       <p>
         Loaded: {loaded} · Failed: {failed.length} · Success:{" "}
         {attempted ? `${Math.round((loaded / attempted) * 100)}%` : "—"}
+      </p>
+      <p>
+        Posts with at least one loaded photo: {summary.posts.loaded} · Failed
+        posts: {summary.posts.failed} · Post success:{" "}
+        {postsAttempted
+          ? `${Math.round((summary.posts.loaded / postsAttempted) * 100)}%`
+          : "—"}
+        . Recovered photos after an earlier failure: {summary.recoveredPhotos}.
+      </p>
+      <p>
+        Export includes up to 8 recent outcome observations per photo, first
+        failure, and available gateway cache / timing diagnostics. Observations
+        are not request attempts. Gateway timings describe shared operations;
+        browser resource time excludes time before the request and image
+        decoding. Cached browser images may refer to an earlier gateway result.
+        Missing diagnostics mean unknown; older local servers need restarting
+        after an update.
       </p>
       <p>
         Deferred during cooldown: {deferred}. These did not make a new upstream
@@ -98,8 +118,9 @@ export function LoadReport() {
         <p>No recorded failures.</p>
       )}
       <p>
-        restricted: audience / age restriction; media_not_found / not_found:
-        unavailable; graphql_error: Instagram could not resolve the post.
+        restricted: the service reported an access restriction; media_not_found
+        / not_found: unavailable; graphql_error: Instagram could not resolve the
+        post. These codes alone do not prove that a post is private or deleted.
         Unknown image errors may include network or browser access failures.
         low_resolution: rejected because the longest image edge is below 640
         pixels.
@@ -114,7 +135,16 @@ export function LoadReport() {
                   JSON.stringify(
                     {
                       generatedAt: new Date().toISOString(),
+                      schemaVersion: 3,
+                      app: {
+                        revision:
+                          import.meta.env.VITE_REPORT_BUILD ?? "unknown",
+                        mode: import.meta.env.MODE,
+                      },
                       startedAt: reportStartedAt,
+                      summary,
+                      diagnosticsScope:
+                        "Gateway metrics describe shared operations, not per-browser upstream attempts. Cache means gateway disk/manifest cache. Missing fields are unknown. browserResourceMs is the latest browser resource duration, excludes image decoding; gatewayRecordedAt may predate browser cache reuse. observations count UI outcomes, not requests. Each retained photo has at most 8 recent observations; firstFailure persists until photo eviction.",
                       scope:
                         "this visit, latest result per photo and source, at most 1000 results; deferred cooldowns excluded from success rate",
                       rows,

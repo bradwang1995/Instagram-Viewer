@@ -10,6 +10,8 @@ import {
 } from "node:fs/promises";
 import path from "node:path";
 import { randomBytes, timingSafeEqual } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import { imageDimensions, isLowResolution } from "./image-quality.mjs";
 import { createSharedRequests } from "../src/features/media/sharedRequests.mjs";
 
@@ -22,6 +24,29 @@ function qualityFailure() {
 
 const codePattern = /^[A-Za-z0-9_-]{1,24}$/;
 const imageTypes = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+let revision = "unknown";
+try {
+  revision = execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+    cwd: fileURLToPath(new URL("..", import.meta.url)),
+    encoding: "utf8",
+    windowsHide: true,
+    stdio: ["ignore", "pipe", "ignore"],
+  }).trim();
+} catch {
+  /* Source archives may not include Git. */
+}
+const serviceVersion = {
+  diagnostics: 1,
+  revision,
+  startedAt: new Date().toISOString(),
+};
+function combineMetrics(first = {}, second = {}) {
+  const result = { ...first, ...second };
+  for (const key of ["queueMs", "metadataMs", "imageMs", "upstreamRequests"])
+    if (key in first || key in second)
+      result[key] = (first[key] ?? 0) + (second[key] ?? 0);
+  return result;
+}
 function failure(status, message) {
   return Object.assign(new Error(message), { status });
 }
@@ -127,7 +152,8 @@ export function createPersonalMedia({
     );
     await prune();
   });
-  async function limited(work, signal) {
+  async function limited(work, signal, metrics, stage) {
+    const queuedAt = performance.now();
     signal?.throwIfAborted();
     if (waiting.length >= 64)
       throw failure(503, "Local media queue is full. Please retry shortly.");
@@ -146,9 +172,16 @@ export function createPersonalMedia({
         signal?.addEventListener("abort", abort, { once: true });
       });
     else active++;
+    if (metrics) metrics.queueMs += Math.round(performance.now() - queuedAt);
     try {
       signal?.throwIfAborted();
-      return await work();
+      const started = performance.now();
+      try {
+        return await work();
+      } finally {
+        if (metrics)
+          metrics[`${stage}Ms`] += Math.round(performance.now() - started);
+      }
     } finally {
       const next = waiting.shift();
       if (next) next();
@@ -204,6 +237,12 @@ export function createPersonalMedia({
     return single(
       "post:" + code,
       async (sharedSignal) => {
+        const metrics = {
+          metadataCache: "miss",
+          queueMs: 0,
+          metadataMs: 0,
+          upstreamRequests: 0,
+        };
         await ready;
         sharedSignal.throwIfAborted();
         const file = path.join(directory, code + ".json");
@@ -215,7 +254,10 @@ export function createPersonalMedia({
               cached.expires > Date.now() &&
               Array.isArray(cached.attachments)
             )
-              return cached;
+              return {
+                ...cached,
+                diagnostics: { ...metrics, metadataCache: "hit" },
+              };
           } catch {
             /* Cache loss or corruption is recoverable. */
           }
@@ -227,46 +269,59 @@ export function createPersonalMedia({
             cooldown.error,
             {
               deferred: true,
+              diagnostics: { ...metrics, metadataCache: "cooldown" },
             },
           );
-        if (Date.now() < blockedUntil) throw cooldownFailure("metadata");
+        if (Date.now() < blockedUntil)
+          throw Object.assign(cooldownFailure("metadata"), {
+            diagnostics: { ...metrics, metadataCache: "cooldown" },
+          });
         try {
-          const data = await limited(async () => {
-            if (Date.now() < blockedUntil) throw cooldownFailure("metadata");
-            const response = await fetcher(
-              `${coreOrigin}/post/${code}${refresh ? "?refresh=1" : ""}`,
-              {
-                signal: AbortSignal.any([
-                  sharedSignal,
-                  AbortSignal.timeout(40_000),
-                ]),
-                redirect: "error",
-              },
-            );
-            if (response.status === 429) blockedUntil = Date.now() + 60_000;
-            if (!response.ok) {
-              let errorCode = `http_${response.status}`;
-              try {
-                const body = JSON.parse(
-                  (await boundedBody(response, 8192)).toString(),
-                );
-                if (
-                  typeof body.errorCode === "string" &&
-                  /^[a-z_]{1,60}$/.test(body.errorCode)
-                )
-                  errorCode = body.errorCode;
-              } catch {
-                /* Preserve the HTTP status even without a JSON body. */
-              }
-              throw Object.assign(
-                failure(response.status, "Instagram could not load this post."),
-                { errorCode, stage: "metadata" },
+          const data = await limited(
+            async () => {
+              if (Date.now() < blockedUntil) throw cooldownFailure("metadata");
+              metrics.upstreamRequests++;
+              const response = await fetcher(
+                `${coreOrigin}/post/${code}${refresh ? "?refresh=1" : ""}`,
+                {
+                  signal: AbortSignal.any([
+                    sharedSignal,
+                    AbortSignal.timeout(40_000),
+                  ]),
+                  redirect: "error",
+                },
               );
-            }
-            return JSON.parse(
-              (await boundedBody(response, 512 * 1024)).toString(),
-            );
-          }, sharedSignal);
+              if (response.status === 429) blockedUntil = Date.now() + 60_000;
+              if (!response.ok) {
+                let errorCode = `http_${response.status}`;
+                try {
+                  const body = JSON.parse(
+                    (await boundedBody(response, 8192)).toString(),
+                  );
+                  if (
+                    typeof body.errorCode === "string" &&
+                    /^[a-z_]{1,60}$/.test(body.errorCode)
+                  )
+                    errorCode = body.errorCode;
+                } catch {
+                  /* Preserve the HTTP status even without a JSON body. */
+                }
+                throw Object.assign(
+                  failure(
+                    response.status,
+                    "Instagram could not load this post.",
+                  ),
+                  { errorCode, stage: "metadata" },
+                );
+              }
+              return JSON.parse(
+                (await boundedBody(response, 512 * 1024)).toString(),
+              );
+            },
+            sharedSignal,
+            metrics,
+            "metadata",
+          );
           sharedSignal.throwIfAborted();
           if (
             !data.complete ||
@@ -297,10 +352,11 @@ export function createPersonalMedia({
           };
           await atomic(file, JSON.stringify(result));
           cooldowns.delete(code);
-          return result;
+          return { ...result, diagnostics: metrics };
         } catch (error) {
           if (sharedSignal.aborted) throw error;
           error.stage ??= "metadata";
+          error.diagnostics ??= metrics;
           if (!error.deferred)
             cooldowns.set(code, { until: Date.now() + 60_000, error });
           if (cooldowns.size > 500)
@@ -317,82 +373,118 @@ export function createPersonalMedia({
     return single(
       `image:${code}:${index}`,
       async (sharedSignal) => {
-        await ready;
-        sharedSignal.throwIfAborted();
-        const file = path.join(directory, `${code}-${index}.image`);
+        const metrics = {
+          imageCache: "miss",
+          queueMs: 0,
+          imageMs: 0,
+          upstreamRequests: 0,
+        };
+        let metadata;
         try {
-          const bytes = await readFile(file);
-          const type = imageType(bytes);
-          if (isLowResolution(imageDimensions(bytes))) {
-            await unlink(file);
-            forget(file);
-            throw qualityFailure();
-          }
-          await touch(file);
-          return { bytes, type, cached: true };
-        } catch (error) {
-          if (error.errorCode === "low_resolution") throw error;
-          /* Read through on missing or invalid cache entries. */
-        }
-        if (Date.now() < blockedUntil) throw cooldownFailure("image");
-        let post = await manifest(code, false, sharedSignal);
-        for (let attempt = 0; attempt < 2; attempt++) {
-          const attachment = post.attachments[index];
-          if (isLowResolution(attachment)) throw qualityFailure();
-          if (
-            !attachment ||
-            attachment.kind !== "image" ||
-            !isInstagramCdn(attachment.url)
-          )
-            throw failure(404, "This photo is unavailable.");
-          const { response, bytes } = await limited(async () => {
-            if (Date.now() < blockedUntil) throw cooldownFailure("image");
-            const response = await fetcher(attachment.url, {
-              redirect: "error",
-              signal: AbortSignal.any([
-                sharedSignal,
-                AbortSignal.timeout(30_000),
-              ]),
-            });
-            if (response.status === 429) blockedUntil = Date.now() + 60_000;
-            return {
-              response,
-              bytes: response.ok
-                ? await boundedBody(response, 20 * 1024 ** 2)
-                : undefined,
-            };
-          }, sharedSignal);
+          await ready;
           sharedSignal.throwIfAborted();
-          if ([403, 404, 410].includes(response.status) && attempt === 0) {
-            await response.body?.cancel();
-            post = await manifest(code, true, sharedSignal);
-            continue;
+          const file = path.join(directory, `${code}-${index}.image`);
+          try {
+            const bytes = await readFile(file);
+            const type = imageType(bytes);
+            if (isLowResolution(imageDimensions(bytes))) {
+              await unlink(file);
+              forget(file);
+              throw qualityFailure();
+            }
+            await touch(file);
+            return {
+              bytes,
+              type,
+              cached: true,
+              diagnostics: { ...metrics, imageCache: "hit" },
+            };
+          } catch (error) {
+            if (error.errorCode === "low_resolution") throw error;
+            /* Read through on missing or invalid cache entries. */
           }
-          if (!response.ok) {
-            await response.body?.cancel();
-            if (response.status === 429) blockedUntil = Date.now() + 60_000;
-            throw Object.assign(
-              failure(
-                response.status === 429 ? 429 : 502,
-                "The image source is temporarily unavailable.",
-              ),
-              {
-                errorCode: `http_${response.status}`,
-                upstreamStatus: response.status,
-                stage: "image",
+          if (Date.now() < blockedUntil) throw cooldownFailure("image");
+          let post = await manifest(code, false, sharedSignal);
+          metadata = post.diagnostics;
+          for (let attempt = 0; attempt < 2; attempt++) {
+            const attachment = post.attachments[index];
+            if (isLowResolution(attachment)) throw qualityFailure();
+            if (
+              !attachment ||
+              attachment.kind !== "image" ||
+              !isInstagramCdn(attachment.url)
+            )
+              throw failure(404, "This photo is unavailable.");
+            const { response, bytes } = await limited(
+              async () => {
+                if (Date.now() < blockedUntil) throw cooldownFailure("image");
+                metrics.upstreamRequests++;
+                const response = await fetcher(attachment.url, {
+                  redirect: "error",
+                  signal: AbortSignal.any([
+                    sharedSignal,
+                    AbortSignal.timeout(30_000),
+                  ]),
+                });
+                if (response.status === 429) blockedUntil = Date.now() + 60_000;
+                return {
+                  response,
+                  bytes: response.ok
+                    ? await boundedBody(response, 20 * 1024 ** 2)
+                    : undefined,
+                };
               },
+              sharedSignal,
+              metrics,
+              "image",
             );
+            sharedSignal.throwIfAborted();
+            if ([403, 404, 410].includes(response.status) && attempt === 0) {
+              await response.body?.cancel();
+              post = await manifest(code, true, sharedSignal);
+              metadata = combineMetrics(metadata, post.diagnostics);
+              continue;
+            }
+            if (!response.ok) {
+              await response.body?.cancel();
+              if (response.status === 429) blockedUntil = Date.now() + 60_000;
+              throw Object.assign(
+                failure(
+                  response.status === 429 ? 429 : 502,
+                  "The image source is temporarily unavailable.",
+                ),
+                {
+                  errorCode: `http_${response.status}`,
+                  upstreamStatus: response.status,
+                  stage: "image",
+                },
+              );
+            }
+            const type = imageType(bytes);
+            if (isLowResolution(imageDimensions(bytes))) throw qualityFailure();
+            await atomic(file, bytes);
+            return {
+              bytes,
+              type,
+              cached: false,
+              diagnostics: combineMetrics(metadata, metrics),
+            };
           }
-          const type = imageType(bytes);
-          if (isLowResolution(imageDimensions(bytes))) throw qualityFailure();
-          await atomic(file, bytes);
-          return { bytes, type, cached: false };
+        } catch (error) {
+          throw Object.assign(new Error(error.message), error, {
+            name: error.name,
+            diagnostics: combineMetrics(
+              combineMetrics(metadata, error.diagnostics),
+              metrics,
+            ),
+          });
         }
       },
       signal,
     );
   }
   return async function middleware(req, res, next) {
+    const requestStarted = performance.now();
     const url = new URL(req.url, "http://127.0.0.1");
     if (!url.pathname.startsWith("/api/personal/")) return next();
     const controller = new AbortController();
@@ -472,6 +564,7 @@ export function createPersonalMedia({
         return reply(
           response.ok ? 200 : 503,
           response.ok ? "ok" : "Core unavailable",
+          { "X-Viewer-Service-Revision": revision },
         );
       }
       const match =
@@ -500,6 +593,11 @@ export function createPersonalMedia({
         return reply(
           200,
           JSON.stringify({
+            diagnostics: {
+              ...data.diagnostics,
+              requestMs: Math.round(performance.now() - requestStarted),
+              service: serviceVersion,
+            },
             photos: data.attachments
               .filter((a) => a.kind === "image" && !isLowResolution(a))
               .map((a) => ({
@@ -528,7 +626,17 @@ export function createPersonalMedia({
           } else if (size) {
             const type = imageType(bytes);
             await touch(file);
-            data = { bytes, type, cached: true };
+            data = {
+              bytes,
+              type,
+              cached: true,
+              diagnostics: {
+                imageCache: "hit",
+                queueMs: 0,
+                imageMs: 0,
+                upstreamRequests: 0,
+              },
+            };
           }
         } catch (error) {
           if (error.code !== "ENOENT") throw error;
@@ -541,6 +649,10 @@ export function createPersonalMedia({
           for (const candidate of candidates) {
             try {
               data = await image(code, candidate.index, signal);
+              data = {
+                ...data,
+                diagnostics: combineMetrics(post.diagnostics, data.diagnostics),
+              };
               break;
             } catch (error) {
               if (error.errorCode !== "low_resolution") throw error;
@@ -552,6 +664,18 @@ export function createPersonalMedia({
         data = await image(code, Number(rawIndex), signal);
       }
       failures.delete(`${code}:${rawIndex}`);
+      failures.set(`${code}:${rawIndex}`, {
+        code: "loaded",
+        stage: "image",
+        status: 200,
+        diagnostics: {
+          ...data.diagnostics,
+          requestMs: Math.round(performance.now() - requestStarted),
+          service: serviceVersion,
+        },
+        recordedAt: new Date().toISOString(),
+      });
+      if (failures.size > 1000) failures.delete(failures.keys().next().value);
       return reply(200, data.bytes, {
         "Content-Type": imageTypes[data.type],
         "X-Personal-Cache": data.cached ? "HIT" : "MISS",
@@ -565,6 +689,12 @@ export function createPersonalMedia({
         ? error.status
         : 502;
       const diagnostic = {
+        diagnostics: {
+          ...error.diagnostics,
+          requestMs: Math.round(performance.now() - requestStarted),
+          service: serviceVersion,
+        },
+        recordedAt: new Date().toISOString(),
         status: error.upstreamStatus ?? status,
         code:
           error.errorCode ??
@@ -584,6 +714,7 @@ export function createPersonalMedia({
         status,
         JSON.stringify({
           errorCode: diagnostic.code,
+          diagnostics: diagnostic.diagnostics,
           ...(error.deferred ? { deferred: true } : {}),
           message:
             status === 502 && !error.status

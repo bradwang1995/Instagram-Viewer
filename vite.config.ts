@@ -2,9 +2,25 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 import { configDefaults } from "vitest/config";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import { createPersonalMedia } from "./scripts/personal-media.mjs";
 
 export default defineConfig(({ mode }) => ({
+  define: {
+    "import.meta.env.VITE_REPORT_BUILD": JSON.stringify(
+      process.env.GITHUB_SHA ||
+        (() => {
+          try {
+            return execFileSync("git", ["rev-parse", "--short", "HEAD"], {
+              encoding: "utf8",
+              windowsHide: true,
+            }).trim();
+          } catch {
+            return "unknown";
+          }
+        })(),
+    ),
+  },
   plugins: [
     react(),
     ...(mode === "personal"

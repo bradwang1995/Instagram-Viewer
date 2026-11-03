@@ -2,7 +2,11 @@ import type { MediaQueueItem } from "./mediaQueue";
 import { createRequestQueue } from "./requestQueue";
 import { createSharedRequests } from "./sharedRequests.mjs";
 import { mediaSource, usesPersonalMedia, personalUrl } from "./personalMedia";
-import { MediaLoadError, responseFailure } from "./loadReport";
+import {
+  MediaLoadError,
+  responseFailure,
+  recordMetadataDiagnostics,
+} from "./loadReport";
 
 const metadataOrigin =
   import.meta.env.VITE_INSTAGRAM_METADATA_ORIGIN ||
@@ -199,6 +203,7 @@ async function fetchPostPhotos(
     if (!response.ok)
       throw new MediaLoadError(await responseFailure(response, "metadata"));
     const data = await response.json();
+    recordMetadataDiagnostics(item, data.diagnostics);
     if (
       !Array.isArray(data.photos) ||
       !data.photos.length ||

@@ -470,7 +470,7 @@ describe("personal disk media gateway", () => {
         middleware,
         "/api/personal/diagnostics/Example/0",
       );
-      expect(JSON.parse(diagnostic.body)).toEqual({
+      expect(JSON.parse(diagnostic.body)).toMatchObject({
         status,
         code: errorCode,
         stage: "metadata",
@@ -589,4 +589,74 @@ describe("personal disk media gateway", () => {
       deferred: true,
     });
   });
+});
+
+it("reports cold image operations and warm disk cache without extra upstream diagnostic requests", async () => {
+  const { middleware, fetcher } = await setup();
+  await request(middleware, "/api/personal/images/Example/0");
+  const cold = JSON.parse(
+    (await request(middleware, "/api/personal/diagnostics/Example/0")).body,
+  );
+  expect(cold).toMatchObject({
+    code: "loaded",
+    status: 200,
+    diagnostics: {
+      imageCache: "miss",
+      metadataCache: "miss",
+      upstreamRequests: 2,
+      queueMs: expect.any(Number),
+      metadataMs: expect.any(Number),
+      imageMs: expect.any(Number),
+      requestMs: expect.any(Number),
+      service: { diagnostics: 1, revision: expect.any(String) },
+    },
+  });
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  await request(middleware, "/api/personal/images/Example/0");
+  const warm = JSON.parse(
+    (await request(middleware, "/api/personal/diagnostics/Example/0")).body,
+  );
+  expect(warm).toMatchObject({
+    diagnostics: { imageCache: "hit", upstreamRequests: 0, imageMs: 0 },
+  });
+  expect(fetcher).toHaveBeenCalledTimes(2);
+  expect(JSON.stringify(warm)).not.toContain("cdninstagram");
+});
+
+it("reports metadata cache hits and cooldowns as zero new upstream requests", async () => {
+  const { middleware, fetcher } = await setup();
+  const cold = JSON.parse(
+    (await request(middleware, "/api/personal/posts/Example")).body,
+  );
+  expect(cold.diagnostics).toMatchObject({
+    metadataCache: "miss",
+    upstreamRequests: 1,
+  });
+  const warm = JSON.parse(
+    (await request(middleware, "/api/personal/posts/Example")).body,
+  );
+  expect(warm.diagnostics).toMatchObject({
+    metadataCache: "hit",
+    upstreamRequests: 0,
+  });
+  fetcher.mockResolvedValue(
+    new Response(JSON.stringify({ errorCode: "graphql_error" }), {
+      status: 502,
+    }),
+  );
+  const failed = JSON.parse(
+    (await request(middleware, "/api/personal/posts/Other")).body,
+  );
+  expect(failed.diagnostics).toMatchObject({
+    metadataCache: "miss",
+    upstreamRequests: 1,
+  });
+  const deferred = JSON.parse(
+    (await request(middleware, "/api/personal/posts/Other")).body,
+  );
+  expect(deferred).toMatchObject({
+    deferred: true,
+    diagnostics: { metadataCache: "cooldown", upstreamRequests: 0 },
+  });
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });

@@ -102,12 +102,15 @@ it("does not let late diagnostics overwrite a newer successful image result", as
   let finish!: (response: Response) => void;
   vi.stubGlobal(
     "fetch",
-    vi.fn(
-      () =>
-        new Promise<Response>((resolve) => {
-          finish = resolve;
-        }),
-    ),
+    vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          }),
+      )
+      .mockResolvedValue(new Response("{}")),
   );
   const pending = report.recordImageFailure(item);
   report.recordLoadOutcome(item, "loaded");
@@ -145,4 +148,113 @@ it("records an unrequested cooldown separately from a failed upstream request", 
     deferred: true,
   });
   expect(report.readLoadReport()[0].outcome).toBe("deferred");
+});
+
+it("retains bounded outcome history and the first failure through cooldown and recovery", () => {
+  report.recordLoadOutcome(item, "failed", {
+    code: "graphql_error",
+    stage: "metadata",
+    status: 502,
+    diagnostics: { upstreamRequests: 1 },
+  });
+  report.recordLoadOutcome(item, "failed", {
+    code: "graphql_error",
+    stage: "metadata",
+    deferred: true,
+    diagnostics: { upstreamRequests: 0, metadataCache: "cooldown" },
+  });
+  for (let i = 0; i < 9; i++) report.recordLoadOutcome(item, "loaded");
+  const row = report.readLoadReport()[0];
+  expect(row.observations).toBe(11);
+  expect(row.history).toHaveLength(8);
+  expect(row.firstFailure).toMatchObject({
+    code: "graphql_error",
+    status: 502,
+  });
+  expect(report.summarizeLoadReport().recoveredPhotos).toBe(1);
+});
+
+it("reports posts separately from carousel photos and keeps sources separate", () => {
+  report.recordLoadOutcome(item, "loaded");
+  report.recordLoadOutcome(
+    { ...item, media: { ...item.media, sourceIndex: 1 } },
+    "loaded",
+  );
+  report.recordLoadOutcome(
+    { ...item, post: { ...item.post, shortcode: "Failed" } },
+    "failed",
+    { code: "graphql_error", stage: "metadata" },
+  );
+  report.recordLoadOutcome(
+    { ...item, post: { ...item.post, shortcode: "Deferred" } },
+    "failed",
+    { code: "cooldown", stage: "metadata", deferred: true },
+  );
+  expect(report.summarizeLoadReport()).toMatchObject({
+    photos: { loaded: 2, failed: 1, deferred: 1 },
+    posts: { loaded: 1, failed: 1, deferred: 1 },
+  });
+});
+
+it("allows only non-sensitive validated gateway diagnostics", async () => {
+  const result = await report.responseFailure(
+    new Response(
+      JSON.stringify({
+        errorCode: "graphql_error",
+        diagnostics: {
+          metadataCache: "miss",
+          metadataMs: 34,
+          queueMs: -1,
+          imageMs: "secret",
+          upstreamRequests: 1,
+          url: "https://example.com/?session=secret",
+          session: "secret",
+          body: "private response",
+          service: {
+            diagnostics: 1,
+            revision: "abcdef1",
+            startedAt: "2026-11-03T23:00:00Z",
+            token: "secret",
+          },
+        },
+      }),
+      { status: 502 },
+    ),
+    "metadata",
+  );
+  expect(result.diagnostics).toEqual({
+    metadataCache: "miss",
+    metadataMs: 34,
+    upstreamRequests: 1,
+    service: {
+      diagnostics: 1,
+      revision: "abcdef1",
+      startedAt: "2026-11-03T23:00:00Z",
+    },
+  });
+  expect(JSON.stringify(result)).not.toContain("secret");
+});
+
+it("enriches successful photos without fetching the image again", async () => {
+  vi.stubEnv("MODE", "personal");
+  const fetcher = vi
+    .fn()
+    .mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          status: 200,
+          code: "loaded",
+          recordedAt: "2026-11-03T23:00:00Z",
+          diagnostics: { imageCache: "hit", upstreamRequests: 0, imageMs: 0 },
+        }),
+      ),
+    );
+  vi.stubGlobal("fetch", fetcher);
+  report.recordLoadOutcome(item, "loaded");
+  await vi.waitFor(() =>
+    expect(report.readLoadReport()[0].diagnostics?.imageCache).toBe("hit"),
+  );
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(fetcher.mock.calls[0][0]).toBe("/api/personal/diagnostics/Example/0");
+  expect(report.readLoadReport()[0].observations).toBe(1);
 });
