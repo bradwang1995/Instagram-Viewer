@@ -120,6 +120,14 @@ export function ArchiveLanding({
               src={`${import.meta.env.BASE_URL}demo/editorial-street.webp`}
               alt="A street scene from the demo collection"
             />
+            <img
+              src={`${import.meta.env.BASE_URL}demo/desert-road.webp`}
+              alt="Layers of mountains in warm evening light"
+            />
+            <img
+              src={`${import.meta.env.BASE_URL}demo/city-night.webp`}
+              alt="City lights from the demo collection"
+            />
           </div>
           <div className="collection-preview-bottom">
             <span>A few things worth saving.</span>
