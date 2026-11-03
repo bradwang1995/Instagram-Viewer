@@ -14,8 +14,14 @@ export function usePersonFocusStyle(
     const image = ref.current;
     if (!enabled || !ready || !url || !image) return;
     let cancelled = false;
+    const controller = new AbortController();
     let observer: ResizeObserver | undefined;
-    void detectPerson(url).then((boxes) => {
+    void detectPerson(
+      url,
+      image.naturalWidth,
+      image.naturalHeight,
+      controller.signal,
+    ).then((boxes) => {
       if (cancelled) return;
       const crop = personCrop(image.naturalWidth, image.naturalHeight, boxes);
       if (!crop) return;
@@ -40,8 +46,9 @@ export function usePersonFocusStyle(
     });
     return () => {
       cancelled = true;
+      controller.abort();
       observer?.disconnect();
     };
   }, [enabled, ready, url, ref]);
-  return enabled ? style : undefined;
+  return enabled ? { ...style, transition: "none" } : undefined;
 }

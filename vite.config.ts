@@ -6,6 +6,7 @@ import { execFileSync } from "node:child_process";
 import { createPersonalMedia } from "./scripts/personal-media.mjs";
 
 export default defineConfig(({ mode }) => ({
+  worker: { format: "es" },
   define: {
     "import.meta.env.VITE_REPORT_BUILD": JSON.stringify(
       process.env.GITHUB_SHA ||
