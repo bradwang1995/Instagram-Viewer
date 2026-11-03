@@ -446,9 +446,14 @@ export function createPersonalMedia({
         // Keep good cached covers available even when the upstream is offline.
         const file = path.join(directory, `${code}-0.image`);
         try {
-          const size = imageDimensions(await readFile(file));
+          const bytes = await readFile(file);
+          const size = imageDimensions(bytes);
           if (isLowResolution(size)) await unlink(file);
-          else if (size) data = await image(code, 0);
+          else if (size) {
+            const type = imageType(bytes);
+            await utimes(file, new Date(), new Date()).catch(() => {});
+            data = { bytes, type, cached: true };
+          }
         } catch (error) {
           if (error.code !== "ENOENT") throw error;
         }

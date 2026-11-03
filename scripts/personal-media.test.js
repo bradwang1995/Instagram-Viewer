@@ -80,6 +80,19 @@ async function request(middleware, url, headers = {}, method = "GET") {
   return { status, body, headers: responseHeaders };
 }
 describe("personal disk media gateway", () => {
+  it("serves a validated cached cover without fetching a manifest or the upstream image", async () => {
+    const { middleware, fetcher, directory } = await setup();
+    const bytes = sizedJpeg(1080, 1350);
+    await writeFile(path.join(directory, "Example-0.image"), bytes);
+    const cover = await request(
+      middleware,
+      "/api/personal/images/Example/0?quality=2&cover=1",
+    );
+    expect(cover.status).toBe(200);
+    expect(cover.headers["X-Personal-Cache"]).toBe("HIT");
+    expect(cover.body).toEqual(bytes);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
   it("filters a low-resolution first photo and uses the next good image as the cover", async () => {
     const { middleware, fetcher, directory } = await setup();
     fetcher.mockImplementation(async (url) =>
