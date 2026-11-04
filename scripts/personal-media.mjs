@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { imageDimensions, isLowResolution } from "./image-quality.mjs";
 import { createSharedRequests } from "../src/features/media/sharedRequests.mjs";
+import { createLoadLog, sanitizeLoadRow } from "./load-log.mjs";
 
 function qualityFailure() {
   return Object.assign(failure(422, "Low-resolution photo rejected."), {
@@ -112,6 +113,19 @@ export function createPersonalMedia({
   maxBytes = 2 * 1024 ** 3,
   maxFiles = 2000,
 }) {
+  const writeLog = createLoadLog(path.join(directory, "load-logs"));
+  let logWarning = false;
+  const logGateway = async (row) => {
+    try {
+      await writeLog([{ kind: "gateway", row: sanitizeLoadRow(row) }]);
+    } catch {
+      if (!logWarning)
+        console.warn(
+          "Local load log could not be written; check disk space and folder permissions.",
+        );
+      logWarning = true;
+    }
+  };
   const single = createSharedRequests();
   const browserOrigin = "https://bradwang1995.github.io";
   const session = randomBytes(32).toString("hex");
@@ -549,13 +563,53 @@ export function createPersonalMedia({
         return reply(503, "Core unavailable");
       }
     }
-    if (req.method !== "GET") return reply(405, "GET only.");
     if (
       (remote || authorizedImage) &&
       !validSession(url.searchParams.get("session"))
     )
       return reply(401, "Reconnect to the local service.");
     url.searchParams.delete("session");
+    if (url.pathname === "/api/personal/load-log" && req.method === "POST") {
+      if (url.search) return reply(400, "Invalid log request.");
+      try {
+        let size = 0;
+        const chunks = [];
+        for await (const chunk of req) {
+          size += Buffer.byteLength(chunk);
+          if (size > 256 * 1024) return reply(413, "Log batch too large.");
+          chunks.push(Buffer.from(chunk));
+        }
+        const data = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+        if (
+          !/^[\dT:Z.\-]{20,40}:[\d.]{1,24}$/.test(data.visit ?? "") ||
+          !/^(?:[a-f0-9]{7,40}|unknown)$/.test(data.revision ?? "") ||
+          !Array.isArray(data.rows) ||
+          !data.rows.length ||
+          data.rows.length > 50
+        )
+          return reply(400, "Invalid log batch.");
+        let events;
+        try {
+          events = data.rows.map((row) => ({
+            kind: "browser",
+            visit: data.visit,
+            revision: data.revision,
+            row: sanitizeLoadRow(row),
+          }));
+        } catch {
+          return reply(400, "Invalid log result.");
+        }
+        try {
+          await writeLog(events);
+        } catch {
+          return reply(503, "Local log could not be written.");
+        }
+        return reply(204, "");
+      } catch {
+        return reply(400, "Invalid log body.");
+      }
+    }
+    if (req.method !== "GET") return reply(405, "GET only.");
     try {
       if (url.pathname === "/api/personal/health") {
         const response = await fetcher(coreOrigin + "/health", {
@@ -590,6 +644,16 @@ export function createPersonalMedia({
       }
       if (kind === "posts" && rawIndex === undefined) {
         const data = await manifest(code, false, signal);
+        await logGateway({
+          shortcode: code,
+          sourceIndex: 0,
+          source: "local",
+          outcome: "loaded",
+          code: "metadata_loaded",
+          stage: "metadata",
+          diagnostics: { ...data.diagnostics, service: serviceVersion },
+          time: new Date().toISOString(),
+        });
         return reply(
           200,
           JSON.stringify({
@@ -676,6 +740,13 @@ export function createPersonalMedia({
         recordedAt: new Date().toISOString(),
       });
       if (failures.size > 1000) failures.delete(failures.keys().next().value);
+      await logGateway({
+        ...failures.get(`${code}:${rawIndex}`),
+        shortcode: code,
+        sourceIndex: Number(rawIndex),
+        source: "local",
+        outcome: "loaded",
+      });
       return reply(200, data.bytes, {
         "Content-Type": imageTypes[data.type],
         "X-Personal-Cache": data.cached ? "HIT" : "MISS",
@@ -710,6 +781,18 @@ export function createPersonalMedia({
         failures.set(key, diagnostic);
         if (failures.size > 1000) failures.delete(failures.keys().next().value);
       }
+      const logMatch =
+        /^\/api\/personal\/(?:images|posts)\/([A-Za-z0-9_-]+)(?:\/(\d+))?$/.exec(
+          url.pathname,
+        );
+      if (logMatch && codePattern.test(logMatch[1]))
+        await logGateway({
+          ...diagnostic,
+          shortcode: logMatch[1],
+          sourceIndex: Number(logMatch[2] ?? 0),
+          source: "local",
+          outcome: diagnostic.deferred ? "deferred" : "failed",
+        });
       return reply(
         status,
         JSON.stringify({

@@ -5,17 +5,20 @@ import {
   summarizeLoadReport,
 } from "../../features/media/loadReport";
 import { localServiceEnabled } from "../../features/media/personalMedia";
+import { localLogStatus } from "../../features/media/localLoadLog";
 
 export function LoadReport() {
   const dialog = useRef<HTMLDialogElement>(null);
   const title = useRef<HTMLHeadingElement>(null);
   const [rows, setRows] = useState(readLoadReport);
+  const [logStatus, setLogStatus] = useState(localLogStatus);
   useEffect(() => {
     // Keep recording in the background, but only render statistics on demand.
     const update = () => {
       if (dialog.current?.open) setRows(readLoadReport());
     };
     const show = () => {
+      setLogStatus(localLogStatus());
       setRows(readLoadReport());
       dialog.current?.showModal();
       title.current?.focus();
@@ -23,9 +26,14 @@ export function LoadReport() {
     };
     window.addEventListener("viewer:show-load-report", show);
     window.addEventListener("viewer:load-report-updated", update);
+    const updateLog = () => {
+      if (dialog.current?.open) setLogStatus(localLogStatus());
+    };
+    window.addEventListener("viewer:local-log-updated", updateLog);
     return () => {
       window.removeEventListener("viewer:show-load-report", show);
       window.removeEventListener("viewer:load-report-updated", update);
+      window.removeEventListener("viewer:local-log-updated", updateLog);
     };
   }, []);
   const failed = rows.filter((row) => row.outcome === "failed");
@@ -52,9 +60,13 @@ export function LoadReport() {
       <p>
         This visit only. Results update as you scroll, navigate or play a
         slideshow, including nearby preloads. Opening this report does not load
-        any posts. Demo photos and previous visits are excluded. No report is
-        uploaded.
+        any posts. Demo photos and previous visits are excluded. When using the
+        local server, diagnostics are saved automatically to this PC. Nothing is
+        sent to a cloud logging service. Export remains optional.
       </p>
+      {(import.meta.env.MODE === "personal" || localServiceEnabled()) && (
+        <p>Automatic local log: {logStatus}</p>
+      )}
       <p>
         Current source:{" "}
         {import.meta.env.MODE === "personal" || localServiceEnabled()

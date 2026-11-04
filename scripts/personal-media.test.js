@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { EventEmitter } from "node:events";
 import { createPersonalMedia, isInstagramCdn } from "./personal-media.mjs";
-import { writeFile } from "node:fs/promises";
+import { writeFile, readFile } from "node:fs/promises";
 
 function sizedJpeg(width, height) {
   const bytes = Buffer.from([
@@ -61,7 +61,14 @@ async function setup(options = {}) {
   const middleware = createPersonalMedia({ directory, fetcher, ...options });
   return { directory, fetcher, middleware };
 }
-async function request(middleware, url, headers = {}, method = "GET", signal) {
+async function request(
+  middleware,
+  url,
+  headers = {},
+  method = "GET",
+  signal,
+  requestBody = "",
+) {
   let status, body, responseHeaders;
   const req = Object.assign(new EventEmitter(), {
     url,
@@ -69,6 +76,9 @@ async function request(middleware, url, headers = {}, method = "GET", signal) {
     headers: { host: "127.0.0.1:5178", ...headers },
   });
   const abort = () => req.emit("aborted");
+  req[Symbol.asyncIterator] = async function* () {
+    yield Buffer.from(requestBody);
+  };
   signal?.addEventListener("abort", abort, { once: true });
   await middleware(
     req,
@@ -501,7 +511,7 @@ describe("personal disk media gateway", () => {
       (await request(middleware, "/api/personal/images/Example/0")).status,
     ).toBe(200);
     const files = await readdir(directory);
-    expect(files).toEqual(["Example-0.image"]);
+    expect(files).toEqual(["Example-0.image", "load-logs"]);
   });
   it("keeps concurrent cache writes within both quotas and recovers the index on restart", async () => {
     const { middleware, fetcher, directory } = await setup({
@@ -659,4 +669,155 @@ it("reports metadata cache hits and cooldowns as zero new upstream requests", as
     diagnostics: { metadataCache: "cooldown", upstreamRequests: 0 },
   });
   expect(fetcher).toHaveBeenCalledTimes(2);
+});
+
+it("persists gateway and browser results locally and strips unrelated browser input", async () => {
+  const { middleware, directory } = await setup();
+  await request(middleware, "/api/personal/images/Example/0");
+  const body = JSON.stringify({
+    visit: "2026-11-03T23:00:00.000Z:0.123",
+    revision: "abcdef1",
+    rows: [
+      {
+        shortcode: "Example",
+        sourceIndex: 0,
+        source: "local",
+        outcome: "loaded",
+        code: "loaded",
+        stage: "image",
+        observations: 2,
+        url: "secret-url",
+        token: "secret-token",
+        diagnostics: {
+          imageCache: "hit",
+          upstreamRequests: 0,
+          url: "secret-cdn",
+        },
+        history: [
+          {
+            outcome: "failed",
+            code: "graphql_error",
+            stage: "metadata",
+            time: "2026-11-03T23:00:00Z",
+          },
+        ],
+      },
+    ],
+  });
+  expect(
+    (
+      await request(
+        middleware,
+        "/api/personal/load-log",
+        {},
+        "POST",
+        undefined,
+        body,
+      )
+    ).status,
+  ).toBe(204);
+  const text = await readFile(
+    path.join(directory, "load-logs/load-events.jsonl"),
+    "utf8",
+  );
+  const events = text.trim().split("\n").map(JSON.parse);
+  expect(events.map((event) => event.kind)).toEqual(["gateway", "browser"]);
+  expect(events[1].row).toMatchObject({
+    observations: 2,
+    diagnostics: { imageCache: "hit" },
+    history: [{ code: "graphql_error" }],
+  });
+  expect(text).not.toContain("secret");
+  expect(text).not.toContain("cdninstagram");
+});
+
+it("rejects unauthorized, oversized and invalid log batches without writing", async () => {
+  const { middleware, directory } = await setup();
+  expect(
+    (
+      await request(
+        middleware,
+        "/api/personal/load-log",
+        { origin: "https://evil.example" },
+        "POST",
+        undefined,
+        "{}",
+      )
+    ).status,
+  ).toBe(403);
+  expect(
+    (
+      await request(
+        middleware,
+        "/api/personal/load-log",
+        { origin: "https://bradwang1995.github.io" },
+        "POST",
+        undefined,
+        "{}",
+      )
+    ).status,
+  ).toBe(401);
+  expect(
+    (
+      await request(
+        middleware,
+        "/api/personal/load-log",
+        {},
+        "POST",
+        undefined,
+        "x".repeat(256 * 1024 + 1),
+      )
+    ).status,
+  ).toBe(413);
+  expect(
+    (
+      await request(
+        middleware,
+        "/api/personal/load-log",
+        {},
+        "POST",
+        undefined,
+        "{}",
+      )
+    ).status,
+  ).toBe(400);
+  expect(await readdir(directory)).not.toContain("load-logs");
+});
+
+it("reports browser write failures while keeping gateway image responses available", async () => {
+  const { middleware, directory } = await setup();
+  await writeFile(path.join(directory, "load-logs"), "not a directory");
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    expect(
+      (await request(middleware, "/api/personal/images/Example/0")).status,
+    ).toBe(200);
+    const body = JSON.stringify({
+      visit: "2026-11-03T23:00:00.000Z:0.123",
+      revision: "abcdef1",
+      rows: [
+        {
+          shortcode: "Example",
+          sourceIndex: 0,
+          source: "local",
+          outcome: "loaded",
+        },
+      ],
+    });
+    expect(
+      (
+        await request(
+          middleware,
+          "/api/personal/load-log",
+          {},
+          "POST",
+          undefined,
+          body,
+        )
+      ).status,
+    ).toBe(503);
+    expect(warn).toHaveBeenCalledTimes(1);
+  } finally {
+    warn.mockRestore();
+  }
 });

@@ -1,5 +1,6 @@
 import type { MediaQueueItem } from "./mediaQueue";
 import { mediaSource, personalUrl, usesPersonalMedia } from "./personalMedia";
+import { queueLocalLoadLog } from "./localLoadLog";
 
 export type LoadDiagnostics = {
   metadataCache?: "hit" | "miss" | "cooldown";
@@ -188,6 +189,7 @@ export function recordLoadOutcome(
     /* Diagnostic timing must never interrupt photo loading. */
   }
   rows.set(key, row);
+  queueLocalLoadLog(row, sessionId);
   if (rows.size > LIMIT) rows.delete(rows.keys().next().value!);
   changed();
   // One bounded write/notification per burst, with synchronous reads remaining current.
@@ -218,6 +220,7 @@ async function enrichGatewayResult(
       Number.isFinite(Date.parse(data.recordedAt))
     )
       row.gatewayRecordedAt = data.recordedAt;
+    queueLocalLoadLog(row, sessionId);
     changed();
   } catch {
     /* Older or offline gateways leave diagnostics unknown. */
@@ -349,6 +352,7 @@ export async function recordImageFailure(item: MediaQueueItem) {
             status: failure.status,
             time: current.time,
           });
+    queueLocalLoadLog(current, sessionId);
     changed();
   }
 }
