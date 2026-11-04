@@ -65,6 +65,7 @@ export function personCrop(width: number, height: number, boxes: PersonBox[]) {
     y,
     width: Math.min(width, right + padX) - x,
     height: Math.min(height, bottom + padY) - y,
+    headY: top,
   };
 }
 
@@ -83,7 +84,11 @@ export function personZoom(
     viewWidth / width,
     viewHeight / height,
   );
-  const target = Math.min(viewWidth / crop.width, viewHeight / crop.height);
+  // The endpoint frames roughly the upper two-thirds; lower legs may be cropped.
+  const target = Math.min(
+    viewWidth / crop.width,
+    viewHeight / (crop.height * 0.65),
+  );
   if (target <= base * 1.025) return null;
   const scale = target / base;
   const drawnWidth = width * base,
@@ -96,7 +101,7 @@ export function personZoom(
   );
   const y = Math.max(
     -limitY,
-    Math.min(limitY, (height / 2 - crop.y - crop.height / 2) * target),
+    Math.min(limitY, -viewHeight / 2 + (height / 2 - crop.headY) * target),
   );
   const progress = Math.min(100, strength) / 100;
   return {

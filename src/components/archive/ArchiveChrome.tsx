@@ -220,8 +220,9 @@ export function ArchiveControlBar({
       >
         <span>
           <Focus size={16} aria-hidden="true" />
-          Focus on person <output>{strength}%</output>
+          Focus on person
         </span>
+        <span className="person-focus-endpoint" aria-hidden="true">0%</span>
         <input
           type="range"
           aria-label="Focus on person"
@@ -232,6 +233,7 @@ export function ArchiveControlBar({
           value={strength}
           onChange={(event) => setStrength(Number(event.target.value))}
         />
+        <span className="person-focus-endpoint" aria-hidden="true">100%</span>
       </label>
     </footer>
   );

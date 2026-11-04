@@ -30,7 +30,7 @@ describe("person focus strength", () => {
       ]),
     ).toBeNull();
   });
-  it("keeps 0 original, interpolates smoothly, and maximizes without cutting off people", () => {
+  it("keeps 0 original and interpolates to a head-aligned crop that may cut off legs", () => {
     const width = 900,
       height = 1200,
       vw = 500,
@@ -54,18 +54,20 @@ describe("person focus strength", () => {
         vw / 2 + (crop.x + crop.width - width / 2) * pixels + full.x,
       ).toBeLessThanOrEqual(vw + 0.00001);
       expect(
-        vh / 2 + (crop.y - height / 2) * pixels + full.y,
+        vh / 2 + (crop.headY - height / 2) * pixels + full.y,
       ).toBeGreaterThanOrEqual(-0.00001);
       expect(
         vh / 2 + (crop.y + crop.height - height / 2) * pixels + full.y,
-      ).toBeLessThanOrEqual(vh + 0.00001);
-      expect(Math.min(vw / crop.width, vh / crop.height)).toBeCloseTo(pixels);
+      ).toBeGreaterThan(vh);
+      expect(Math.min(vw / crop.width, vh / (crop.height * 0.65))).toBeCloseTo(
+        pixels,
+      );
       expect(full.drawnWidth / full.drawnHeight).toBeCloseTo(width / height);
     }
   });
   it("never shrinks already-large people", () => {
     const crop = personCrop(900, 1200, [
-      { originX: 0, originY: 100, width: 850, height: 1000 },
+      { originX: 0, originY: 100, width: 900, height: 1000 },
     ])!;
     expect(personZoom(900, 1200, 600, 600, crop, "cover")).toBeNull();
   });

@@ -12,6 +12,8 @@ it("shares a labeled 0–100 focus slider across footers", () => {
   );
   const sliders = screen.getAllByRole("slider", { name: "Focus on person" });
   expect(sliders[0]).toHaveValue("100");
+  expect(screen.getAllByText("0%")).toHaveLength(2);
+  expect(screen.getAllByText("100%")).toHaveLength(2);
   fireEvent.change(sliders[0], { target: { value: "50" } });
   expect(sliders[1]).toHaveValue("50");
   expect(localStorage.getItem("viewer:person-focus-strength")).toBe("50");

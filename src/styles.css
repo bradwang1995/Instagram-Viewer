@@ -1621,10 +1621,10 @@ button.viewer-control.post-panel-close {
   .archive-dock .slideshow-inline-settings { gap: 8px; }
 }
 
-.person-focus-slider { display: grid; gap: 6px; width: min(230px, 100%); min-width: 150px; color: var(--paper); }
+.person-focus-slider { display: flex; align-items: center; gap: 8px; width: min(350px, 100%); min-width: 0; color: var(--paper); }
 .person-focus-slider > span { display: flex; align-items: center; gap: 6px; font-size: .7rem; }
-.person-focus-slider output { margin-left: auto; font-variant-numeric: tabular-nums; }
-.person-focus-slider input { width: 100%; margin: 0; accent-color: var(--acid); cursor: pointer; }
+.person-focus-endpoint { font-variant-numeric: tabular-nums; color: var(--dim); }
+.person-focus-slider input { flex: 1; min-width: 40px; width: 100%; margin: 0; accent-color: var(--acid); cursor: pointer; }
 .person-focus-slider input { appearance: none; height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--acid) 0 var(--focus-strength), #4a3546 var(--focus-strength) 100%); }
 .person-focus-slider input::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border: 2px solid white; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 4px rgb(255 77 154 / 15%); }
 .person-focus-slider input::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid white; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 4px rgb(255 77 154 / 15%); }

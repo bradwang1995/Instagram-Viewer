@@ -78,7 +78,7 @@ it("keeps an already-large cover image unchanged", async () => {
     objectFit: "cover",
   } as CSSStyleDeclaration);
   vi.mocked(detectPerson).mockResolvedValue([
-    { originX: 0, originY: 100, width: 850, height: 1000 },
+    { originX: 0, originY: 100, width: 900, height: 1000 },
   ]);
   const image = new Image();
   Object.defineProperties(image, {
