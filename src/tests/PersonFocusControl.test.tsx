@@ -1,8 +1,8 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { ArchiveControlBar } from "../components/archive/ArchiveChrome";
 import { usePersonFocus } from "../features/media/personFocus";
-afterEach(() => usePersonFocus.setState({ strength: 0 }));
+afterEach(() => usePersonFocus.setState({ strength: 0, pending: 0 }));
 it("shares a labeled 0–100 focus slider across footers", () => {
   render(
     <>
@@ -21,7 +21,7 @@ it("shares a labeled 0–100 focus slider across footers", () => {
   expect(sliders[0]).toHaveAttribute("aria-valuetext", "Original");
 });
 
-it("separates each date label from its value with a dash", () => {
+it("shows date labels and values without dashes", () => {
   const { container } = render(
     <ArchiveControlBar
       dateRange={{
@@ -34,9 +34,20 @@ it("separates each date label from its value with a dash", () => {
     />,
   );
   const labels = container.querySelectorAll(".archive-date-value");
-  expect(labels[0]).toHaveTextContent("Start time-Jul 2026");
-  expect(labels[1]).toHaveTextContent("Jul 2026-End time");
+  expect(labels[0]).toHaveTextContent("Start timeJul 2026");
+  expect(labels[1]).toHaveTextContent("Jul 2026End time");
   expect(container.querySelector(".person-focus-slider")).not.toHaveTextContent(
     "-",
   );
+});
+
+it("replaces the focus slider with a loading indicator until preparation finishes", () => {
+  usePersonFocus.setState({ pending: 1 });
+  render(<ArchiveControlBar />);
+  expect(screen.queryByRole("slider", { name: "Focus on person" })).toBeNull();
+  expect(screen.getByRole("status")).toHaveTextContent("Preparing focus");
+  act(() => usePersonFocus.setState({ pending: 0 }));
+  expect(
+    screen.getByRole("slider", { name: "Focus on person" }),
+  ).toBeInTheDocument();
 });

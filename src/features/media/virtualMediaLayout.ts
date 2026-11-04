@@ -33,27 +33,45 @@ export function getGridMetrics(
   itemCount: number,
   viewportWidth: number,
   viewportHeight: number,
+  aspects?: number[],
 ): GridMetrics {
   const safeWidth = Math.max(320, viewportWidth);
   const safeHeight = Math.max(320, viewportHeight);
-  const columns = safeWidth <= 640 ? 1 : safeWidth <= 1100 ? 2 : 4;
+  const columns =
+    safeWidth <= 640
+      ? 1
+      : safeWidth <= 1100
+        ? 2
+        : safeWidth >= 1800 && aspects
+          ? 5
+          : 4;
   const paddingX = 0;
   const paddingY = columns === 1 ? 12 : 14;
   const columnGap = columns === 1 ? 0 : clamp(safeWidth * 0.009, 9, 18);
   const rowGap = columns === 1 ? 7 : clamp(safeHeight * 0.0125, 9, 13);
   const itemWidth =
     (safeWidth - paddingX * 2 - columnGap * (columns - 1)) / columns;
-  // A square card matches the unresolved Instagram preview surface and avoids
-  // stretching each Grid row to nearly a full viewport. Four rendered rows
-  // retain one recently viewed row while keeping visible and ahead-of-scroll
-  // content inside a bounded window.
+  // Keep square fallback metrics for unresolved surfaces; known ratios use
+  // justified rows below, including full-width portrait photos on mobile.
   const itemHeight = itemWidth;
   const rowStride = itemHeight + rowGap;
   const rowCount = Math.ceil(itemCount / columns);
-  const totalHeight = rowCount
+  let totalHeight = rowCount
     ? paddingY * 2 + rowCount * itemHeight + (rowCount - 1) * rowGap
     : safeHeight;
 
+  if (aspects?.length) {
+    totalHeight = paddingY * 2;
+    for (let i = 0; i < itemCount; i += columns) {
+      const row = aspects.slice(i, i + columns).map(safeAspect);
+      const height = Math.min(
+        row.length === columns ? Infinity : itemWidth / 0.78,
+        (safeWidth - columnGap * (row.length - 1)) /
+          row.reduce((a, b) => a + b, 0),
+      );
+      totalHeight += height + (i + columns < itemCount ? rowGap : 0);
+    }
+  }
   return {
     columns,
     itemWidth,
@@ -113,7 +131,31 @@ export function getGridWindow(
 export function getGridLayouts(
   itemCount: number,
   metrics: GridMetrics,
+  aspects?: number[],
 ): VirtualMediaLayout[] {
+  if (aspects?.length) {
+    const layouts: VirtualMediaLayout[] = [];
+    const availableWidth =
+      metrics.itemWidth * metrics.columns +
+      metrics.columnGap * (metrics.columns - 1);
+    let top = metrics.paddingY;
+    for (let i = 0; i < itemCount; i += metrics.columns) {
+      const row = aspects.slice(i, i + metrics.columns).map(safeAspect);
+      const height = Math.min(
+        row.length === metrics.columns ? Infinity : metrics.itemWidth / 0.78,
+        (availableWidth - metrics.columnGap * (row.length - 1)) /
+          row.reduce((a, b) => a + b, 0),
+      );
+      let left = metrics.paddingX;
+      row.forEach((aspect, column) => {
+        const width = height * aspect;
+        layouts.push({ index: i + column, left, top, width, height });
+        left += width + metrics.columnGap;
+      });
+      top += height + metrics.rowGap;
+    }
+    return layouts;
+  }
   const layouts: VirtualMediaLayout[] = [];
 
   for (let index = 0; index < itemCount; index += 1) {
@@ -255,4 +297,8 @@ function findLastLayoutStartingBefore(
 
 function clamp(value: number, minimum: number, maximum: number): number {
   return Math.min(maximum, Math.max(minimum, value));
+}
+
+function safeAspect(value: number): number {
+  return Number.isFinite(value) && value > 0 ? value : 0.78;
 }

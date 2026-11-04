@@ -3,9 +3,11 @@ import { create } from "zustand";
 // Start each page visit at the original framing, even after an earlier high setting.
 export const usePersonFocus = create<{
   strength: number;
+  pending: number;
   setStrength: (value: number) => void;
 }>((set) => ({
   strength: 0,
+  pending: 0,
   setStrength: (value) =>
     set({
       strength: Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0,

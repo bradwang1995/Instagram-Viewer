@@ -57,3 +57,18 @@ it("pauses in the background or under a photo panel and resumes with a full dwel
   act(() => vi.advanceTimersByTime(3000));
   expect(next).toHaveBeenCalledTimes(1);
 });
+
+it("resets the remaining dwell when manually navigating to an already loaded photo", () => {
+  vi.useFakeTimers();
+  const next = vi.fn();
+  const view = renderHook(
+    ({ id }) => useSlideshowPlayback(true, id, true, 5000, next),
+    { initialProps: { id: "first" } },
+  );
+  act(() => vi.advanceTimersByTime(4500));
+  view.rerender({ id: "second" });
+  act(() => vi.advanceTimersByTime(4999));
+  expect(next).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(1));
+  expect(next).toHaveBeenCalledTimes(1);
+});

@@ -147,12 +147,22 @@ export const ArchivePreview = memo(function ArchivePreview({
       new Map(visibleOrderedItems.map((item, index) => [item.media.id, index])),
     [visibleOrderedItems],
   );
+  const [measuredAspects, setMeasuredAspects] = useState<
+    Record<string, number>
+  >({});
+  const onAspectChange = useCallback((id: string, aspect: number) => {
+    setMeasuredAspects((previous) =>
+      previous[id] === aspect ? previous : { ...previous, [id]: aspect },
+    );
+  }, []);
   const aspects = useMemo(
     () =>
-      visibleOrderedItems.map(({ media }) =>
-        media.width && media.height ? media.width / media.height : 0.78,
+      visibleOrderedItems.map(
+        ({ media }) =>
+          measuredAspects[media.id] ??
+          (media.width && media.height ? media.width / media.height : 0.78),
       ),
-    [visibleOrderedItems],
+    [visibleOrderedItems, measuredAspects],
   );
   const ribbonMetrics = useMemo(
     () => getRibbonMetrics(aspects, viewport.width, viewport.height),
@@ -164,15 +174,22 @@ export const ArchivePreview = memo(function ArchivePreview({
         visibleOrderedItems.length,
         viewport.width,
         viewport.height,
+        aspects,
       ),
-    [visibleOrderedItems.length, viewport],
+    [visibleOrderedItems.length, viewport, aspects],
   );
   const allLayouts = useMemo(
     () =>
       viewMode === "grid"
-        ? getGridLayouts(visibleOrderedItems.length, gridMetrics)
+        ? getGridLayouts(visibleOrderedItems.length, gridMetrics, aspects)
         : ribbonMetrics.layouts,
-    [gridMetrics, ribbonMetrics.layouts, viewMode, visibleOrderedItems.length],
+    [
+      gridMetrics,
+      ribbonMetrics.layouts,
+      viewMode,
+      visibleOrderedItems.length,
+      aspects,
+    ],
   );
   const layoutStyleById = useMemo(() => {
     const styles = new Map<string, CSSProperties>();
@@ -351,7 +368,11 @@ export const ArchivePreview = memo(function ArchivePreview({
           Math.ceil(visibleOrderedItems.length / gridMetrics.columns) - 1;
         const fallbackRow = Math.min(
           lastRow,
-          Math.max(0, Math.round(scroller.scrollTop / gridMetrics.rowStride)),
+          Math.floor(
+            (allLayouts.find(
+              (layout) => layout.top + layout.height > scroller.scrollTop,
+            )?.index ?? 0) / gridMetrics.columns,
+          ),
         );
         const selectedIndex = selectedId
           ? visibleIndexById.get(selectedId)
@@ -787,6 +808,7 @@ export const ArchivePreview = memo(function ArchivePreview({
               );
               return (
                 <ArchiveMediaCard
+                  onAspectChange={onAspectChange}
                   key={item.media.id}
                   item={item}
                   index={visibleIndex ?? sessionIndex}

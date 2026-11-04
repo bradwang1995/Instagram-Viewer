@@ -737,7 +737,7 @@ describe("Photo archive preview", () => {
     fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
 
     fireEvent.keyDown(window, { key: "ArrowDown", cancelable: true });
-    expect(card(4)).toHaveClass("is-selected");
+    expect(card(5)).toHaveClass("is-selected");
     expect(scroller.scrollTop).toBe(0);
     await waitFor(() => expect(scroller.scrollTop).toBeGreaterThan(0));
 
@@ -813,16 +813,16 @@ describe("Photo archive preview", () => {
     fireEvent.click(screen.getByRole("tab", { name: /Grid View/ }));
 
     fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
-    expect(card(4)).toHaveClass("is-selected");
+    expect(card(5)).toHaveClass("is-selected");
     await waitFor(() => expect(scroller.scrollTop).toBeGreaterThan(0));
     const firstStep = scroller.scrollTop;
     fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
-    expect(card(8)).toHaveClass("is-selected");
+    expect(card(10)).toHaveClass("is-selected");
     await waitFor(() => expect(scroller.scrollTop).toBeGreaterThan(firstStep));
     fireEvent.wheel(scroller, { deltaY: 120, cancelable: true });
-    expect(card(8)).toHaveClass("is-selected");
+    expect(card(10)).toHaveClass("is-selected");
     fireEvent.wheel(scroller, { deltaY: -120, cancelable: true });
-    expect(card(4)).toHaveClass("is-selected");
+    expect(card(5)).toHaveClass("is-selected");
   });
 
   it("opens the slideshow tab, auto-loops, and supports keyboard navigation", async () => {
@@ -846,14 +846,17 @@ describe("Photo archive preview", () => {
       within(slideshow).queryByRole("button", { name: "Hide this media" }),
     ).not.toBeInTheDocument();
     expect(
-      within(slideshow).queryByRole("button", { name: /previous|next|pause/i }),
-    ).not.toBeInTheDocument();
+      within(slideshow).getByRole("button", { name: "Previous photo" }),
+    ).toBeInTheDocument();
+    expect(
+      within(slideshow).getByRole("button", { name: "Next photo" }),
+    ).toBeInTheDocument();
     expect(
       within(slideshow).getByRole("combobox", { name: "Transition style" }),
     ).toHaveValue(DEFAULT_SETTINGS.slideshowTransitionPreset);
     expect(
       within(slideshow).getByRole("slider", { name: "Frame duration" }),
-    ).toHaveAttribute("min", "3000");
+    ).toHaveAttribute("min", "2000");
     await waitFor(() =>
       expect(
         slideshow.querySelector('[data-slideshow-slot="0"]'),

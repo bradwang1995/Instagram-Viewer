@@ -32,6 +32,8 @@ it("shows local service startup guidance when connecting fails without enabling 
     ),
   );
   expect(localStorage.length).toBe(0);
-  fireEvent.click(screen.getByRole("button", { name: "Close" }));
+  fireEvent.click(
+    screen.getByRole("button", { name: "Close local server settings" }),
+  );
   expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 });

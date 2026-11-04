@@ -4,22 +4,26 @@ import { usePersonFocusStyle } from "../hooks/usePersonFocusStyle";
 import { usePersonFocus } from "../features/media/personFocus";
 import { detectPerson } from "../features/media/personDetector";
 vi.mock("../features/media/personDetector", () => ({ detectPerson: vi.fn() }));
-beforeEach(() => usePersonFocus.setState({ strength: 100 }));
+beforeEach(() => {
+  usePersonFocus.setState({ strength: 100, pending: 0 });
+  vi.mocked(detectPerson).mockResolvedValue([]);
+});
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   usePersonFocus.setState({ strength: 100 });
   vi.clearAllMocks();
 });
-it("leaves loaded photos original without starting detection at zero", async () => {
+it("prepares loaded photos at zero while leaving the original framing", async () => {
   usePersonFocus.setState({ strength: 0 });
   const ref = { current: new Image() };
   const { result } = renderHook(() => usePersonFocusStyle(ref, "photo", true));
   await act(async () => {});
   expect(result.current).toEqual({ transition: "none" });
-  expect(detectPerson).not.toHaveBeenCalled();
+  expect(detectPerson).toHaveBeenCalledTimes(1);
+  expect(usePersonFocus.getState().pending).toBe(0);
 });
-it("disables the zoom animation and ignores a result after focus is switched off", async () => {
+it("keeps preparation active at zero and cancels when the photo is no longer ready", async () => {
   let complete!: (
     boxes: {
       originX: number;
@@ -36,11 +40,18 @@ it("disables the zoom animation and ignores a result after focus is switched off
   );
   const image = new Image();
   const ref = { current: image };
-  const { result } = renderHook(() => usePersonFocusStyle(ref, "photo", true));
+  const { result, rerender } = renderHook(
+    ({ ready }) => usePersonFocusStyle(ref, "photo", ready),
+    { initialProps: { ready: true } },
+  );
+  expect(usePersonFocus.getState().pending).toBe(1);
   expect(result.current?.transition).toBe("none");
   const signal = vi.mocked(detectPerson).mock.calls[0][3];
   act(() => usePersonFocus.setState({ strength: 0 }));
+  expect(signal.aborted).toBe(false);
+  rerender({ ready: false });
   expect(signal.aborted).toBe(true);
+  expect(usePersonFocus.getState().pending).toBe(0);
   await act(async () =>
     complete([{ originX: 100, originY: 200, width: 200, height: 500 }]),
   );
@@ -132,4 +143,15 @@ it("updates slider strength without restarting detection", async () => {
   expect(detectPerson).toHaveBeenCalledTimes(1);
   act(() => usePersonFocus.setState({ strength: 0 }));
   expect(result.current).toEqual({ transition: "none" });
+});
+
+it("holds focus readiness while a photo is still loading and releases it on unmount", () => {
+  const ref = { current: new Image() };
+  const view = renderHook(() =>
+    usePersonFocusStyle(ref, undefined, false, true),
+  );
+  expect(usePersonFocus.getState().pending).toBe(1);
+  expect(detectPerson).not.toHaveBeenCalled();
+  view.unmount();
+  expect(usePersonFocus.getState().pending).toBe(0);
 });

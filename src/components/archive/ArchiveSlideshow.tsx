@@ -1,3 +1,4 @@
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSlideshowPlayback } from "../../hooks/useSlideshowPlayback";
@@ -41,7 +42,7 @@ type SlideshowFrame = {
   slot: -1 | 0 | 1;
 };
 
-const TRANSITION_DURATION_SECONDS = 0.36;
+const TRANSITION_DURATION_SECONDS = 0.7;
 
 export function ArchiveSlideshow({
   open,
@@ -172,6 +173,26 @@ export function ArchiveSlideshow({
       />
 
       <div className="slideshow-stage">
+        {item ? (
+          <>
+            <button
+              className="slideshow-arrow is-previous"
+              aria-label="Previous photo"
+              onClick={onPrevious}
+              disabled={!previousItem}
+            >
+              <ChevronLeft />
+            </button>
+            <button
+              className="slideshow-arrow is-next"
+              aria-label="Next photo"
+              onClick={onNext}
+              disabled={!nextItem}
+            >
+              <ChevronRight />
+            </button>
+          </>
+        ) : null}
         {frames.length ? (
           frames.map((frame) => {
             return (
@@ -183,8 +204,12 @@ export function ArchiveSlideshow({
                 aria-hidden={frame.slot === 0 ? undefined : true}
                 initial={false}
                 animate={getFrameMotion(transitionPreset, frame.slot)}
+                style={{ zIndex: frame.slot === 0 ? 3 : 2 }}
                 transition={{
                   duration: TRANSITION_DURATION_SECONDS,
+                  ...(transitionPreset === "ken-burns" && frame.slot === 0
+                    ? { scale: { duration: dwellMs / 1000, ease: "linear" } }
+                    : {}),
                   ease: [0.22, 1, 0.36, 1],
                 }}
               >
@@ -278,15 +303,24 @@ function getFrameMotion(preset: TransitionPreset, slot: -1 | 0 | 1) {
   const isCurrent = slot === 0;
   const directionalX = `${slot * 100}%`;
 
+  const base = {
+    opacity: isCurrent ? 1 : 0,
+    x: "0%",
+    scale: 1,
+    filter: "none",
+    clipPath: "inset(0 0 0 0%)",
+  };
   switch (preset) {
     case "directional-wipe":
       return {
+        ...base,
         opacity: isCurrent ? 1 : 0,
         x: directionalX,
         clipPath: isCurrent ? "inset(0 0 0 0%)" : "inset(0 12% 0 12%)",
       };
     case "depth-zoom":
       return {
+        ...base,
         opacity: isCurrent ? 1 : 0,
         x: `${slot * 10}%`,
         scale: isCurrent ? 1 : 1.06,
@@ -294,20 +328,23 @@ function getFrameMotion(preset: TransitionPreset, slot: -1 | 0 | 1) {
       };
     case "rgb-split":
       return {
+        ...base,
         opacity: isCurrent ? 1 : 0,
         x: `${slot * 8}%`,
         filter: isCurrent
           ? "contrast(1) saturate(1)"
-          : "contrast(1.6) saturate(1.7)",
+          : "contrast(1.6) saturate(1.7) drop-shadow(-14px 0 0 cyan) drop-shadow(14px 0 0 magenta)",
       };
     case "ken-burns":
       return {
+        ...base,
         opacity: isCurrent ? 1 : 0,
         x: `${slot * 6}%`,
-        scale: isCurrent ? 1 : 1.035,
+        scale: isCurrent ? [1, 1.045] : 1,
       };
     case "film-burn":
       return {
+        ...base,
         opacity: isCurrent ? 1 : 0,
         x: `${slot * 8}%`,
         scale: isCurrent ? 1 : 1.02,
@@ -317,8 +354,9 @@ function getFrameMotion(preset: TransitionPreset, slot: -1 | 0 | 1) {
       };
     default:
       return {
+        ...base,
         opacity: isCurrent ? 1 : 0,
-        x: `${slot * 6}%`,
+        x: "0%",
       };
   }
 }

@@ -34,6 +34,7 @@ type ArchiveMediaCardProps = {
   registerShell?: (itemId: string, node: HTMLElement | null) => void;
   onSelect: (mediaId: string) => void;
   onUnavailable: (mediaId: string) => void;
+  onAspectChange?: (mediaId: string, aspect: number) => void;
   onLoadStateChange?: (mediaId: string, ready: boolean) => void;
 };
 
@@ -48,6 +49,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   onSelect,
   onUnavailable,
   onLoadStateChange,
+  onAspectChange,
 }: ArchiveMediaCardProps) {
   const { media, post } = item;
   const sourceRevision = `${media.id}\u0000${post.shortcode ?? ""}\u0000${media.sourceIndex}`;
@@ -89,6 +91,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     imageRef,
     resolvedUrl,
     loadMedia && !visuallyHidden && !isLoading && !hasFailed,
+    loadMedia && !visuallyHidden && !hasFailed,
   );
   const shellRef = useCallback(
     (node: HTMLElement | null) => registerShell?.(media.id, node),
@@ -276,6 +279,11 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                     reportUnavailable();
                     return;
                   }
+                  if (image.naturalWidth > 0 && image.naturalHeight > 0)
+                    onAspectChange?.(
+                      media.id,
+                      image.naturalWidth / image.naturalHeight,
+                    );
                   recordLoadOutcome(item, "loaded");
                   if (resolvedCandidateByRevision.size > 200)
                     resolvedCandidateByRevision.delete(

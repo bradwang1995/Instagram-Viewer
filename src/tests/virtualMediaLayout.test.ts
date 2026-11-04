@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   getClosestRibbonIndex,
   getGridMetrics,
+  getGridLayouts,
   getGridWindow,
   getRetainedMediaLayouts,
   getRibbonMetrics,
@@ -158,4 +159,18 @@ describe("virtual media layout", () => {
     expect(getGridWindow(100, 0, mobile)).toHaveLength(3);
     expect(getGridWindow(100, 0, mobile)[1].top).toBeLessThan(654);
   });
+});
+
+it("packs mixed photo ratios without cropping or empty sidebars and bounds the final row", () => {
+  const aspects = [0.6, 1.5, 0.8, 1, 0.7, 1.8, 0.5];
+  const metrics = getGridMetrics(aspects.length, 1920, 900, aspects);
+  const layouts = getGridLayouts(aspects.length, metrics, aspects);
+  expect(metrics.columns).toBe(5);
+  layouts.forEach((layout, index) => {
+    expect(layout.width / layout.height).toBeCloseTo(aspects[index]);
+    expect(layout.left + layout.width).toBeLessThanOrEqual(1920.001);
+    expect(layout.top + layout.height).toBeLessThanOrEqual(metrics.totalHeight);
+  });
+  expect(layouts[4].left + layouts[4].width).toBeCloseTo(1920);
+  expect(layouts[5].top).toBeGreaterThan(layouts[0].top + layouts[0].height);
 });

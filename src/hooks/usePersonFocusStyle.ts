@@ -10,14 +10,30 @@ export function usePersonFocusStyle(
   ref: RefObject<HTMLImageElement>,
   url: string | undefined,
   ready: boolean,
+  preparing = ready,
 ) {
   const strength = usePersonFocus((s) => s.strength);
   const enabled = strength > 0;
+  // Loading photos also hold the control, so it cannot accept a setting before
+  // the first inference has even started.
+  useEffect(() => {
+    if (!preparing || ready) return;
+    usePersonFocus.setState((s) => ({ pending: s.pending + 1 }));
+    return () =>
+      usePersonFocus.setState((s) => ({ pending: Math.max(0, s.pending - 1) }));
+  }, [preparing, ready]);
   const [geometry, setGeometry] = useState<ReturnType<typeof personZoom>>(null);
   useEffect(() => {
     setGeometry(null);
     const image = ref.current;
-    if (!enabled || !ready || !url || !image) return;
+    if (!ready || !url || !image) return;
+    usePersonFocus.setState((s) => ({ pending: s.pending + 1 }));
+    let pending = true;
+    const finish = () => {
+      if (!pending) return;
+      pending = false;
+      usePersonFocus.setState((s) => ({ pending: Math.max(0, s.pending - 1) }));
+    };
     const surface = image.parentElement ?? image;
     const controller = new AbortController();
     let observer: ResizeObserver | undefined;
@@ -27,6 +43,7 @@ export function usePersonFocusStyle(
       image.naturalHeight,
       controller.signal,
     ).then((boxes) => {
+      finish();
       if (controller.signal.aborted) return;
       const crop = personCrop(image.naturalWidth, image.naturalHeight, boxes);
       if (!crop) return;
@@ -46,10 +63,11 @@ export function usePersonFocusStyle(
       observer.observe(surface);
     });
     return () => {
+      finish();
       controller.abort();
       observer?.disconnect();
     };
-  }, [enabled, ready, url, ref]);
+  }, [ready, url, ref]);
   const style: CSSProperties = { transition: "none" };
   // Keep transitions disabled while restoring normal layout at zero, too.
   // Otherwise the stylesheet animates the removed centering translation.

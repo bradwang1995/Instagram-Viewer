@@ -1,3 +1,4 @@
+import { X, Monitor } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   connectLocalService,
@@ -102,12 +103,22 @@ export function LocalServiceSettings() {
             aria-label="Local server settings"
             onClick={(e) => e.stopPropagation()}
           >
-            <h2>Local server</h2>
+            <button
+              className="viewer-control dialog-close"
+              aria-label="Close local server settings"
+              onClick={() => setOpen(false)}
+            >
+              <X />
+            </button>
+            <div className="local-server-heading">
+              <Monitor size={26} />
+              <h2>Local server</h2>
+            </div>
             <p>
               Use the OG service on this PC. This setting applies only to this
               browser.
             </p>
-            <p>
+            <p className="local-server-state">
               {enabled
                 ? "Local service enabled"
                 : "Default media service enabled"}
@@ -141,9 +152,6 @@ export function LocalServiceSettings() {
                   Use default service
                 </button>
               ) : null}
-              <button className="viewer-control" onClick={() => setOpen(false)}>
-                Close
-              </button>
             </div>
           </section>
         </div>

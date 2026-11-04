@@ -1,4 +1,10 @@
-import { Grid2X2, MoveHorizontal, Play, Upload } from "lucide-react";
+import {
+  Grid2X2,
+  LoaderCircle,
+  MoveHorizontal,
+  Play,
+  Upload,
+} from "lucide-react";
 import { usePersonFocus } from "../../features/media/personFocus";
 import type { CSSProperties } from "react";
 import type { TransitionPreset } from "../../db/schema";
@@ -116,7 +122,7 @@ export function ArchiveControlBar({
   dateRange,
   slideshow,
 }: ArchiveControlBarProps) {
-  const { strength, setStrength } = usePersonFocus();
+  const { strength, setStrength, pending } = usePersonFocus();
   const { months, startIndex, endIndex, onStartChange, onEndChange } =
     dateRange ?? {
       months: [],
@@ -139,7 +145,6 @@ export function ArchiveControlBar({
         <div className="archive-date-range">
           <span className="archive-date-value" aria-hidden="true">
             <span>Start time</span>
-            <span aria-hidden="true">-</span>
             <strong>{formatMonth(months[startIndex])}</strong>
           </span>
           <div className="archive-dual-range" style={rangeStyle}>
@@ -171,7 +176,6 @@ export function ArchiveControlBar({
           </div>
           <span className="archive-date-value is-end" aria-hidden="true">
             <strong>{formatMonth(months[endIndex])}</strong>
-            <span aria-hidden="true">-</span>
             <span>End time</span>
           </span>
         </div>
@@ -202,9 +206,9 @@ export function ArchiveControlBar({
             <input
               type="range"
               aria-label="Frame duration"
-              min={3000}
-              max={10000}
-              step={500}
+              min={2000}
+              max={15000}
+              step={1000}
               value={slideshow.dwellMs}
               onChange={(event) =>
                 slideshow.onDwellChange(Number(event.target.value))
@@ -221,22 +225,32 @@ export function ArchiveControlBar({
         style={{ "--focus-strength": `${strength}%` } as CSSProperties}
       >
         <span>Focus on Person</span>
-        <span className="person-focus-endpoint" aria-hidden="true">
-          0%
-        </span>
-        <input
-          type="range"
-          aria-label="Focus on person"
-          aria-valuetext={strength === 0 ? "Original" : `${strength}% focus`}
-          min={0}
-          max={100}
-          step={1}
-          value={strength}
-          onChange={(event) => setStrength(Number(event.target.value))}
-        />
-        <span className="person-focus-endpoint" aria-hidden="true">
-          100%
-        </span>
+        {pending > 0 ? (
+          <span className="person-focus-loading" role="status">
+            <LoaderCircle size={18} /> Preparing focus…
+          </span>
+        ) : (
+          <>
+            <span className="person-focus-endpoint" aria-hidden="true">
+              0%
+            </span>
+            <input
+              type="range"
+              aria-label="Focus on person"
+              aria-valuetext={
+                strength === 0 ? "Original" : `${strength}% focus`
+              }
+              min={0}
+              max={100}
+              step={1}
+              value={strength}
+              onChange={(event) => setStrength(Number(event.target.value))}
+            />
+            <span className="person-focus-endpoint" aria-hidden="true">
+              100%
+            </span>
+          </>
+        )}
       </label>
     </footer>
   );
