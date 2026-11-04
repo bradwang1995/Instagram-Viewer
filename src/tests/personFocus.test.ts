@@ -14,23 +14,33 @@ describe("person focus strength", () => {
     usePersonFocus.getState().setStrength(120);
     expect(usePersonFocus.getState().strength).toBe(100);
   });
-  it("includes all people with a small margin and rejects invalid boxes", () => {
-    const crop = personCrop(1000, 1000, [
-      { originX: 50, originY: 100, width: 100, height: 400 },
-      { originX: 700, originY: 300, width: 150, height: 500 },
-    ])!;
-    expect(crop.x).toBeLessThan(50);
-    expect(crop.y).toBeLessThan(100);
-    expect(crop.x + crop.width).toBeGreaterThan(850);
-    expect(crop.y + crop.height).toBeGreaterThan(800);
+  it("selects the dominant foreground person independently of background people and order", () => {
+    const main = { originX: 300, originY: 400, width: 250, height: 500 };
+    const background = { originX: 20, originY: 650, width: 40, height: 120 };
+    for (const boxes of [
+      [main, background],
+      [background, main],
+    ]) {
+      expect(personCrop(1000, 1000, boxes)).toEqual({
+        x: 300,
+        y: 400,
+        width: 250,
+        height: 500,
+      });
+    }
     expect(personCrop(1000, 1000, [])).toBeNull();
     expect(
       personCrop(1000, 1000, [
         { originX: NaN, originY: 0, width: 20, height: 40 },
       ]),
     ).toBeNull();
+    expect(
+      personCrop(1000, 1000, [
+        { originX: -20, originY: 900, width: 100, height: 200 },
+      ]),
+    ).toEqual({ x: 0, y: 900, width: 80, height: 100 });
   });
-  it("keeps 0 original and interpolates to a horizontally and vertically centered close crop", () => {
+  it("keeps 0 original and interpolates to a head-aligned close crop", () => {
     const width = 900,
       height = 1200,
       vw = 500,
@@ -56,23 +66,38 @@ describe("person focus strength", () => {
       expect(
         vw / 2 + (crop.x + crop.width / 2 - width / 2) * pixels + full.x,
       ).toBeCloseTo(vw / 2);
-      expect(
-        vh / 2 + (crop.y + crop.height / 2 - height / 2) * pixels + full.y,
-      ).toBeCloseTo(vh / 2);
+      expect(vh / 2 + (crop.y - height / 2) * pixels + full.y).toBeCloseTo(0);
       expect(
         vh / 2 + (crop.y + crop.height - height / 2) * pixels + full.y,
       ).toBeGreaterThan(vh);
-      expect(Math.min(vw / crop.width, vh / (crop.height * 0.65))).toBeCloseTo(
-        pixels,
-      );
+      expect(vh / (crop.height * 0.96)).toBeCloseTo(pixels);
       expect(full.drawnWidth / full.drawnHeight).toBeCloseTo(width / height);
+    }
+  });
+  it("gives standing and kneeling people different per-photo scales and offsets without a width cap", () => {
+    const standing = { x: 300, y: 400, width: 300, height: 500 };
+    const kneeling = { x: 400, y: 650, width: 400, height: 300 };
+    const a = personZoom(1000, 1000, 600, 900, standing, "cover")!;
+    const b = personZoom(1000, 1000, 600, 900, kneeling, "cover")!;
+    expect(b.scale).toBeGreaterThan(a.scale);
+    expect(b.x).not.toBe(a.x);
+    expect(b.y).not.toBe(a.y);
+    for (const [crop, z] of [
+      [standing, a],
+      [kneeling, b],
+    ] as const) {
+      const pixels = (z.drawnHeight / 1000) * z.scale;
+      expect(450 + (crop.y - 500) * pixels + z.y).toBeCloseTo(0);
+      expect(450 + (crop.y + crop.height - 500) * pixels + z.y).toBeCloseTo(
+        900 / 0.96,
+      );
     }
   });
   it("never shrinks already-large people", () => {
     const crop = personCrop(900, 1200, [
       { originX: 0, originY: 100, width: 900, height: 1000 },
     ])!;
-    expect(personZoom(900, 1200, 600, 600, crop, "cover")).toBeNull();
+    expect(personZoom(900, 1200, 600, 600, crop, "cover")!.scale).toBe(1);
   });
   it("keeps the original image footprint covered for edge subjects at every strength", () => {
     for (const fit of ["cover", "contain"])
@@ -100,12 +125,9 @@ describe("person focus strength", () => {
             ).toBeGreaterThanOrEqual(Math.min(vh, z.drawnHeight) / 2 - 0.00001);
             if (amount === 100) {
               const pixels = (z.drawnWidth / width) * z.scale;
-              expect(
-                vw / 2 + (crop.x + crop.width / 2 - width / 2) * pixels + z.x,
-              ).toBeCloseTo(vw / 2);
-              expect(
-                vh / 2 + (crop.y + crop.height / 2 - height / 2) * pixels + z.y,
-              ).toBeCloseTo(vh / 2);
+              expect(vh / 2 + (crop.y - height / 2) * pixels + z.y).toBeCloseTo(
+                0,
+              );
             }
           }
         }

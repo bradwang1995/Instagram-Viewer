@@ -75,7 +75,7 @@ it("applies a detected crop immediately and cancels work when the card unmounts"
   expect(signal.aborted).toBe(true);
 });
 
-it("keeps an already-large cover image unchanged", async () => {
+it("never zooms out an already-large cover image", async () => {
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -99,7 +99,8 @@ it("keeps an already-large cover image unchanged", async () => {
   const ref = { current: image };
   const { result } = renderHook(() => usePersonFocusStyle(ref, "large", true));
   await act(async () => {});
-  expect(result.current).toEqual({ transition: "none" });
+  expect(result.current?.transform).toContain("scale(1)");
+  expect(result.current?.transition).toBe("none");
   expect(result.current).not.toHaveProperty("objectFit");
   vi.restoreAllMocks();
 });

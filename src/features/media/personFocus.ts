@@ -18,7 +18,7 @@ export type PersonBox = {
   height: number;
 };
 
-// Include every detected person, with a small margin for detector uncertainty.
+// Prefer the dominant foreground person; distant bystanders must not widen the crop.
 export function personCrop(width: number, height: number, boxes: PersonBox[]) {
   const valid = boxes.filter(
     (b) =>
@@ -26,28 +26,25 @@ export function personCrop(width: number, height: number, boxes: PersonBox[]) {
       b.width > 0 &&
       b.height > 0,
   );
-  if (!valid.length) return null;
-  const left = Math.max(0, Math.min(...valid.map((b) => b.originX)));
-  const top = Math.max(0, Math.min(...valid.map((b) => b.originY)));
-  const right = Math.min(
-    width,
-    Math.max(...valid.map((b) => b.originX + b.width)),
+  const candidates = valid
+    .map((b) => {
+      const x = Math.max(0, b.originX),
+        y = Math.max(0, b.originY);
+      return {
+        x,
+        y,
+        width: Math.min(width, b.originX + b.width) - x,
+        height: Math.min(height, b.originY + b.height) - y,
+      };
+    })
+    .filter((b) => b.width > 0 && b.height > 0);
+  candidates.sort(
+    (a, b) =>
+      b.width * b.height - a.width * a.height ||
+      Math.abs(a.x + a.width / 2 - width / 2) -
+        Math.abs(b.x + b.width / 2 - width / 2),
   );
-  const bottom = Math.min(
-    height,
-    Math.max(...valid.map((b) => b.originY + b.height)),
-  );
-  if (right <= left || bottom <= top) return null;
-  const padX = (right - left) * 0.02,
-    padY = (bottom - top) * 0.04;
-  const x = Math.max(0, left - padX),
-    y = Math.max(0, top - padY);
-  return {
-    x,
-    y,
-    width: Math.min(width, right + padX) - x,
-    height: Math.min(height, bottom + padY) - y,
-  };
+  return candidates[0] ?? null;
 }
 
 export function personZoom(
@@ -65,34 +62,20 @@ export function personZoom(
     viewWidth / width,
     viewHeight / height,
   );
-  // Keep the close endpoint while centering the detected person on both axes.
-  const closeTarget = Math.min(
-    viewWidth / crop.width,
-    viewHeight / (crop.height * 0.65),
-  );
+  // Each photo fills the frame vertically with its own subject. At full focus,
+  // the head reaches the top and the lowest ~4% may fall below the bottom.
+  // A width cap would leave short/seated subjects and beach photos far away.
+  const target = Math.max(base, viewHeight / (crop.height * 0.96));
   const centerX = crop.x + crop.width / 2;
-  const centerY = crop.y + crop.height / 2;
-  // Make enough room to center edge subjects without revealing empty image edges.
-  const target = Math.max(
-    closeTarget,
-    Math.min(viewWidth, width * base) /
-      (2 * Math.min(centerX, width - centerX)),
-    Math.min(viewHeight, height * base) /
-      (2 * Math.min(centerY, height - centerY)),
-  );
-  if (target <= base * 1.025) return null;
   const scale = target / base;
   const drawnWidth = width * base,
     drawnHeight = height * base;
   const limitX = (width * target - Math.min(viewWidth, drawnWidth)) / 2;
   const limitY = (height * target - Math.min(viewHeight, drawnHeight)) / 2;
-  const x = Math.max(
-    -limitX,
-    Math.min(limitX, (width / 2 - crop.x - crop.width / 2) * target),
-  );
+  const x = Math.max(-limitX, Math.min(limitX, (width / 2 - centerX) * target));
   const y = Math.max(
     -limitY,
-    Math.min(limitY, (height / 2 - crop.y - crop.height / 2) * target),
+    Math.min(limitY, -viewHeight / 2 + (height / 2 - crop.y) * target),
   );
   const progress = Math.min(100, strength) / 100;
   return {
