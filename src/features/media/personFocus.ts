@@ -54,3 +54,44 @@ export function personCrop(width: number, height: number, boxes: PersonBox[]) {
   );
   return { x, y, width: cropWidth, height: cropHeight };
 }
+
+export function personZoom(
+  width: number,
+  height: number,
+  viewWidth: number,
+  viewHeight: number,
+  crop: NonNullable<ReturnType<typeof personCrop>>,
+  fit: string,
+) {
+  if (Math.min(width, height, viewWidth, viewHeight) <= 0) return null;
+  const contained = Math.min(viewWidth / width, viewHeight / height);
+  const base =
+    fit === "cover"
+      ? Math.max(viewWidth / width, viewHeight / height)
+      : contained;
+  const scale = (contained * width) / crop.width / base;
+  // Preserve the existing framing, including the normal 2.5% hover enlargement.
+  if (scale <= 1.025) return null;
+  const drawnWidth = width * base;
+  const drawnHeight = height * base;
+  // object-fit clips to the image element before CSS transforms are applied.
+  const limitX = Math.min(
+    (viewWidth * (scale - 1)) / 2,
+    (drawnWidth * scale - Math.min(viewWidth, drawnWidth)) / 2,
+  );
+  const limitY = Math.min(
+    (viewHeight * (scale - 1)) / 2,
+    (drawnHeight * scale - Math.min(viewHeight, drawnHeight)) / 2,
+  );
+  return {
+    scale,
+    x: Math.max(
+      -limitX,
+      Math.min(limitX, (width / 2 - crop.x - crop.width / 2) * base * scale),
+    ),
+    y: Math.max(
+      -limitY,
+      Math.min(limitY, (height / 2 - crop.y - crop.height / 2) * base * scale),
+    ),
+  };
+}

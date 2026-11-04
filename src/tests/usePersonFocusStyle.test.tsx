@@ -64,3 +64,32 @@ it("applies a detected crop immediately and cancels work when the card unmounts"
   unmount();
   expect(signal.aborted).toBe(true);
 });
+
+it("keeps an already-large cover image unchanged", async () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  vi.spyOn(window, "getComputedStyle").mockReturnValue({
+    objectFit: "cover",
+  } as CSSStyleDeclaration);
+  vi.mocked(detectPerson).mockResolvedValue([
+    { originX: 0, originY: 100, width: 850, height: 1000 },
+  ]);
+  const image = new Image();
+  Object.defineProperties(image, {
+    naturalWidth: { value: 900 },
+    naturalHeight: { value: 1200 },
+    clientWidth: { value: 600 },
+    clientHeight: { value: 600 },
+  });
+  const ref = { current: image };
+  const { result } = renderHook(() => usePersonFocusStyle(ref, "large", true));
+  await act(async () => {});
+  expect(result.current).toEqual({ transition: "none" });
+  expect(result.current).not.toHaveProperty("objectFit");
+  vi.restoreAllMocks();
+});
