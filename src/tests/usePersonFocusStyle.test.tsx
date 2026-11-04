@@ -16,7 +16,7 @@ it("leaves loaded photos original without starting detection at zero", async () 
   const ref = { current: new Image() };
   const { result } = renderHook(() => usePersonFocusStyle(ref, "photo", true));
   await act(async () => {});
-  expect(result.current).toBeUndefined();
+  expect(result.current).toEqual({ transition: "none" });
   expect(detectPerson).not.toHaveBeenCalled();
 });
 it("disables the zoom animation and ignores a result after focus is switched off", async () => {
@@ -44,7 +44,7 @@ it("disables the zoom animation and ignores a result after focus is switched off
   await act(async () =>
     complete([{ originX: 100, originY: 200, width: 200, height: 500 }]),
   );
-  expect(result.current).toBeUndefined();
+  expect(result.current).toEqual({ transition: "none" });
 });
 it("applies a detected crop immediately and cancels work when the card unmounts", async () => {
   vi.stubGlobal(
@@ -130,5 +130,5 @@ it("updates slider strength without restarting detection", async () => {
   expect(result.current?.transform).not.toEqual(full);
   expect(detectPerson).toHaveBeenCalledTimes(1);
   act(() => usePersonFocus.setState({ strength: 0 }));
-  expect(result.current).toBeUndefined();
+  expect(result.current).toEqual({ transition: "none" });
 });

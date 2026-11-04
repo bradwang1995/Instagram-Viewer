@@ -50,9 +50,10 @@ export function usePersonFocusStyle(
       observer?.disconnect();
     };
   }, [enabled, ready, url, ref]);
-  if (!enabled) return undefined;
   const style: CSSProperties = { transition: "none" };
-  if (!geometry) return style;
+  // Keep transitions disabled while restoring normal layout at zero, too.
+  // Otherwise the stylesheet animates the removed centering translation.
+  if (!enabled || !geometry) return style;
   const progress = strength / 100;
   // Render the full image at its original fitted size before scaling/panning it.
   // Transforming an object-fit-clipped element would permanently cut off limbs.
