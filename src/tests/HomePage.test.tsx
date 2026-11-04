@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_SETTINGS, type MediaItem, type SavedPost } from "../db/schema";
 import type { MediaQueueItem } from "../features/media/mediaQueue";
 import { HomePage } from "../pages/HomePage";
+import { usePersonFocus } from "../features/media/personFocus";
 
 const testState = vi.hoisted(() => ({
   posts: [] as SavedPost[],
@@ -108,9 +109,27 @@ describe("Photo archive preview", () => {
     testState.getInstagramEmbedAvailability.mockResolvedValue("available");
   });
   afterEach(() => {
+    act(() => usePersonFocus.setState({ peopleOnly: false, people: {} }));
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("hides only confirmed non-person photos and restores them when disabled", async () => {
+    const [person, scenery, unknown] = testState.queue;
+    usePersonFocus.setState({
+      people: { [person.media.id]: true, [scenery.media.id]: false },
+    });
+    render(<HomePage />);
+    await act(async () => undefined);
+    fireEvent.click(screen.getByRole("button", { name: "People only" }));
+    const card = (id: string) =>
+      document.querySelector(`article[data-media-id="${id}"]`);
+    expect(card(person.media.id)).not.toHaveAttribute("hidden");
+    expect(card(scenery.media.id)).toBeNull();
+    expect(card(unknown.media.id)).not.toHaveAttribute("hidden");
+    fireEvent.click(screen.getByRole("button", { name: "People only" }));
+    expect(card(scenery.media.id)).not.toHaveAttribute("hidden");
   });
 
   it("shows only the first photo per post and opens its isolated photo panel", async () => {

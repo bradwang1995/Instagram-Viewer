@@ -85,14 +85,14 @@ it("settles active and queued work when the worker crashes or times out", async 
   const first = request(detectPerson, "first");
   const second = request(detectPerson, "second");
   vi.advanceTimersByTime(45_000);
-  expect(await first).toEqual([]);
-  expect(await second).toEqual([]);
+  expect(await first).toBeNull();
+  expect(await second).toBeNull();
   expect(FakeWorker.instances[0].terminate).toHaveBeenCalledOnce();
-  expect(await request(detectPerson, "third")).toEqual([]);
+  expect(await request(detectPerson, "third")).toBeNull();
 });
 
 it("falls back to the original image when workers are unsupported", async () => {
   vi.stubGlobal("Worker", undefined);
   const { detectPerson } = await import("../features/media/personDetector");
-  expect(await request(detectPerson, "first")).toEqual([]);
+  expect(await request(detectPerson, "first")).toBeNull();
 });

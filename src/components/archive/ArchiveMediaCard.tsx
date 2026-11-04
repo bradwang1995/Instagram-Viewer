@@ -1,5 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 import { usePersonFocusStyle } from "../../hooks/usePersonFocusStyle";
+import { usePersonFocus } from "../../features/media/personFocus";
 import {
   memo,
   useCallback,
@@ -52,6 +53,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   onAspectChange,
 }: ArchiveMediaCardProps) {
   const { media, post } = item;
+  const sharpen = usePersonFocus((s) => s.sharpen);
   const sourceRevision = `${media.id}\u0000${post.shortcode ?? ""}\u0000${media.sourceIndex}`;
   const [proxy, setProxy] = useState<{
     revision: string;
@@ -92,6 +94,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     resolvedUrl,
     loadMedia && !visuallyHidden && !isLoading && !hasFailed,
     loadMedia && !visuallyHidden && !hasFailed,
+    media.id,
   );
   const shellRef = useCallback(
     (node: HTMLElement | null) => registerShell?.(media.id, node),
@@ -248,6 +251,9 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 src={resolvedUrl}
                 style={{
                   ...focusStyle,
+                  filter: sharpen
+                    ? `url("${import.meta.env.BASE_URL}photo-sharpen.svg#sharpen")`
+                    : undefined,
                   visibility: isLoading ? "hidden" : undefined,
                 }}
                 data-media-id={media.id}

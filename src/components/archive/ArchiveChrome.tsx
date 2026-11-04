@@ -122,7 +122,8 @@ export function ArchiveControlBar({
   dateRange,
   slideshow,
 }: ArchiveControlBarProps) {
-  const { strength, setStrength, pending } = usePersonFocus();
+  const { strength, setStrength, pending, sharpen, autoRotate, peopleOnly } =
+    usePersonFocus();
   const { months, startIndex, endIndex, onStartChange, onEndChange } =
     dateRange ?? {
       months: [],
@@ -222,7 +223,7 @@ export function ArchiveControlBar({
       )}
       <label
         className="person-focus-slider"
-        style={{ "--focus-strength": `${strength}%` } as CSSProperties}
+        style={{ "--focus-strength": `${strength / 2}%` } as CSSProperties}
       >
         <span>Focus on Person</span>
         {pending > 0 ? (
@@ -241,17 +242,55 @@ export function ArchiveControlBar({
                 strength === 0 ? "Original" : `${strength}% focus`
               }
               min={0}
-              max={100}
+              max={200}
               step={1}
               value={strength}
               onChange={(event) => setStrength(Number(event.target.value))}
+              onPointerUp={(event) => {
+                const value = Number(event.currentTarget.value);
+                setStrength(Math.abs(value - 100) <= 3 ? 100 : value);
+              }}
             />
             <span className="person-focus-endpoint" aria-hidden="true">
-              100%
+              200%
             </span>
           </>
         )}
       </label>
+      <div
+        className="photo-display-toggles"
+        role="group"
+        aria-label="Photo Display"
+      >
+        <button
+          type="button"
+          className={`viewer-control${sharpen ? " is-active" : ""}`}
+          aria-pressed={sharpen}
+          title="Local edge sharpening; does not recover missing image detail"
+          onClick={() => usePersonFocus.setState({ sharpen: !sharpen })}
+        >
+          Sharpen
+        </button>
+        <button
+          type="button"
+          className={`viewer-control${autoRotate ? " is-active" : ""}`}
+          aria-pressed={autoRotate}
+          title="Automatically turn detected sideways people upright"
+          onClick={() => usePersonFocus.setState({ autoRotate: !autoRotate })}
+        >
+          Auto rotate 90°
+        </button>
+        <button
+          type="button"
+          className={`viewer-control${peopleOnly ? " is-active" : ""}`}
+          aria-pressed={peopleOnly}
+          title="Hide photos with no detected person as they load; detection errors remain visible"
+          onClick={() => usePersonFocus.setState({ peopleOnly: !peopleOnly })}
+        >
+          People only
+        </button>
+        <span aria-live="polite">{strength}%</span>
+      </div>
     </footer>
   );
 }

@@ -17,6 +17,7 @@ import {
   type MediaQueueItem,
 } from "../features/media/mediaQueue";
 import { useMediaLibrary } from "../hooks/useMediaLibrary";
+import { usePeopleFilter } from "../hooks/usePeopleFilter";
 
 const FILTER_DEBOUNCE_MS = 300;
 const MIN_SLIDESHOW_DWELL_MS = 3_000;
@@ -204,7 +205,7 @@ export function HomePage() {
   const dateTo = dateMonths[appliedDateEndIndex]
     ? formatDateInput(dateMonths[appliedDateEndIndex], true)
     : "";
-  const visibleItems = useMemo(
+  const dateFilteredItems = useMemo(
     () =>
       filterMediaQueue(sessionItems, {
         query: "",
@@ -216,6 +217,7 @@ export function HomePage() {
       }),
     [dateFrom, dateTo, sessionItems],
   );
+  const visibleItems = usePeopleFilter(dateFilteredItems);
   const visibleItemIds = useMemo(
     () => new Set(visibleItems.map((item) => item.media.id)),
     [visibleItems],

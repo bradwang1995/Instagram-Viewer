@@ -4,13 +4,21 @@ import { create } from "zustand";
 export const usePersonFocus = create<{
   strength: number;
   pending: number;
+  sharpen: boolean;
+  autoRotate: boolean;
+  peopleOnly: boolean;
+  people: Record<string, boolean | undefined>;
   setStrength: (value: number) => void;
 }>((set) => ({
   strength: 0,
   pending: 0,
+  sharpen: false,
+  autoRotate: false,
+  peopleOnly: false,
+  people: {},
   setStrength: (value) =>
     set({
-      strength: Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0,
+      strength: Number.isFinite(value) ? Math.max(0, Math.min(200, value)) : 0,
     }),
 }));
 export type PersonBox = {
@@ -18,6 +26,7 @@ export type PersonBox = {
   originY: number;
   width: number;
   height: number;
+  rotation?: 90 | -90;
 };
 
 // Prefer the dominant foreground person; distant bystanders must not widen the crop.
@@ -37,6 +46,7 @@ export function personCrop(width: number, height: number, boxes: PersonBox[]) {
         y,
         width: Math.min(width, b.originX + b.width) - x,
         height: Math.min(height, b.originY + b.height) - y,
+        ...(b.rotation ? { rotation: b.rotation } : {}),
       };
     })
     .filter((b) => b.width > 0 && b.height > 0);
@@ -67,7 +77,11 @@ export function personZoom(
   // Each photo fills the frame vertically with its own subject. At full focus,
   // the head reaches the top and the lowest ~4% may fall below the bottom.
   // A width cap would leave short/seated subjects and beach photos far away.
-  const target = Math.max(base, viewHeight / (crop.height * 0.96));
+  const closeup = Math.max(0, Math.min(1, (strength - 100) / 100));
+  const target = Math.max(
+    base,
+    viewHeight / (crop.height * (0.96 - 0.46 * closeup)),
+  );
   const centerX = crop.x + crop.width / 2;
   const scale = target / base;
   const drawnWidth = width * base,

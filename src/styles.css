@@ -1671,6 +1671,9 @@ button.viewer-control.post-panel-close {
 .person-focus-slider { gap: 12px; width: min(390px, 100%); }
 .person-focus-loading { flex: 1; justify-content: center; min-width: 120px; color: #8b858f; }
 .person-focus-loading svg { animation: spin 1s linear infinite; flex-shrink: 0; }
+.photo-display-toggles { grid-column: 1 / -1; justify-self: end; display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.photo-display-toggles .viewer-control { font-size: 13px; padding: 5px 9px; }
+.photo-display-toggles > span { min-width: 4ch; color: var(--paper); font-variant-numeric: tabular-nums; }
 .archive-preview.is-grid .archive-media-surface { border: 0; box-shadow: none; }
 .local-server-dialog { position: relative; padding: 30px; background: radial-gradient(ellipse at top left, #34202f, transparent 65%), #151116; }
 .local-server-heading { display: flex; align-items: center; gap: 12px; padding-right: 38px; }

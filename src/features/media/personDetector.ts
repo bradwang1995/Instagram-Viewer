@@ -5,7 +5,7 @@ type Job = {
   url: string;
   width: number;
   height: number;
-  listeners: Set<(boxes: PersonBox[]) => void>;
+  listeners: Set<(boxes: PersonBox[] | null) => void>;
 };
 const cache = new Map<string, PersonBox[]>();
 const jobs = new Map<string, Job>();
@@ -16,10 +16,10 @@ let timer: ReturnType<typeof setTimeout> | undefined;
 let nextId = 0;
 let unavailable = false;
 
-function finish(boxes: PersonBox[]) {
+function finish(boxes: PersonBox[] | null) {
   if (!active) return;
   clearTimeout(timer);
-  cache.set(active.url, boxes);
+  if (boxes !== null) cache.set(active.url, boxes);
   if (cache.size > 100) cache.delete(cache.keys().next().value!);
   jobs.delete(active.url);
   for (const resolve of active.listeners) resolve(boxes);
@@ -33,7 +33,7 @@ function failWorker() {
   worker?.terminate();
   worker = undefined;
   for (const job of jobs.values())
-    for (const resolve of job.listeners) resolve([]);
+    for (const resolve of job.listeners) resolve(null);
   jobs.clear();
   queue.length = 0;
   active = undefined;
@@ -55,9 +55,14 @@ function pump() {
         { type: "module" },
       );
       worker.onmessage = (
-        event: MessageEvent<{ id: number; boxes: PersonBox[] }>,
+        event: MessageEvent<{
+          id: number;
+          boxes: PersonBox[];
+          failed?: boolean;
+        }>,
       ) => {
-        if (event.data.id === active?.id) finish(event.data.boxes);
+        if (event.data.id === active?.id)
+          finish(event.data.failed ? null : event.data.boxes);
       };
       worker.onerror = failWorker;
       worker.onmessageerror = failWorker;
@@ -81,9 +86,9 @@ export function detectPerson(
   width: number,
   height: number,
   signal: AbortSignal,
-): Promise<PersonBox[]> {
+): Promise<PersonBox[] | null> {
   if (signal.aborted || unavailable || typeof Worker === "undefined")
-    return Promise.resolve([]);
+    return Promise.resolve(null);
   const cached = cache.get(url);
   if (cached) return Promise.resolve(cached);
   return new Promise((resolve) => {
@@ -94,7 +99,7 @@ export function detectPerson(
       queue.push(job);
     }
     const subscribedJob = job;
-    const complete = (boxes: PersonBox[]) => {
+    const complete = (boxes: PersonBox[] | null) => {
       signal.removeEventListener("abort", abort);
       subscribedJob.listeners.delete(complete);
       resolve(boxes);

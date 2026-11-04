@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
+import { usePeopleFilter } from "../../hooks/usePeopleFilter";
 import type { TransitionPreset } from "../../db/schema";
 import { loadPostPhotos } from "../../features/media/instagramMedia";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
-import type { ArchiveTab } from "./ArchiveChrome";
+import { ArchiveControlBar, type ArchiveTab } from "./ArchiveChrome";
 import { ArchivePreview } from "./ArchivePreview";
 import { ArchiveSlideshow } from "./ArchiveSlideshow";
 import { usesPersonalMedia } from "../../features/media/personalMedia";
@@ -38,10 +39,11 @@ export function PostPhotoPanel({
   const [dwellMs, setDwellMs] = useState(initialDwellMs);
   const [preset, setPreset] = useState(initialPreset);
   const [failedIds, setFailedIds] = useState<Set<string>>(() => new Set());
-  const items = useMemo(
+  const availableItems = useMemo(
     () => loadedItems.filter((entry) => !failedIds.has(entry.media.id)),
     [loadedItems, failedIds],
   );
+  const items = usePeopleFilter(availableItems);
   const visibleIds = useMemo(
     () => new Set(items.map((entry) => entry.media.id)),
     [items],
@@ -141,8 +143,11 @@ export function PostPhotoPanel({
       {loading || !items.length ? (
         <div className="post-panel-message" role="status">
           <strong>
-            {loading ? "Loading post photos…" : "No photos in this post."}
+            {loading
+              ? "Loading post photos…"
+              : "No matching photos in this post."}
           </strong>
+          {!loading && <ArchiveControlBar />}
         </div>
       ) : (
         <>

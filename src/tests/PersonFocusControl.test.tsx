@@ -3,7 +3,7 @@ import { afterEach, expect, it } from "vitest";
 import { ArchiveControlBar } from "../components/archive/ArchiveChrome";
 import { usePersonFocus } from "../features/media/personFocus";
 afterEach(() => usePersonFocus.setState({ strength: 0, pending: 0 }));
-it("shares a labeled 0–100 focus slider across footers", () => {
+it("shares a labeled 0–200 focus slider across footers", () => {
   render(
     <>
       <ArchiveControlBar />
@@ -12,13 +12,34 @@ it("shares a labeled 0–100 focus slider across footers", () => {
   );
   const sliders = screen.getAllByRole("slider", { name: "Focus on person" });
   expect(sliders[0]).toHaveValue("0");
-  expect(screen.getAllByText("0%")).toHaveLength(2);
-  expect(screen.getAllByText("100%")).toHaveLength(2);
+  expect(sliders[0]).toHaveAttribute("max", "200");
+  expect(screen.getAllByText("200%")).toHaveLength(2);
   fireEvent.change(sliders[0], { target: { value: "50" } });
   expect(sliders[1]).toHaveValue("50");
   expect(usePersonFocus.getState().strength).toBe(50);
   fireEvent.change(sliders[1], { target: { value: "0" } });
   expect(sliders[0]).toHaveAttribute("aria-valuetext", "Original");
+});
+
+it("snaps a released pointer near 100 without trapping keyboard adjustments", () => {
+  render(<ArchiveControlBar />);
+  const slider = screen.getByRole("slider", { name: "Focus on person" });
+  fireEvent.change(slider, { target: { value: "102" } });
+  fireEvent.pointerUp(slider);
+  expect(slider).toHaveValue("100");
+  fireEvent.change(slider, { target: { value: "101" } });
+  expect(slider).toHaveValue("101");
+});
+
+it("toggles browser-local display options", () => {
+  render(<ArchiveControlBar />);
+  for (const name of ["Sharpen", "Auto rotate 90°", "People only"]) {
+    const button = screen.getByRole("button", { name });
+    fireEvent.click(button);
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(button);
+    expect(button).toHaveAttribute("aria-pressed", "false");
+  }
 });
 
 it("shows date labels and values without dashes", () => {
