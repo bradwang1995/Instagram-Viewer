@@ -1,7 +1,6 @@
 import { AnimatePresence } from "motion/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ArchiveTab } from "../components/archive/ArchiveChrome";
-import { ArchiveLanding } from "../components/archive/ArchiveLanding";
 import { LocalServiceSettings } from "../components/archive/LocalServiceSettings";
 import {
   ArchivePreview,
@@ -53,7 +52,7 @@ function formatDateInput(value: number, endOfMonth = false): string {
 
 export function HomePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const { posts, queue, isLoading, error, refresh } = useMediaLibrary();
+  const { queue, isLoading, error, refresh } = useMediaLibrary();
   const postQueue = useMemo(() => firstPhotoPerPost(queue), [queue]);
   const [failedMediaIds, setFailedMediaIds] = useState<Set<string>>(
     () => new Set(),
@@ -77,12 +76,6 @@ export function HomePage() {
   const [slideshowDirection, setSlideshowDirection] = useState<1 | -1>(1);
   const [isImporting, setIsImporting] = useState(false);
   const [actionError, setActionError] = useState("");
-  const [landingDismissed, setLandingDismissed] = useState(false);
-
-  const forceLanding = useMemo(
-    () => new URLSearchParams(window.location.search).has("landing"),
-    [],
-  );
 
   const setViewModeRoute = useCallback((mode: ArchiveViewMode) => {
     const url = new URL(window.location.href);
@@ -261,8 +254,6 @@ export function HomePage() {
     }),
     [dateEndIndex, dateMonths, dateStartIndex],
   );
-  const showLanding =
-    !isLoading && (posts.length === 0 || (forceLanding && !landingDismissed));
 
   useEffect(() => {
     if (!selectedItem) {
@@ -300,11 +291,6 @@ export function HomePage() {
       setLoadGeneration((value) => value + 1);
       await refresh();
       setSelectedMediaId(undefined);
-      setLandingDismissed(true);
-      if (forceLanding) {
-        window.history.replaceState({}, "", import.meta.env.BASE_URL);
-        setIsSlideshowOpen(false);
-      }
     } else {
       setActionError(job.error ?? "Could not import this JSON file.");
     }
@@ -371,19 +357,7 @@ export function HomePage() {
         </div>
       ) : null}
 
-      {showLanding ? (
-        <ArchiveLanding
-          isImporting={isImporting}
-          error={actionError || error}
-          onChooseFile={() => fileInputRef.current?.click()}
-          onFile={(file) => void handleImport(file)}
-          onDemo={() => {
-            window.location.search = "?demo=1";
-          }}
-        />
-      ) : null}
-
-      {!isLoading && !showLanding ? (
+      {!isLoading ? (
         <ArchivePreview
           loadGeneration={loadGeneration}
           loadScope={`${dateFrom}:${dateTo}`}
@@ -452,6 +426,11 @@ export function HomePage() {
           initialPreset={transitionPreset}
           onClose={() => setOpenedPost(undefined)}
         />
+      ) : null}
+      {actionError || error ? (
+        <div className="archive-import-notice" role="alert">
+          {actionError || error}
+        </div>
       ) : null}
       <LoadReport />
     </div>

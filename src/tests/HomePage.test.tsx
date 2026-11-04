@@ -434,23 +434,39 @@ describe("Photo archive preview", () => {
     });
   });
 
-  it("shows the import-first landing when the library is empty", async () => {
-    testState.posts = [];
-    testState.queue = [];
+  it.each(["/", "/?landing=1"])(
+    "opens the viewer for an empty library at %s",
+    async (url) => {
+      window.history.replaceState({}, "", url);
+      testState.posts = [];
+      testState.queue = [];
+      render(<HomePage />);
+      await act(async () => undefined);
+
+      expect(
+        screen.getByRole("tab", { name: "Horizontal View" }),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Import JSON/ }),
+      ).toBeInTheDocument();
+      expect(screen.getByTestId("archive-scroller")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "View demo" }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  it("ignores the old landing parameter with an existing library", async () => {
+    window.history.replaceState({}, "", "/?landing=1");
     render(<HomePage />);
     await act(async () => undefined);
-
-    expect(screen.getByText("Import saved posts")).toBeInTheDocument();
+    expect(screen.getByTestId("archive-scroller")).toHaveAttribute(
+      "data-total-count",
+      "3",
+    );
     expect(
-      screen.getByRole("heading", { name: "Instagram Viewer" }),
-    ).toHaveTextContent("InstagramViewer");
-    expect(screen.queryByText("INSTAGRAM")).not.toBeInTheDocument();
-    expect(screen.queryByText("VIEWER")).not.toBeInTheDocument();
-    expect(
-      screen.getByRole("button", {
-        name: "Choose Instagram saved posts JSON file",
-      }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: "View demo" }),
+    ).not.toBeInTheDocument();
   });
 
   it("bounds Grid DOM size for a large library and renders the final row on demand", async () => {
