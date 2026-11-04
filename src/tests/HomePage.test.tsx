@@ -132,6 +132,23 @@ describe("Photo archive preview", () => {
     expect(card(scenery.media.id)).not.toHaveAttribute("hidden");
   });
 
+  it("keeps a way to disable People only when every photo is filtered", async () => {
+    usePersonFocus.setState({
+      people: Object.fromEntries(
+        testState.queue.map((item) => [item.media.id, false]),
+      ),
+    });
+    render(<HomePage />);
+    await act(async () => undefined);
+    fireEvent.click(screen.getByRole("button", { name: "People only" }));
+    expect(
+      screen.getByText("Turn off People only to show all photos."),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "People only" }));
+    expect(screen.queryByText("No photos with detected people.")).toBeNull();
+    expect(screen.getAllByTestId("archive-media-card")).toHaveLength(3);
+  });
+
   it("shows only the first photo per post and opens its isolated photo panel", async () => {
     const post = testState.posts[0];
     testState.queue = [

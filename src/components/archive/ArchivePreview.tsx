@@ -25,6 +25,7 @@ import {
   ArchiveHeader,
 } from "./ArchiveChrome";
 import { ArchiveMediaCard } from "./ArchiveMediaCard";
+import { usePersonFocus } from "../../features/media/personFocus";
 
 export type ArchiveViewMode = "ribbon" | "grid";
 
@@ -87,6 +88,7 @@ export const ArchivePreview = memo(function ArchivePreview({
   onViewModeChange,
   onStartSlideshow,
 }: ArchivePreviewProps) {
+  const peopleOnly = usePersonFocus((s) => s.peopleOnly);
   const scrollerRef = useRef<HTMLDivElement>(null);
   const wheelHandlerRef = useRef(handleWheel);
   wheelHandlerRef.current = handleWheel;
@@ -825,14 +827,18 @@ export const ArchivePreview = memo(function ArchivePreview({
           {!visibleOrderedItems.length ? (
             <div className="archive-empty-field">
               <strong>
-                {hasFilters
-                  ? "No photos match."
-                  : "No photos to display this visit."}
+                {peopleOnly
+                  ? "No photos with detected people."
+                  : hasFilters
+                    ? "No photos match."
+                    : "No photos to display this visit."}
               </strong>
               <span>
-                {hasFilters
-                  ? "Widen the date range to bring photos back."
-                  : "You can return later to load your posts again."}
+                {peopleOnly
+                  ? "Turn off People only to show all photos."
+                  : hasFilters
+                    ? "Widen the date range to bring photos back."
+                    : "You can return later to load your posts again."}
               </span>
             </div>
           ) : null}
