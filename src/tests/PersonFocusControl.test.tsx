@@ -45,7 +45,7 @@ it("replaces the focus slider with a loading indicator until preparation finishe
   usePersonFocus.setState({ pending: 1 });
   render(<ArchiveControlBar />);
   expect(screen.queryByRole("slider", { name: "Focus on person" })).toBeNull();
-  expect(screen.getByRole("status")).toHaveTextContent("Preparing focus");
+  expect(screen.getByRole("status")).toHaveTextContent("Preparing");
   act(() => usePersonFocus.setState({ pending: 0 }));
   expect(
     screen.getByRole("slider", { name: "Focus on person" }),

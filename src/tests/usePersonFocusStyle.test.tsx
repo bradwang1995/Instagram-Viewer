@@ -57,7 +57,7 @@ it("keeps preparation active at zero and cancels when the photo is no longer rea
   );
   expect(result.current).toEqual({ transition: "none" });
 });
-it("applies a detected crop immediately and cancels work when the card unmounts", async () => {
+it("animates a delayed detected crop from the original framing and cancels on unmount", async () => {
   vi.stubGlobal(
     "ResizeObserver",
     class {
@@ -75,6 +75,9 @@ it("applies a detected crop immediately and cancels work when the card unmounts"
     clientWidth: { value: 450 },
     clientHeight: { value: 580 },
   });
+  const cancel = vi.fn();
+  const animate = vi.fn().mockReturnValue({ cancel, playState: "running" });
+  image.animate = animate;
   const ref = { current: image };
   const { result, unmount } = renderHook(() =>
     usePersonFocusStyle(ref, "photo", true),
@@ -82,7 +85,15 @@ it("applies a detected crop immediately and cancels work when the card unmounts"
   await waitFor(() => expect(result.current?.transform).toContain("scale("));
   expect(result.current?.transition).toBe("none");
   const signal = vi.mocked(detectPerson).mock.calls[0][3];
+  expect(animate).toHaveBeenCalledWith(
+    [
+      { transform: "translate(-50%, -50%) translate(0px, 0px) scale(1)" },
+      { transform: result.current.transform },
+    ],
+    expect.objectContaining({ duration: 600 }),
+  );
   unmount();
+  expect(cancel).toHaveBeenCalled();
   expect(signal.aborted).toBe(true);
 });
 
@@ -142,7 +153,10 @@ it("updates slider strength without restarting detection", async () => {
   expect(result.current?.transform).not.toEqual(full);
   expect(detectPerson).toHaveBeenCalledTimes(1);
   act(() => usePersonFocus.setState({ strength: 0 }));
-  expect(result.current).toEqual({ transition: "none" });
+  expect(result.current.transform).toBe(
+    "translate(-50%, -50%) translate(0px, 0px) scale(1)",
+  );
+  expect(result.current.position).toBe("absolute");
 });
 
 it("holds focus readiness while a photo is still loading and releases it on unmount", () => {

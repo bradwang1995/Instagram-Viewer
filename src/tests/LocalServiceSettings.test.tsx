@@ -25,6 +25,13 @@ it("shows local service startup guidance when connecting fails without enabling 
     </>,
   );
   fireEvent.click(screen.getByRole("button", { name: "Local server" }));
+  expect(screen.getByRole("dialog")).toHaveFocus();
+  expect(
+    screen.getByRole("region", { name: "Online service" }),
+  ).toBeInTheDocument();
+  expect(
+    screen.getByRole("region", { name: "Service on this PC" }),
+  ).toHaveTextContent("Start Personal Viewer.cmd");
   fireEvent.click(screen.getByRole("button", { name: "Connect to this PC" }));
   await waitFor(() =>
     expect(screen.getByRole("status")).toHaveTextContent(

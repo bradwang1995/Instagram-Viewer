@@ -1,4 +1,11 @@
-import { useEffect, useState, type RefObject, type CSSProperties } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type RefObject,
+  type CSSProperties,
+} from "react";
 import {
   usePersonFocus,
   personCrop,
@@ -13,7 +20,7 @@ export function usePersonFocusStyle(
   preparing = ready,
 ) {
   const strength = usePersonFocus((s) => s.strength);
-  const enabled = strength > 0;
+
   // Loading photos also hold the control, so it cannot accept a setting before
   // the first inference has even started.
   useEffect(() => {
@@ -68,11 +75,45 @@ export function usePersonFocusStyle(
       observer?.disconnect();
     };
   }, [ready, url, ref]);
-  const style: CSSProperties = { transition: "none" };
-  // Keep transitions disabled while restoring normal layout at zero, too.
-  // Otherwise the stylesheet animates the removed centering translation.
-  if (!enabled || !geometry) return style;
   const progress = strength / 100;
+  const originalTransform =
+    "translate(-50%, -50%) translate(0px, 0px) scale(1)";
+  const transform = geometry
+    ? `translate(-50%, -50%) translate(${geometry.x * progress}px, ${geometry.y * progress}px) scale(${1 + (geometry.scale - 1) * progress})`
+    : originalTransform;
+  const animation = useRef<Animation>();
+  const previous = useRef<{ url: string | undefined; transform: string }>();
+  useLayoutEffect(() => {
+    const image = ref.current;
+    if (!geometry || !ready || !image) {
+      animation.current?.cancel();
+      previous.current = undefined;
+      return;
+    }
+    const from =
+      previous.current && previous.current.url === url
+        ? animation.current?.playState === "running"
+          ? getComputedStyle(image).transform
+          : previous.current.transform
+        : originalTransform;
+    animation.current?.cancel();
+    if (
+      from !== transform &&
+      !window.matchMedia?.("(prefers-reduced-motion: reduce)").matches
+    ) {
+      animation.current = image.animate?.(
+        [{ transform: from }, { transform }],
+        {
+          duration: 600,
+          easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+        },
+      );
+    }
+    previous.current = { url, transform };
+  }, [geometry, ready, url, transform, ref]);
+  useEffect(() => () => animation.current?.cancel(), []);
+  const style: CSSProperties = { transition: "none" };
+  if (!geometry) return style;
   // Render the full image at its original fitted size before scaling/panning it.
   // Transforming an object-fit-clipped element would permanently cut off limbs.
   return {
@@ -83,6 +124,6 @@ export function usePersonFocusStyle(
     width: geometry.drawnWidth,
     height: geometry.drawnHeight,
     maxWidth: "none",
-    transform: `translate(-50%, -50%) translate(${geometry.x * progress}px, ${geometry.y * progress}px) scale(${1 + (geometry.scale - 1) * progress})`,
+    transform,
   } satisfies CSSProperties;
 }

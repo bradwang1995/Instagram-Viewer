@@ -227,7 +227,7 @@ export function ArchiveControlBar({
         <span>Focus on Person</span>
         {pending > 0 ? (
           <span className="person-focus-loading" role="status">
-            <LoaderCircle size={18} /> Preparing focus…
+            <LoaderCircle size={18} /> Preparing…
           </span>
         ) : (
           <>

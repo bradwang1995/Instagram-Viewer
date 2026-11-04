@@ -1,5 +1,5 @@
-import { X, Monitor } from "lucide-react";
-import { useEffect, useState } from "react";
+import { X, Monitor, Globe } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import {
   connectLocalService,
   localServiceEnabled,
@@ -21,6 +21,7 @@ export function LocalServiceButton() {
 
 export function LocalServiceSettings() {
   const [open, setOpen] = useState(false);
+  const dialogRef = useRef<HTMLElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [offline, setOffline] = useState(false);
@@ -58,6 +59,7 @@ export function LocalServiceSettings() {
   }, [enabled]);
   useEffect(() => {
     if (!open) return;
+    dialogRef.current?.focus({ preventScroll: true });
     const escape = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.stopImmediatePropagation();
@@ -97,6 +99,8 @@ export function LocalServiceSettings() {
       {open ? (
         <div className="local-server-overlay" onClick={() => setOpen(false)}>
           <section
+            ref={dialogRef}
+            tabIndex={-1}
             className="local-server-dialog"
             role="dialog"
             aria-modal="true"
@@ -114,45 +118,92 @@ export function LocalServiceSettings() {
               <Monitor size={26} />
               <h2>Local server</h2>
             </div>
-            <p>
-              Use the OG service on this PC. This setting applies only to this
-              browser.
+
+            <p className="local-server-intro">
+              Choose how this browser loads your Instagram photos. Use the
+              online service for everyday viewing, or connect to a service
+              running on this PC.
             </p>
             <p className="local-server-state">
               {enabled
                 ? "Local service enabled"
                 : "Default media service enabled"}
             </p>
-            <p>
-              Start Personal Viewer.cmd before connecting. Your browser may ask
-              for local network access.
-            </p>
-            {message ? <p role="status">{message}</p> : null}
-            <div className="local-server-actions">
-              <button
-                autoFocus
-                className="viewer-control"
-                disabled={busy}
-                onClick={() => void connect()}
+            <div className="media-service-options">
+              <section
+                className={
+                  "media-service-option" + (!enabled ? " is-selected" : "")
+                }
+                aria-label="Online service"
               >
-                {busy
-                  ? "Connecting…"
-                  : enabled
-                    ? "Reconnect"
-                    : "Connect to this PC"}
-              </button>
-              {enabled ? (
+                <div className="media-service-title">
+                  <Globe size={22} />
+                  <h3>Online service</h3>
+                  <span>{!enabled ? "Selected" : "Default"}</span>
+                </div>
+                <p>
+                  No local setup needed. Photos load through the default online
+                  service while it is available.
+                </p>
                 <button
                   className="viewer-control"
+                  disabled={!enabled || busy}
                   onClick={() => {
                     setLocalService(false);
                     window.location.reload();
                   }}
                 >
-                  Use default service
+                  {enabled ? "Use default service" : "Currently selected"}
                 </button>
-              ) : null}
+              </section>
+              <section
+                className={
+                  "media-service-option" + (enabled ? " is-selected" : "")
+                }
+                aria-label="Service on this PC"
+              >
+                <div className="media-service-title">
+                  <Monitor size={22} />
+                  <h3>On this PC</h3>
+                  <span>{enabled ? "Selected" : "Local"}</span>
+                </div>
+                <p>
+                  A local alternative when the online service is unavailable, or
+                  when you prefer to run your own service.
+                </p>
+                <ol className="local-server-steps">
+                  <li>
+                    Run <strong>Start Personal Viewer.cmd</strong> in your local
+                    project folder.
+                  </li>
+                  <li>
+                    Keep the service running, then connect below. Allow local
+                    network access if your browser asks.
+                  </li>
+                </ol>
+                <button
+                  className="viewer-control"
+                  disabled={busy}
+                  onClick={() => void connect()}
+                >
+                  {busy
+                    ? "Connecting…"
+                    : enabled
+                      ? "Reconnect"
+                      : "Connect to this PC"}
+                </button>
+              </section>
             </div>
+            {message ? (
+              <p className="local-server-feedback" role="status">
+                {message}
+              </p>
+            ) : null}
+            <p className="local-server-footnote">
+              Your choice is saved only in this browser. Keep the local service
+              running while viewing; you can return here to switch back to the
+              online service.
+            </p>
           </section>
         </div>
       ) : null}

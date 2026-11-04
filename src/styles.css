@@ -460,6 +460,9 @@ input:not([type="range"]):not([type="checkbox"]),
   display: flex;
   align-items: center;
   align-self: center;
+  justify-self: center;
+  width: max-content;
+  max-width: 100%;
   justify-content: center;
   gap: 0;
   overflow: hidden;
@@ -1664,9 +1667,9 @@ button.viewer-control.post-panel-close {
 .archive-dock .archive-date-value { gap: 14px; }
 .archive-dock .archive-date-range { gap: 16px; width: min(540px, 100%); }
 .archive-dock .archive-date-value > span,
-.archive-dock .person-focus-slider > span:first-child { color: #c4bec7; }
+.archive-dock .person-focus-slider > span:first-child { color: #8b858f; }
 .person-focus-slider { gap: 12px; width: min(390px, 100%); }
-.person-focus-loading { flex: 1; justify-content: center; min-width: 120px; color: #c4bec7; }
+.person-focus-loading { flex: 1; justify-content: center; min-width: 120px; color: #8b858f; }
 .person-focus-loading svg { animation: spin 1s linear infinite; flex-shrink: 0; }
 .archive-preview.is-grid .archive-media-surface { border: 0; box-shadow: none; }
 .local-server-dialog { position: relative; padding: 30px; background: radial-gradient(ellipse at top left, #34202f, transparent 65%), #151116; }
@@ -1685,7 +1688,7 @@ button.viewer-control.dialog-close svg,
 button.viewer-control.post-panel-close svg { width: 30px; height: 30px; flex-basis: 30px; stroke-width: 1.7; }
 button.viewer-control.dialog-close:hover,
 button.viewer-control.post-panel-close:hover { background: transparent; color: var(--acid); box-shadow: 0 0 22px #ff4d9a30; }
-.post-photo-count { left: 50%; bottom: 18px; transform: translateX(-50%); color: white; font-size: 18px; text-align: center; }
+.post-photo-count { left: 24px; bottom: 18px; transform: none; color: white; font-size: 18px; text-align: left; }
 .slideshow-arrow { position: absolute; top: 50%; transform: translateY(-50%); z-index: 10; display: grid; place-items: center; width: 60px; height: 76px; border: 0; border-radius: 18px; background: #100c12a8; color: white; cursor: pointer; box-shadow: 0 4px 24px #0004; }
 .slideshow-arrow:hover { color: var(--acid); background: #24151fdd; }
 .slideshow-arrow svg { width: 40px; height: 40px; }
@@ -1705,4 +1708,35 @@ button.viewer-control.post-panel-close:hover { background: transparent; color: v
   .slideshow-arrow.is-previous { left: 8px; }
   .slideshow-arrow.is-next { right: 8px; }
   .post-photo-count { bottom: 78px; }
+}
+
+/* Service choices share a readable layout as connection options grow. */
+.local-server-dialog { width: min(900px, 100%); max-height: calc(100dvh - 40px); overflow-y: auto; padding: 28px; }
+.local-server-heading h2 { font-size: 30px; }
+.local-server-dialog p { font-size: 18px; line-height: 1.65; }
+.local-server-dialog .local-server-intro { max-width: 650px; margin: 16px 0; }
+.media-service-options { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+.media-service-option { display: flex; flex-direction: column; align-items: flex-start; padding: 22px; border: 1px solid #44353f; border-radius: 16px; background: #100d1180; }
+.media-service-option.is-selected { border-color: #a65079; background: #ff4d9a08; }
+.media-service-title { display: flex; align-items: center; gap: 10px; width: 100%; }
+.media-service-title > svg { color: var(--acid); flex-shrink: 0; }
+.media-service-title h3 { margin: 0; font: 600 20px/1.3 system-ui, sans-serif; }
+.media-service-title > span { margin-left: auto; color: #b8a2af; font-size: 13px; }
+.local-server-dialog .media-service-option p { font-size: 17px; margin: 16px 0; }
+.local-server-steps { margin: 0 0 22px; padding-left: 20px; font-size: 16px; line-height: 1.6; color: #c4bec7; }
+.local-server-steps li + li { margin-top: 10px; }
+.local-server-steps strong { color: white; font-weight: 500; }
+.media-service-option > button { margin-top: auto; }
+.local-server-dialog .local-server-footnote { margin: 20px 0 0; font-size: 15px; color: #a89da8; }
+.local-server-dialog .local-server-feedback { padding: 12px 16px; background: #ff4d9a10; border-radius: 10px; color: white; }
+@media (max-width: 640px) {
+  .local-server-overlay { padding: 12px; }
+  .local-server-dialog { padding: 24px; max-height: calc(100dvh - 24px); }
+  .media-service-options { grid-template-columns: 1fr; }
+  .media-service-option { padding: 18px; }
+}
+
+@media (max-width: 640px) {
+  .post-photo-panel .archive-dock { padding-left: 12px; padding-bottom: 34px; }
+  .post-photo-count { bottom: 8px; }
 }
