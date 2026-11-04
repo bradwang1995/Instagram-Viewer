@@ -1,14 +1,23 @@
 import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { usePersonFocusStyle } from "../hooks/usePersonFocusStyle";
 import { usePersonFocus } from "../features/media/personFocus";
 import { detectPerson } from "../features/media/personDetector";
 vi.mock("../features/media/personDetector", () => ({ detectPerson: vi.fn() }));
+beforeEach(() => usePersonFocus.setState({ strength: 100 }));
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   usePersonFocus.setState({ strength: 100 });
   vi.clearAllMocks();
+});
+it("leaves loaded photos original without starting detection at zero", async () => {
+  usePersonFocus.setState({ strength: 0 });
+  const ref = { current: new Image() };
+  const { result } = renderHook(() => usePersonFocusStyle(ref, "photo", true));
+  await act(async () => {});
+  expect(result.current).toBeUndefined();
+  expect(detectPerson).not.toHaveBeenCalled();
 });
 it("disables the zoom animation and ignores a result after focus is switched off", async () => {
   let complete!: (

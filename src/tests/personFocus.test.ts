@@ -5,10 +5,10 @@ import {
   usePersonFocus,
 } from "../features/media/personFocus";
 describe("person focus strength", () => {
-  it("defaults to full focus and persists/clamps the slider", () => {
-    expect(usePersonFocus.getState().strength).toBe(100);
+  it("starts at zero and clamps the session slider", () => {
+    expect(usePersonFocus.getState().strength).toBe(0);
     usePersonFocus.getState().setStrength(0);
-    expect(localStorage.getItem("viewer:person-focus-strength")).toBe("0");
+    expect(usePersonFocus.getState().strength).toBe(0);
     usePersonFocus.getState().setStrength(45);
     expect(usePersonFocus.getState().strength).toBe(45);
     usePersonFocus.getState().setStrength(120);

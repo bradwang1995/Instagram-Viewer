@@ -1,34 +1,16 @@
 import { create } from "zustand";
 
-function initialStrength() {
-  try {
-    const saved = localStorage.getItem("viewer:person-focus-strength");
-    if (saved !== null && Number.isFinite(Number(saved)))
-      return Math.max(0, Math.min(100, Number(saved)));
-    return localStorage.getItem("viewer:person-focus") === "off" ? 0 : 100;
-  } catch {
-    return 100;
-  }
-}
-
+// Start each page visit at the original framing, even after an earlier high setting.
 export const usePersonFocus = create<{
   strength: number;
   setStrength: (value: number) => void;
 }>((set) => ({
-  strength: initialStrength(),
-  setStrength: (value) => {
-    const strength = Number.isFinite(value)
-      ? Math.max(0, Math.min(100, value))
-      : 0;
-    try {
-      localStorage.setItem("viewer:person-focus-strength", String(strength));
-    } catch {
-      /* Session preference still works. */
-    }
-    set({ strength });
-  },
+  strength: 0,
+  setStrength: (value) =>
+    set({
+      strength: Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0,
+    }),
 }));
-
 export type PersonBox = {
   originX: number;
   originY: number;

@@ -1,4 +1,4 @@
-import { Focus, Grid2X2, MoveHorizontal, Play, Upload } from "lucide-react";
+import { Grid2X2, MoveHorizontal, Play, Upload } from "lucide-react";
 import { usePersonFocus } from "../../features/media/personFocus";
 import type { CSSProperties } from "react";
 import type { TransitionPreset } from "../../db/schema";
@@ -138,7 +138,7 @@ export function ArchiveControlBar({
       {dateRange ? (
         <div className="archive-date-range">
           <span className="archive-date-value" aria-hidden="true">
-            Start time
+            <span>Start time</span>
             <strong>{formatMonth(months[startIndex])}</strong>
           </span>
           <div className="archive-dual-range" style={rangeStyle}>
@@ -169,8 +169,8 @@ export function ArchiveControlBar({
             />
           </div>
           <span className="archive-date-value is-end" aria-hidden="true">
-            End time
             <strong>{formatMonth(months[endIndex])}</strong>
+            <span>End time</span>
           </span>
         </div>
       ) : null}
@@ -218,11 +218,10 @@ export function ArchiveControlBar({
         className="person-focus-slider"
         style={{ "--focus-strength": `${strength}%` } as CSSProperties}
       >
-        <span>
-          <Focus size={16} aria-hidden="true" />
-          Focus on person
+        <span>Focus on Person</span>
+        <span className="person-focus-endpoint" aria-hidden="true">
+          0%
         </span>
-        <span className="person-focus-endpoint" aria-hidden="true">0%</span>
         <input
           type="range"
           aria-label="Focus on person"
@@ -233,7 +232,9 @@ export function ArchiveControlBar({
           value={strength}
           onChange={(event) => setStrength(Number(event.target.value))}
         />
-        <span className="person-focus-endpoint" aria-hidden="true">100%</span>
+        <span className="person-focus-endpoint" aria-hidden="true">
+          100%
+        </span>
       </label>
     </footer>
   );
