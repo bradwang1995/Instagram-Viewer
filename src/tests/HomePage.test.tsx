@@ -1053,8 +1053,11 @@ describe("Photo archive preview", () => {
       for (const image of initial) fireEvent.error(image);
       await act(async () => undefined);
       expect(document.querySelectorAll("img[data-media-id]")).toHaveLength(0);
-      // Neither opening the report nor settling the unchanged viewport starts work.
-      fireEvent.click(screen.getByRole("button", { name: "Load report" }));
+      // Logging stays in the background; settling the viewport starts no work.
+      expect(
+        screen.queryByRole("button", { name: "Load report" }),
+      ).not.toBeInTheDocument();
+      expect(document.querySelector("dialog.load-report")).toBeNull();
       await act(async () => undefined);
       expect(document.querySelectorAll("img[data-media-id]")).toHaveLength(0);
       const scroller = screen.getByTestId("archive-scroller");

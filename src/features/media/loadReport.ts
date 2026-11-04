@@ -76,9 +76,7 @@ export type LoadOutcome = LoadFailure & {
   browserResourceMs?: number;
   gatewayRecordedAt?: string;
 };
-const KEY = "instagram-viewer:load-report:v2";
-export const reportStartedAt = new Date().toISOString();
-const sessionId = `${reportStartedAt}:${Math.random()}`;
+const sessionId = `${new Date().toISOString()}:${Math.random()}`;
 const LIMIT = 1000;
 const rows = new Map<string, LoadOutcome>();
 const metadata = new Map<string, LoadDiagnostics>();
@@ -93,42 +91,9 @@ export function recordMetadataDiagnostics(
   metadata.set(key, diagnostic);
   if (metadata.size > LIMIT) metadata.delete(metadata.keys().next().value!);
 }
-function changed() {
-  dirty = true;
-  flushTimer ??= setTimeout(flushLoadReport, 250);
-}
-let memoryOnly = false;
-let flushTimer: ReturnType<typeof setTimeout> | undefined;
-let dirty = false;
-
 export function readLoadReport(): LoadOutcome[] {
-  // Each module instance is one visit. Storage from an older visit is never a data source.
   return [...rows.values()];
 }
-
-export function flushLoadReport() {
-  if (flushTimer !== undefined) clearTimeout(flushTimer);
-  flushTimer = undefined;
-  if (!dirty) return;
-  dirty = false;
-  if (!memoryOnly) {
-    try {
-      localStorage.setItem(
-        KEY,
-        JSON.stringify({ sessionId, rows: readLoadReport() }),
-      );
-    } catch {
-      memoryOnly = true;
-      /* Browsing and the current report continue without storage. */
-    }
-  }
-  window.dispatchEvent(new Event("viewer:load-report-updated"));
-}
-
-window.addEventListener("pagehide", flushLoadReport);
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "hidden") flushLoadReport();
-});
 
 export function recordLoadOutcome(
   item: MediaQueueItem,
@@ -191,8 +156,6 @@ export function recordLoadOutcome(
   rows.set(key, row);
   queueLocalLoadLog(row, sessionId);
   if (rows.size > LIMIT) rows.delete(rows.keys().next().value!);
-  changed();
-  // One bounded write/notification per burst, with synchronous reads remaining current.
   if (outcome === "loaded" && usesPersonalMedia(item))
     void enrichGatewayResult(item, row, key);
 }
@@ -221,7 +184,6 @@ async function enrichGatewayResult(
     )
       row.gatewayRecordedAt = data.recordedAt;
     queueLocalLoadLog(row, sessionId);
-    changed();
   } catch {
     /* Older or offline gateways leave diagnostics unknown. */
   }
@@ -353,33 +315,5 @@ export async function recordImageFailure(item: MediaQueueItem) {
             time: current.time,
           });
     queueLocalLoadLog(current, sessionId);
-    changed();
   }
-}
-
-export function summarizeLoadReport(input = readLoadReport()) {
-  const posts = new Map<string, LoadOutcome[]>();
-  for (const row of input) {
-    const key = `${row.source}:${row.shortcode}`;
-    posts.set(key, [...(posts.get(key) ?? []), row]);
-  }
-  const postResults = [...posts.values()].map((photos) =>
-    photos.some((p) => p.outcome === "loaded")
-      ? "loaded"
-      : photos.some((p) => p.outcome === "failed")
-        ? "failed"
-        : "deferred",
-  );
-  const counts = (outcomes: string[]) => ({
-    loaded: outcomes.filter((s) => s === "loaded").length,
-    failed: outcomes.filter((s) => s === "failed").length,
-    deferred: outcomes.filter((s) => s === "deferred").length,
-  });
-  return {
-    photos: counts(input.map((r) => r.outcome)),
-    posts: counts(postResults),
-    recoveredPhotos: input.filter(
-      (r) => r.outcome === "loaded" && r.firstFailure,
-    ).length,
-  };
 }

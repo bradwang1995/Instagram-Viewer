@@ -42,7 +42,6 @@ it("automatically batches local results and replaces a photo after diagnostics a
   expect(JSON.parse(fetcher.mock.calls[0][1].body).rows).toEqual([
     expect.objectContaining({ diagnostics: { imageCache: "hit" } }),
   ]);
-  expect(log.localLogStatus()).toContain("Saved automatically");
   await vi.advanceTimersByTimeAsync(60_000);
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
@@ -54,10 +53,8 @@ it("retains failed batches and retries without changing image loading", async ()
   vi.stubGlobal("fetch", fetcher);
   log.queueLocalLoadLog(row, "2026-11-03T23:00:00.000Z:0.123");
   await vi.advanceTimersByTimeAsync(2000);
-  expect(log.localLogStatus()).toContain("not saved yet");
   await vi.advanceTimersByTimeAsync(30_000);
   expect(fetcher).toHaveBeenCalledTimes(2);
-  expect(log.localLogStatus()).toContain("Saved automatically");
 });
 it("does not transmit default-service results or run without a local connection", async () => {
   const fetcher = vi.fn();

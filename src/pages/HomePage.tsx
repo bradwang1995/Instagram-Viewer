@@ -17,7 +17,6 @@ import {
   type MediaQueueItem,
 } from "../features/media/mediaQueue";
 import { useMediaLibrary } from "../hooks/useMediaLibrary";
-import { LoadReport } from "../components/archive/LoadReport";
 
 const FILTER_DEBOUNCE_MS = 300;
 const MIN_SLIDESHOW_DWELL_MS = 3_000;
@@ -432,7 +431,6 @@ export function HomePage() {
           {actionError || error}
         </div>
       ) : null}
-      <LoadReport />
     </div>
   );
 }

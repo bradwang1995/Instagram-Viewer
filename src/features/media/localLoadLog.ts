@@ -4,15 +4,7 @@ import type { LoadOutcome } from "./loadReport";
 const pending = new Map<string, LoadOutcome>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 let sending = false;
-let status = "No local results recorded yet.";
 let visit = "";
-export function localLogStatus() {
-  return status;
-}
-function setStatus(next: string) {
-  status = next;
-  window.dispatchEvent(new Event("viewer:local-log-updated"));
-}
 function enabled() {
   return import.meta.env.MODE === "personal" || localServiceEnabled();
 }
@@ -36,6 +28,7 @@ export async function flushLocalLoadLog(keepalive = false) {
   if (sending || !pending.size || !enabled()) return;
   sending = true;
   const batch = [...pending.entries()].slice(0, keepalive ? 5 : 50);
+  let saved = false;
   try {
     const response = await fetch(personalUrl("/api/personal/load-log"), {
       method: "POST",
@@ -52,15 +45,12 @@ export async function flushLocalLoadLog(keepalive = false) {
     if (!response.ok) throw new Error("Local logging unavailable.");
     for (const [key, row] of batch)
       if (pending.get(key) === row) pending.delete(key);
-    setStatus("Saved automatically to this PC's local load-logs folder.");
+    saved = true;
   } catch {
-    setStatus(
-      "Local log not saved yet. Check or restart the local server; retrying automatically.",
-    );
+    // Keep the bounded batch for a background retry.
   } finally {
     sending = false;
-    if (pending.size && enabled())
-      schedule(status.startsWith("Saved") ? 2000 : 30_000);
+    if (pending.size && enabled()) schedule(saved ? 2000 : 30_000);
   }
 }
 document.addEventListener("visibilitychange", () => {

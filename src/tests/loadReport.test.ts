@@ -10,7 +10,6 @@ const item = {
   media: { sourceIndex: 0, sourceKind: "remote" },
 } as MediaQueueItem;
 afterEach(() => {
-  report.flushLoadReport();
   localStorage.clear();
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
@@ -33,8 +32,6 @@ it("keeps the latest result per photo and replaces failures after a successful l
   ]);
 });
 it("retains only the most recent 1000 photos", () => {
-  vi.useFakeTimers();
-  const write = vi.spyOn(Storage.prototype, "setItem");
   for (let index = 0; index < 1002; index++)
     report.recordLoadOutcome(
       { ...item, post: { ...item.post, shortcode: `Post${index}` } },
@@ -42,27 +39,6 @@ it("retains only the most recent 1000 photos", () => {
     );
   expect(report.readLoadReport()).toHaveLength(1000);
   expect(report.readLoadReport()[0].shortcode).toBe("Post2");
-  expect(write).not.toHaveBeenCalled();
-  vi.advanceTimersByTime(250);
-  expect(write).toHaveBeenCalledTimes(1);
-  expect(JSON.parse(write.mock.calls[0][1]).rows).toHaveLength(1000);
-  write.mockRestore();
-  vi.useRealTimers();
-});
-it("flushes pending rows on page hide and retains live results if storage is unavailable", () => {
-  const write = vi
-    .spyOn(Storage.prototype, "setItem")
-    .mockImplementation(() => {
-      throw new Error("storage denied");
-    });
-  report.recordLoadOutcome(item, "loaded");
-  window.dispatchEvent(new Event("pagehide"));
-  expect(write).toHaveBeenCalledTimes(1);
-  report.recordLoadOutcome(item, "failed", { code: "timeout", stage: "image" });
-  report.flushLoadReport();
-  expect(report.readLoadReport()[0].code).toBe("timeout");
-  expect(write).toHaveBeenCalledTimes(1);
-  write.mockRestore();
 });
 it("reads local diagnostics without re-fetching media and preserves a restricted verdict", async () => {
   vi.stubEnv("MODE", "personal");
@@ -122,15 +98,7 @@ it("does not let late diagnostics overwrite a newer successful image result", as
   await pending;
   expect(report.readLoadReport()[0].outcome).toBe("loaded");
 });
-it("ignores previous visits and demo results, and identifies the actual source", () => {
-  localStorage.setItem(
-    "instagram-viewer:load-report:v1",
-    JSON.stringify(Array(1000).fill({ outcome: "failed" })),
-  );
-  localStorage.setItem(
-    "instagram-viewer:load-report:v2",
-    JSON.stringify({ sessionId: "old visit", rows: [{ outcome: "failed" }] }),
-  );
+it("ignores demo results and identifies the actual source", () => {
   expect(report.readLoadReport()).toEqual([]);
   report.recordLoadOutcome(
     { ...item, media: { ...item.media, sourceKind: "demo" } },
@@ -170,29 +138,6 @@ it("retains bounded outcome history and the first failure through cooldown and r
   expect(row.firstFailure).toMatchObject({
     code: "graphql_error",
     status: 502,
-  });
-  expect(report.summarizeLoadReport().recoveredPhotos).toBe(1);
-});
-
-it("reports posts separately from carousel photos and keeps sources separate", () => {
-  report.recordLoadOutcome(item, "loaded");
-  report.recordLoadOutcome(
-    { ...item, media: { ...item.media, sourceIndex: 1 } },
-    "loaded",
-  );
-  report.recordLoadOutcome(
-    { ...item, post: { ...item.post, shortcode: "Failed" } },
-    "failed",
-    { code: "graphql_error", stage: "metadata" },
-  );
-  report.recordLoadOutcome(
-    { ...item, post: { ...item.post, shortcode: "Deferred" } },
-    "failed",
-    { code: "cooldown", stage: "metadata", deferred: true },
-  );
-  expect(report.summarizeLoadReport()).toMatchObject({
-    photos: { loaded: 2, failed: 1, deferred: 1 },
-    posts: { loaded: 1, failed: 1, deferred: 1 },
   });
 });
 
@@ -237,18 +182,16 @@ it("allows only non-sensitive validated gateway diagnostics", async () => {
 
 it("enriches successful photos without fetching the image again", async () => {
   vi.stubEnv("MODE", "personal");
-  const fetcher = vi
-    .fn()
-    .mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          status: 200,
-          code: "loaded",
-          recordedAt: "2026-11-03T23:00:00Z",
-          diagnostics: { imageCache: "hit", upstreamRequests: 0, imageMs: 0 },
-        }),
-      ),
-    );
+  const fetcher = vi.fn().mockResolvedValue(
+    new Response(
+      JSON.stringify({
+        status: 200,
+        code: "loaded",
+        recordedAt: "2026-11-03T23:00:00Z",
+        diagnostics: { imageCache: "hit", upstreamRequests: 0, imageMs: 0 },
+      }),
+    ),
+  );
   vi.stubGlobal("fetch", fetcher);
   report.recordLoadOutcome(item, "loaded");
   await vi.waitFor(() =>
