@@ -1632,3 +1632,28 @@ button.viewer-control.post-panel-close {
 .person-focus-slider input::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border: 2px solid white; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 4px rgb(255 77 154 / 15%); }
 .person-focus-slider input::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid white; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 4px rgb(255 77 154 / 15%); }
 .person-focus-slider input:focus-visible { outline: 2px solid var(--paper); outline-offset: 7px; }
+
+/* One readable type size for all footer labels and values. */
+.archive-dock { --footer-control-font-size: 18px; }
+.archive-dock .archive-date-value,
+.archive-dock .archive-date-value strong,
+.archive-dock .person-focus-slider > span,
+.archive-dock .slideshow-inline-settings label,
+.archive-dock .slideshow-inline-settings select,
+.archive-dock .slideshow-inline-settings output {
+  font-size: var(--footer-control-font-size);
+  color: var(--paper);
+  font-weight: 400;
+}
+.archive-dock .archive-date-value { gap: 4px; }
+.archive-dock .archive-date-range { gap: 6px; grid-template-columns: max-content minmax(28px, 1fr) max-content; }
+@media (max-width: 1560px) {
+  .archive-slideshow > .archive-dock { grid-template-columns: minmax(0, 1fr) auto; }
+  .archive-slideshow .slideshow-inline-settings { grid-column: 1 / -1; grid-row: 2; width: 100%; justify-content: center; flex-wrap: wrap; }
+  .archive-slideshow .person-focus-slider { grid-column: 2; grid-row: 1; }
+}
+@media (max-width: 900px) {
+  .archive-dock { --footer-control-font-size: 17px; }
+  .archive-dock .archive-date-range { grid-column: 1 / -1; }
+  .archive-dock .person-focus-slider { grid-column: 2; grid-row: 3; }
+}

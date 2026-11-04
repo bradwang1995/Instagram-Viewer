@@ -30,13 +30,13 @@ describe("person focus strength", () => {
       ]),
     ).toBeNull();
   });
-  it("keeps 0 original and interpolates to a head-aligned crop that may cut off legs", () => {
+  it("keeps 0 original and interpolates to a horizontally and vertically centered close crop", () => {
     const width = 900,
       height = 1200,
       vw = 500,
       vh = 600;
     const crop = personCrop(width, height, [
-      { originX: 200, originY: 300, width: 300, height: 600 },
+      { originX: 200, originY: 150, width: 300, height: 600 },
     ])!;
     for (const fit of ["cover", "contain"]) {
       expect(personZoom(width, height, vw, vh, crop, fit, 0)).toBeNull();
@@ -54,8 +54,11 @@ describe("person focus strength", () => {
         vw / 2 + (crop.x + crop.width - width / 2) * pixels + full.x,
       ).toBeLessThanOrEqual(vw + 0.00001);
       expect(
-        vh / 2 + (crop.headY - height / 2) * pixels + full.y,
-      ).toBeGreaterThanOrEqual(-0.00001);
+        vw / 2 + (crop.x + crop.width / 2 - width / 2) * pixels + full.x,
+      ).toBeCloseTo(vw / 2);
+      expect(
+        vh / 2 + (crop.y + crop.height / 2 - height / 2) * pixels + full.y,
+      ).toBeCloseTo(vh / 2);
       expect(
         vh / 2 + (crop.y + crop.height - height / 2) * pixels + full.y,
       ).toBeGreaterThan(vh);
@@ -95,6 +98,15 @@ describe("person focus strength", () => {
             expect(
               (z.drawnHeight * z.scale) / 2 - Math.abs(z.y),
             ).toBeGreaterThanOrEqual(Math.min(vh, z.drawnHeight) / 2 - 0.00001);
+            if (amount === 100) {
+              const pixels = (z.drawnWidth / width) * z.scale;
+              expect(
+                vw / 2 + (crop.x + crop.width / 2 - width / 2) * pixels + z.x,
+              ).toBeCloseTo(vw / 2);
+              expect(
+                vh / 2 + (crop.y + crop.height / 2 - height / 2) * pixels + z.y,
+              ).toBeCloseTo(vh / 2);
+            }
           }
         }
   });

@@ -139,6 +139,7 @@ export function ArchiveControlBar({
         <div className="archive-date-range">
           <span className="archive-date-value" aria-hidden="true">
             <span>Start time</span>
+            <span aria-hidden="true">-</span>
             <strong>{formatMonth(months[startIndex])}</strong>
           </span>
           <div className="archive-dual-range" style={rangeStyle}>
@@ -170,6 +171,7 @@ export function ArchiveControlBar({
           </div>
           <span className="archive-date-value is-end" aria-hidden="true">
             <strong>{formatMonth(months[endIndex])}</strong>
+            <span aria-hidden="true">-</span>
             <span>End time</span>
           </span>
         </div>

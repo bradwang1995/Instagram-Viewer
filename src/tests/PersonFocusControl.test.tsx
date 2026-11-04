@@ -20,3 +20,23 @@ it("shares a labeled 0–100 focus slider across footers", () => {
   fireEvent.change(sliders[1], { target: { value: "0" } });
   expect(sliders[0]).toHaveAttribute("aria-valuetext", "Original");
 });
+
+it("separates each date label from its value with a dash", () => {
+  const { container } = render(
+    <ArchiveControlBar
+      dateRange={{
+        months: [new Date(2026, 6, 15).getTime()],
+        startIndex: 0,
+        endIndex: 0,
+        onStartChange: () => {},
+        onEndChange: () => {},
+      }}
+    />,
+  );
+  const labels = container.querySelectorAll(".archive-date-value");
+  expect(labels[0]).toHaveTextContent("Start time-Jul 2026");
+  expect(labels[1]).toHaveTextContent("Jul 2026-End time");
+  expect(container.querySelector(".person-focus-slider")).not.toHaveTextContent(
+    "-",
+  );
+});
