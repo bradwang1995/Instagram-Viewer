@@ -11,13 +11,14 @@ export function usePersonFocusStyle(
   url: string | undefined,
   ready: boolean,
 ) {
-  const enabled = usePersonFocus((s) => s.enabled);
-  const [style, setStyle] = useState<CSSProperties>();
+  const strength = usePersonFocus((s) => s.strength);
+  const enabled = strength > 0;
+  const [geometry, setGeometry] = useState<ReturnType<typeof personZoom>>(null);
   useEffect(() => {
-    setStyle(undefined);
+    setGeometry(null);
     const image = ref.current;
     if (!enabled || !ready || !url || !image) return;
-    let cancelled = false;
+    const surface = image.parentElement ?? image;
     const controller = new AbortController();
     let observer: ResizeObserver | undefined;
     void detectPerson(
@@ -26,35 +27,43 @@ export function usePersonFocusStyle(
       image.naturalHeight,
       controller.signal,
     ).then((boxes) => {
-      if (cancelled) return;
+      if (controller.signal.aborted) return;
       const crop = personCrop(image.naturalWidth, image.naturalHeight, boxes);
       if (!crop) return;
-      const update = () => {
-        const zoom = personZoom(
-          image.naturalWidth,
-          image.naturalHeight,
-          image.clientWidth,
-          image.clientHeight,
-          crop,
-          getComputedStyle(image).objectFit,
+      const update = () =>
+        setGeometry(
+          personZoom(
+            image.naturalWidth,
+            image.naturalHeight,
+            surface.clientWidth,
+            surface.clientHeight,
+            crop,
+            getComputedStyle(image).objectFit,
+          ),
         );
-        setStyle(
-          zoom
-            ? {
-                transform: `translate(${zoom.x}px, ${zoom.y}px) scale(${zoom.scale})`,
-              }
-            : undefined,
-        );
-      };
       update();
       observer = new ResizeObserver(update);
-      observer.observe(image);
+      observer.observe(surface);
     });
     return () => {
-      cancelled = true;
       controller.abort();
       observer?.disconnect();
     };
   }, [enabled, ready, url, ref]);
-  return enabled ? { ...style, transition: "none" } : undefined;
+  if (!enabled) return undefined;
+  const style: CSSProperties = { transition: "none" };
+  if (!geometry) return style;
+  const progress = strength / 100;
+  // Render the full image at its original fitted size before scaling/panning it.
+  // Transforming an object-fit-clipped element would permanently cut off limbs.
+  return {
+    ...style,
+    position: "absolute",
+    left: "50%",
+    top: "50%",
+    width: geometry.drawnWidth,
+    height: geometry.drawnHeight,
+    maxWidth: "none",
+    transform: `translate(-50%, -50%) translate(${geometry.x * progress}px, ${geometry.y * progress}px) scale(${1 + (geometry.scale - 1) * progress})`,
+  } satisfies CSSProperties;
 }

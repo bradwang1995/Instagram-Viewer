@@ -1593,16 +1593,12 @@ button.viewer-control.post-panel-close {
   min-width: 0;
   grid-template-columns: max-content minmax(70px, 1fr) max-content;
 }
-.person-focus-toggle {
+.person-focus-slider {
   grid-column: 3;
   justify-self: end;
   white-space: nowrap;
 }
-.person-focus-toggle:not(.is-active) {
-  color: var(--dim);
-  background: #151318;
-  border-color: var(--line);
-}
+
 .archive-dock .slideshow-inline-settings {
   grid-column: 2;
   justify-self: center;
@@ -1621,11 +1617,20 @@ button.viewer-control.post-panel-close {
     justify-content: center;
     flex-wrap: wrap;
   }
-  .person-focus-toggle { grid-column: 2; grid-row: 1; }
+  .person-focus-slider { grid-column: 2; grid-row: 1; }
   .slideshow-settings-placeholder { display: none; }
 }
 @media (max-width: 540px) {
   .archive-dock .archive-date-range { grid-column: 1 / -1; }
-  .person-focus-toggle { grid-row: 3; }
+  .person-focus-slider { grid-row: 3; }
   .archive-dock .slideshow-inline-settings { gap: 8px; }
 }
+
+.person-focus-slider { display: grid; gap: 6px; width: min(230px, 100%); min-width: 150px; color: var(--paper); }
+.person-focus-slider > span { display: flex; align-items: center; gap: 6px; font-size: .7rem; }
+.person-focus-slider output { margin-left: auto; font-variant-numeric: tabular-nums; }
+.person-focus-slider input { width: 100%; margin: 0; accent-color: var(--acid); cursor: pointer; }
+.person-focus-slider input { appearance: none; height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--acid) 0 var(--focus-strength), #4a3546 var(--focus-strength) 100%); }
+.person-focus-slider input::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; border: 2px solid white; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 4px rgb(255 77 154 / 15%); }
+.person-focus-slider input::-moz-range-thumb { width: 14px; height: 14px; border: 2px solid white; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 4px rgb(255 77 154 / 15%); }
+.person-focus-slider input:focus-visible { outline: 2px solid var(--paper); outline-offset: 7px; }

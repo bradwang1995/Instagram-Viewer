@@ -125,7 +125,7 @@ export function ArchiveControlBar({
   dateRange,
   slideshow,
 }: ArchiveControlBarProps) {
-  const { enabled, toggle } = usePersonFocus();
+  const { strength, setStrength } = usePersonFocus();
   const { months, startIndex, endIndex, onStartChange, onEndChange } =
     dateRange ?? {
       months: [],
@@ -223,16 +223,25 @@ export function ArchiveControlBar({
       ) : (
         <div className="slideshow-settings-placeholder" />
       )}
-      <button
-        type="button"
-        className={`viewer-control person-focus-toggle${enabled ? " is-active" : ""}`}
-        aria-pressed={enabled}
-        onClick={toggle}
-        title="Detect and zoom in on the main person. Photos are processed on this device."
+      <label
+        className="person-focus-slider"
+        style={{ "--focus-strength": `${strength}%` } as CSSProperties}
       >
-        <Focus size={18} aria-hidden="true" />
-        Focus on person
-      </button>
+        <span>
+          <Focus size={16} aria-hidden="true" />
+          Focus on person <output>{strength}%</output>
+        </span>
+        <input
+          type="range"
+          aria-label="Focus on person"
+          aria-valuetext={strength === 0 ? "Original" : `${strength}% focus`}
+          min={0}
+          max={100}
+          step={1}
+          value={strength}
+          onChange={(event) => setStrength(Number(event.target.value))}
+        />
+      </label>
     </footer>
   );
 }
