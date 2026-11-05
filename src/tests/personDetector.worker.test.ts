@@ -53,10 +53,10 @@ beforeEach(() => {
   );
 });
 afterEach(() => vi.unstubAllGlobals());
-async function run(width = 1000, height = 800) {
+async function run(width = 1000, height = 800, bitmap?: unknown) {
   await import("../features/media/personDetector.worker");
   await worker.onmessage!({
-    data: { id: 1, url: "photo", width, height, baseUrl: "/" },
+    data: { id: 1, url: "photo", width, height, baseUrl: "/", bitmap },
   });
   return worker.postMessage.mock.calls[0][0];
 }
@@ -66,6 +66,16 @@ it("leaves an upright person untouched", async () => {
     { originX: 100, originY: 100, width: 200, height: 600 },
   ]);
   expect(detect).toHaveBeenCalledTimes(1);
+});
+it("detects transferred pixels even when refetching the source would fail", async () => {
+  const close = vi.fn();
+  vi.mocked(fetch).mockRejectedValue(new Error("Refetch blocked"));
+  detect.mockReturnValue(result(100, 100, 200, 600));
+  expect(
+    (await run(1000, 800, { width: 1000, height: 800, close })).boxes,
+  ).toHaveLength(1);
+  expect(fetch).not.toHaveBeenCalled();
+  expect(close).toHaveBeenCalledOnce();
 });
 it("orients a reclining foreground person even when quarter-turn person detection would miss it", async () => {
   detect.mockReturnValue(result(15, 50, 900, 700));

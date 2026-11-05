@@ -124,7 +124,7 @@ describe("Photo archive preview", () => {
     await act(async () => undefined);
     if (!screen.getByText("View Options").closest("details")!.open)
       fireEvent.click(screen.getByText("View Options"));
-    fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Human Only" }));
     const card = (id: string) =>
       document.querySelector(`article[data-media-id="${id}"]`);
     expect(card(person.media.id)).not.toHaveAttribute("hidden");
@@ -132,7 +132,7 @@ describe("Photo archive preview", () => {
     expect(card(unknown.media.id)).not.toHaveAttribute("hidden");
     if (!screen.getByText("View Options").closest("details")!.open)
       fireEvent.click(screen.getByText("View Options"));
-    fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Human Only" }));
     expect(card(scenery.media.id)).not.toHaveAttribute("hidden");
   });
 
@@ -160,13 +160,42 @@ describe("Photo archive preview", () => {
         );
       await waitFor(() => expect(image(0)).toHaveAttribute("src"));
       fireEvent.click(screen.getByText("View Options"));
-      fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
+      fireEvent.click(screen.getByRole("switch", { name: "Human Only" }));
       await waitFor(() => expect(image(80)).toHaveAttribute("src"));
       expect(image(0)).toBeNull();
-      fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
+      fireEvent.click(screen.getByRole("switch", { name: "Human Only" }));
       await waitFor(() => expect(image(0)).toHaveAttribute("src"));
     },
   );
+
+  it("continues checking unknown photos after the initial Human Only cohort contains only scenery", async () => {
+    testState.queue = Array.from({ length: 100 }, (_, index) =>
+      createQueueItem(createPost(`SCAN${index}`, "@test", "Saved"), 0, 1),
+    );
+    render(<HomePage />);
+    await act(async () => undefined);
+    fireEvent.click(screen.getByText("View Options"));
+    fireEvent.click(screen.getByRole("switch", { name: "Human Only" }));
+    const initial = [
+      ...document.querySelectorAll<HTMLImageElement>("img[data-media-id]"),
+    ].map((image) => image.dataset.mediaId!);
+    expect(initial.length).toBeGreaterThan(0);
+    act(() =>
+      usePersonFocus.setState({
+        people: Object.fromEntries(initial.map((id) => [id, false])),
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        document.querySelectorAll("img[data-media-id]").length,
+      ).toBeGreaterThan(0),
+    );
+    expect(
+      [
+        ...document.querySelectorAll<HTMLImageElement>("img[data-media-id]"),
+      ].every((image) => !initial.includes(image.dataset.mediaId!)),
+    ).toBe(true);
+  });
 
   it("keeps a way to disable Human Only when every photo is filtered", async () => {
     usePersonFocus.setState({
@@ -178,13 +207,13 @@ describe("Photo archive preview", () => {
     await act(async () => undefined);
     if (!screen.getByText("View Options").closest("details")!.open)
       fireEvent.click(screen.getByText("View Options"));
-    fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Human Only" }));
     expect(
       screen.getByText("Turn off Human Only to show all photos."),
     ).toBeInTheDocument();
     if (!screen.getByText("View Options").closest("details")!.open)
       fireEvent.click(screen.getByText("View Options"));
-    fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Human Only" }));
     expect(screen.queryByText("No photos with detected people.")).toBeNull();
     expect(screen.getAllByTestId("archive-media-card")).toHaveLength(3);
   });

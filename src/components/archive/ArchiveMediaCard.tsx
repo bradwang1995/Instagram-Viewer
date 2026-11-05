@@ -317,18 +317,6 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                   }}
                   draggable={false}
                 />
-              ) : enhanced ? (
-                <span
-                  className="super-resolution-status"
-                  role="status"
-                  title={enhanced.error}
-                >
-                  {enhanced.error
-                    ? enhanced.error.includes("4 MP")
-                      ? "Super Resolution: photo exceeds 4 MP"
-                      : "Super Resolution unavailable"
-                    : `Super Resolution ${enhanced.progress ?? 0}%`}
-                </span>
               ) : null}
               {isLoading ? (
                 <MediaLoadingState className="archive-image-loading" />

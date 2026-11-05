@@ -12,10 +12,11 @@ self.onmessage = async (
     width: number;
     height: number;
     baseUrl: string;
+    bitmap?: ImageBitmap;
   }>,
 ) => {
   const { id, url, width, height, baseUrl } = event.data;
-  let bitmap: ImageBitmap | undefined;
+  let bitmap: ImageBitmap | undefined = event.data.bitmap;
   try {
     detector ??= ObjectDetector.createFromOptions(
       {
@@ -34,20 +35,20 @@ self.onmessage = async (
         canvas: new OffscreenCanvas(1, 1),
       },
     );
-    const [model, response] = await Promise.all([
-      detector,
-      fetch(url, {
+    const model = await detector;
+    if (!bitmap) {
+      const response = await fetch(url, {
         credentials: "omit",
         referrerPolicy: "no-referrer",
         signal: AbortSignal.timeout(30_000),
-      }),
-    ]);
-    if (!response.ok) throw new Error("Image unavailable");
-    const ratio = Math.min(1, 1280 / Math.max(width, height));
-    bitmap = await createImageBitmap(await response.blob(), {
-      resizeWidth: Math.max(1, Math.round(width * ratio)),
-      resizeHeight: Math.max(1, Math.round(height * ratio)),
-    });
+      });
+      if (!response.ok) throw new Error("Image unavailable");
+      const ratio = Math.min(1, 1280 / Math.max(width, height));
+      bitmap = await createImageBitmap(await response.blob(), {
+        resizeWidth: Math.max(1, Math.round(width * ratio)),
+        resizeHeight: Math.max(1, Math.round(height * ratio)),
+      });
+    }
     const boxes: PersonBox[] = model.detect(bitmap).detections.flatMap((d) =>
       d.boundingBox
         ? [

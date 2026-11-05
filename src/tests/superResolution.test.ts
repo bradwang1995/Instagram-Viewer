@@ -57,6 +57,25 @@ it("serializes inference, shares duplicate requests, reports progress and caches
   expect(await enhancePhoto("a", signal, vi.fn())).toEqual(await a);
   expect(worker.postMessage).toHaveBeenCalledTimes(2);
 });
+it("enhances loaded image pixels instead of depending on a second source fetch", async () => {
+  const bitmap = { close: vi.fn() };
+  vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue(bitmap));
+  const { enhancePhoto } = await import("../features/media/superResolution");
+  const result = enhancePhoto(
+    "photo",
+    new AbortController().signal,
+    vi.fn(),
+    new Image(),
+  );
+  await Promise.resolve();
+  const worker = FakeWorker.instances[0];
+  expect(worker.postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({ bitmap }),
+    [bitmap],
+  );
+  worker.reply({ blob: new Blob(["output"]) });
+  expect((await result).url).toContain("blob:enhanced");
+});
 it("allows a new request after a rapid off/on without attaching it to cancelled inference", async () => {
   const { enhancePhoto } = await import("../features/media/superResolution");
   const c = new AbortController();

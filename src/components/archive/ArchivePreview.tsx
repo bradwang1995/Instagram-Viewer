@@ -89,6 +89,8 @@ export const ArchivePreview = memo(function ArchivePreview({
   onStartSlideshow,
 }: ArchivePreviewProps) {
   const peopleOnly = usePersonFocus((s) => s.peopleOnly);
+  const people = usePersonFocus((s) => s.people);
+  const classifiedCount = peopleOnly ? Object.keys(people).length : 0;
   const scrollerRef = useRef<HTMLDivElement>(null);
   const wheelHandlerRef = useRef(handleWheel);
   wheelHandlerRef.current = handleWheel;
@@ -265,7 +267,7 @@ export const ArchivePreview = memo(function ArchivePreview({
 
       // Hiding a failed card changes geometry, but is not a scroll gesture.
       // Freeze this window's request cohort until navigation actually changes.
-      const key = `${viewMode}:${viewport.width}:${viewport.height}:${offset}:${loadGeneration}:${loadScope}:${peopleOnly}`;
+      const key = `${viewMode}:${viewport.width}:${viewport.height}:${offset}:${loadGeneration}:${loadScope}:${peopleOnly}:${classifiedCount}`;
       if (retainedIds.size && admittedWindowRef.current?.key !== key) {
         admittedWindowRef.current = { key, ids: new Set(retainedIds) };
       }
@@ -296,6 +298,7 @@ export const ArchivePreview = memo(function ArchivePreview({
       loadGeneration,
       loadScope,
       peopleOnly,
+      classifiedCount,
     ],
   );
 

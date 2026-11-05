@@ -33,11 +33,11 @@ it("toggles browser-local display options", () => {
   render(<ArchiveControlBar />);
   fireEvent.click(screen.getByText("View Options"));
   for (const name of ["Super Resolution", "Auto Rotate", "Human Only"]) {
-    const button = screen.getByRole("button", { name });
+    const button = screen.getByRole("switch", { name });
     fireEvent.click(button);
-    expect(button).toHaveAttribute("aria-pressed", "true");
+    expect(button).toHaveAttribute("aria-checked", "true");
     fireEvent.click(button);
-    expect(button).toHaveAttribute("aria-pressed", "false");
+    expect(button).toHaveAttribute("aria-checked", "false");
   }
 });
 it("closes View Options with Escape without dismissing its containing photo dialog", () => {
@@ -46,7 +46,7 @@ it("closes View Options with Escape without dismissing its containing photo dial
   fireEvent.click(summary);
   expect(summary.closest("details")).toHaveAttribute("open");
   expect(
-    fireEvent.keyDown(screen.getByRole("button", { name: "Auto Rotate" }), {
+    fireEvent.keyDown(screen.getByRole("switch", { name: "Auto Rotate" }), {
       key: "Escape",
     }),
   ).toBe(false);

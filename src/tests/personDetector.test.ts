@@ -88,7 +88,31 @@ it("settles active and queued work when the worker crashes or times out", async 
   expect(await first).toBeNull();
   expect(await second).toBeNull();
   expect(FakeWorker.instances[0].terminate).toHaveBeenCalledOnce();
-  expect(await request(detectPerson, "third")).toBeNull();
+  const retry = request(detectPerson, "third");
+  expect(FakeWorker.instances).toHaveLength(2);
+  FakeWorker.instances[1].reply([]);
+  expect(await retry).toEqual([]);
+});
+
+it("passes loaded image pixels directly without downloading the photo again", async () => {
+  const bitmap = { close: vi.fn() };
+  vi.stubGlobal("createImageBitmap", vi.fn().mockResolvedValue(bitmap));
+  const { detectPerson } = await import("../features/media/personDetector");
+  const result = detectPerson(
+    "photo",
+    2000,
+    1600,
+    new AbortController().signal,
+    new Image(),
+  );
+  await Promise.resolve();
+  const worker = FakeWorker.instances[0];
+  expect(worker.postMessage).toHaveBeenCalledWith(
+    expect.objectContaining({ bitmap }),
+    [bitmap],
+  );
+  worker.reply([]);
+  expect(await result).toEqual([]);
 });
 
 it("falls back to the original image when workers are unsupported", async () => {

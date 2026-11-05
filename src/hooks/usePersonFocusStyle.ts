@@ -22,6 +22,7 @@ export function usePersonFocusStyle(
 ) {
   const strength = usePersonFocus((s) => s.strength);
   const autoRotate = usePersonFocus((s) => s.autoRotate);
+  const peopleOnly = usePersonFocus((s) => s.peopleOnly);
   const [rotation, setRotation] = useState(0);
 
   // Loading photos also hold the control, so it cannot accept a setting before
@@ -48,15 +49,31 @@ export function usePersonFocusStyle(
     const surface = image.parentElement ?? image;
     const controller = new AbortController();
     let observer: ResizeObserver | undefined;
-    void detectPerson(
-      url,
-      image.naturalWidth,
-      image.naturalHeight,
-      controller.signal,
-    ).then((boxes) => {
+    const request = async () => {
+      let boxes = await detectPerson(
+        url,
+        image.naturalWidth,
+        image.naturalHeight,
+        controller.signal,
+        image,
+      );
+      if (boxes === null && peopleOnly && !controller.signal.aborted)
+        boxes = await detectPerson(
+          url,
+          image.naturalWidth,
+          image.naturalHeight,
+          controller.signal,
+          image,
+        );
+      return boxes;
+    };
+    void request().then((boxes) => {
       finish();
       if (controller.signal.aborted) return;
-      if (boxes === null) return;
+      if (boxes === null) {
+        if (peopleOnly) usePersonFocus.setState({ detectionError: true });
+        return;
+      }
       if (mediaId)
         usePersonFocus.setState((s) => ({
           people: { ...s.people, [mediaId]: boxes.length > 0 },
@@ -103,7 +120,7 @@ export function usePersonFocusStyle(
       controller.abort();
       observer?.disconnect();
     };
-  }, [ready, url, ref, autoRotate, mediaId]);
+  }, [ready, url, ref, autoRotate, peopleOnly, mediaId]);
   const progress = Math.min(100, strength) / 100;
   const originalTransform =
     "translate(-50%, -50%) translate(0px, 0px) scale(1)";

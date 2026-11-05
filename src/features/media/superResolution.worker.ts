@@ -12,6 +12,7 @@ self.onmessage = async ({
   url?: string;
   baseUrl: string;
   cancel?: boolean;
+  bitmap?: ImageBitmap;
 }>) => {
   if (data.cancel) {
     if (active?.id === data.id) active.controller.abort();
@@ -20,7 +21,7 @@ self.onmessage = async ({
   const { id, url, baseUrl } = data;
   const controller = new AbortController();
   active = { id, controller };
-  let bitmap: ImageBitmap | undefined;
+  let bitmap: ImageBitmap | undefined = data.bitmap;
   let input: tf.Tensor3D | undefined;
   let output: tf.Tensor3D | undefined;
   try {
@@ -45,16 +46,16 @@ self.onmessage = async ({
       model = undefined;
       throw error;
     });
-    const [upscaler, response] = await Promise.all([
-      model,
-      fetch(url!, {
+    const upscaler = await model;
+    if (!bitmap) {
+      const response = await fetch(url!, {
         credentials: "omit",
         referrerPolicy: "no-referrer",
         signal: controller.signal,
-      }),
-    ]);
-    if (!response.ok) throw new Error("Photo unavailable");
-    bitmap = await createImageBitmap(await response.blob());
+      });
+      if (!response.ok) throw new Error("Photo unavailable");
+      bitmap = await createImageBitmap(await response.blob());
+    }
     // Do not downsample a large original and present it as increased resolution.
     if (bitmap.width * bitmap.height > 4_000_000)
       throw new Error("This photo exceeds the local 4 MP processing limit");
@@ -70,6 +71,7 @@ self.onmessage = async ({
       output: "tensor",
       patchSize: 64,
       padding: 12,
+      awaitNextFrame: true,
       signal: controller.signal,
       progress: (progress: number) => self.postMessage({ id, progress }),
     });

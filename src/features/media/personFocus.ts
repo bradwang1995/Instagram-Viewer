@@ -5,16 +5,21 @@ export const usePersonFocus = create<{
   strength: number;
   pending: number;
   superResolution: boolean;
+  enhancing: number;
+  enhancementError?: string;
   autoRotate: boolean;
   peopleOnly: boolean;
+  detectionError: boolean;
   people: Record<string, boolean | undefined>;
   setStrength: (value: number) => void;
 }>((set) => ({
   strength: 0,
   pending: 0,
   superResolution: false,
+  enhancing: 0,
   autoRotate: false,
   peopleOnly: false,
+  detectionError: false,
   people: {},
   setStrength: (value) =>
     set({

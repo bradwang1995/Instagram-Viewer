@@ -5,7 +5,12 @@ import { usePersonFocus } from "../features/media/personFocus";
 import { detectPerson } from "../features/media/personDetector";
 vi.mock("../features/media/personDetector", () => ({ detectPerson: vi.fn() }));
 beforeEach(() => {
-  usePersonFocus.setState({ strength: 100, pending: 0 });
+  usePersonFocus.setState({
+    strength: 100,
+    pending: 0,
+    peopleOnly: false,
+    detectionError: false,
+  });
   vi.mocked(detectPerson).mockResolvedValue([]);
 });
 afterEach(() => {
@@ -168,4 +173,42 @@ it("holds focus readiness while a photo is still loading and releases it on unmo
   expect(detectPerson).not.toHaveBeenCalled();
   view.unmount();
   expect(usePersonFocus.getState().pending).toBe(0);
+});
+it("retries transient detection failures when Human Only is enabled", async () => {
+  usePersonFocus.setState({ peopleOnly: true });
+  vi.mocked(detectPerson).mockResolvedValueOnce(null).mockResolvedValueOnce([]);
+  const image = new Image();
+  renderHook(() =>
+    usePersonFocusStyle(
+      { current: image },
+      "retry-photo",
+      true,
+      true,
+      "retry-photo",
+    ),
+  );
+  await waitFor(() =>
+    expect(usePersonFocus.getState().people["retry-photo"]).toBe(false),
+  );
+  expect(detectPerson).toHaveBeenCalledTimes(2);
+  expect(usePersonFocus.getState().pending).toBe(0);
+});
+it("reports failed classification rather than silently claiming the filter completed", async () => {
+  usePersonFocus.setState({ peopleOnly: true });
+  vi.mocked(detectPerson).mockResolvedValue(null);
+  const ref = { current: new Image() };
+  renderHook(() =>
+    usePersonFocusStyle(
+      ref,
+      "unavailable-photo",
+      true,
+      true,
+      "unavailable-photo",
+    ),
+  );
+  await waitFor(() =>
+    expect(usePersonFocus.getState().detectionError).toBe(true),
+  );
+  expect(usePersonFocus.getState().pending).toBe(0);
+  expect(usePersonFocus.getState().people["unavailable-photo"]).toBeUndefined();
 });

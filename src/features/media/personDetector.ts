@@ -5,6 +5,7 @@ type Job = {
   url: string;
   width: number;
   height: number;
+  image?: HTMLImageElement;
   listeners: Set<(boxes: PersonBox[] | null) => void>;
 };
 const cache = new Map<string, PersonBox[]>();
@@ -14,7 +15,6 @@ let worker: Worker | undefined;
 let active: Job | undefined;
 let timer: ReturnType<typeof setTimeout> | undefined;
 let nextId = 0;
-let unavailable = false;
 
 function finish(boxes: PersonBox[] | null) {
   if (!active) return;
@@ -28,7 +28,6 @@ function finish(boxes: PersonBox[] | null) {
 }
 
 function failWorker() {
-  unavailable = true;
   clearTimeout(timer);
   worker?.terminate();
   worker = undefined;
@@ -40,7 +39,7 @@ function failWorker() {
 }
 
 function pump() {
-  if (active || unavailable) return;
+  if (active) return;
   let job: Job | undefined;
   while ((job = queue.shift())) {
     if (job.listeners.size) break;
@@ -68,13 +67,51 @@ function pump() {
       worker.onmessageerror = failWorker;
     }
     timer = setTimeout(failWorker, 45_000);
-    worker.postMessage({
+    const message = {
       id: job.id,
       url: new URL(job.url, window.location.href).href,
       width: job.width,
       height: job.height,
       baseUrl: new URL(import.meta.env.BASE_URL, window.location.href).href,
-    });
+    };
+    const target = worker;
+    const currentJob = job;
+    const sendUrl = () => {
+      if (active !== currentJob) return;
+      try {
+        target.postMessage(message);
+      } catch {
+        failWorker();
+      }
+    };
+    if (job.image && typeof createImageBitmap !== "undefined") {
+      const ratio = Math.min(1, 1280 / Math.max(job.width, job.height));
+      const current = job;
+      void createImageBitmap(job.image, {
+        resizeWidth: Math.max(1, Math.round(job.width * ratio)),
+        resizeHeight: Math.max(1, Math.round(job.height * ratio)),
+      })
+        .then((bitmap) => {
+          if (active !== current) {
+            bitmap.close();
+            return;
+          }
+          if (!current.listeners.size) {
+            bitmap.close();
+            finish(null);
+            return;
+          }
+          try {
+            target.postMessage({ ...message, bitmap }, [bitmap]);
+          } catch {
+            bitmap.close();
+            sendUrl();
+          }
+        })
+        .catch(() => {
+          sendUrl();
+        });
+    } else sendUrl();
   } catch {
     failWorker();
   }
@@ -86,15 +123,16 @@ export function detectPerson(
   width: number,
   height: number,
   signal: AbortSignal,
+  image?: HTMLImageElement,
 ): Promise<PersonBox[] | null> {
-  if (signal.aborted || unavailable || typeof Worker === "undefined")
+  if (signal.aborted || typeof Worker === "undefined")
     return Promise.resolve(null);
   const cached = cache.get(url);
   if (cached) return Promise.resolve(cached);
   return new Promise((resolve) => {
     let job = jobs.get(url);
     if (!job) {
-      job = { id: ++nextId, url, width, height, listeners: new Set() };
+      job = { id: ++nextId, url, width, height, image, listeners: new Set() };
       jobs.set(url, job);
       queue.push(job);
     }

@@ -127,8 +127,11 @@ export function ArchiveControlBar({
     setStrength,
     pending,
     superResolution,
+    enhancing,
+    enhancementError,
     autoRotate,
     peopleOnly,
+    detectionError,
   } = usePersonFocus();
   const { months, startIndex, endIndex, onStartChange, onEndChange } =
     dateRange ?? {
@@ -277,39 +280,81 @@ export function ArchiveControlBar({
             role="group"
             aria-label="View Options"
           >
-            <button
-              type="button"
-              className={`viewer-control${superResolution ? " is-active" : ""}`}
-              aria-pressed={superResolution}
-              title="Local AI 2× super resolution for photos up to 4 megapixels; keeps the original while processing"
-              onClick={() =>
-                usePersonFocus.setState({ superResolution: !superResolution })
-              }
-            >
-              Super Resolution
-            </button>
-            <button
-              type="button"
-              className={`viewer-control${autoRotate ? " is-active" : ""}`}
-              aria-pressed={autoRotate}
-              title="Automatically turn detected sideways people upright"
-              onClick={() =>
-                usePersonFocus.setState({ autoRotate: !autoRotate })
-              }
-            >
-              Auto Rotate
-            </button>
-            <button
-              type="button"
-              className={`viewer-control${peopleOnly ? " is-active" : ""}`}
-              aria-pressed={peopleOnly}
-              title="Hide photos with no detected person as they load; detection errors remain visible"
-              onClick={() =>
-                usePersonFocus.setState({ peopleOnly: !peopleOnly })
-              }
-            >
-              Human Only
-            </button>
+            <label className="view-option">
+              <span>Super Resolution</span>
+              <button
+                type="button"
+                role="switch"
+                aria-label="Super Resolution"
+                aria-checked={superResolution}
+                className="view-option-switch"
+                title="Local AI 2× enhancement; originals remain visible during processing"
+                onClick={() =>
+                  usePersonFocus.setState({
+                    superResolution: !superResolution,
+                    enhancementError: undefined,
+                  })
+                }
+              >
+                <span aria-hidden="true" />
+              </button>
+            </label>
+            <label className="view-option">
+              <span>Auto Rotate</span>
+              <button
+                type="button"
+                role="switch"
+                aria-label="Auto Rotate"
+                aria-checked={autoRotate}
+                className="view-option-switch"
+                onClick={() =>
+                  usePersonFocus.setState({ autoRotate: !autoRotate })
+                }
+              >
+                <span aria-hidden="true" />
+              </button>
+            </label>
+            <label className="view-option">
+              <span>Human Only</span>
+              <button
+                type="button"
+                role="switch"
+                aria-label="Human Only"
+                aria-checked={peopleOnly}
+                className="view-option-switch"
+                onClick={() =>
+                  usePersonFocus.setState({
+                    peopleOnly: !peopleOnly,
+                    detectionError: false,
+                  })
+                }
+              >
+                <span aria-hidden="true" />
+              </button>
+            </label>
+            {superResolution && enhancing > 0 ? (
+              <span className="view-options-status" role="status">
+                Enhancing photos…
+              </span>
+            ) : null}
+            {superResolution && enhancementError ? (
+              <span className="view-options-status" role="status">
+                {enhancementError.includes("4 MP")
+                  ? "Photos over 4 MP retain their originals."
+                  : "Some photos could not be enhanced. Originals are shown."}
+              </span>
+            ) : null}
+            {peopleOnly && pending > 0 ? (
+              <span className="view-options-status" role="status">
+                Checking photos…
+              </span>
+            ) : null}
+            {peopleOnly && pending === 0 && detectionError ? (
+              <span className="view-options-status" role="status">
+                Some photos could not be checked. Switch Human Only off and on
+                to retry.
+              </span>
+            ) : null}
           </div>
         </details>
       </div>

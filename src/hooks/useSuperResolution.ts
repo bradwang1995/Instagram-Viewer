@@ -13,7 +13,6 @@ export function useSuperResolution(
     source: string;
     url?: string;
     error?: string;
-    progress?: number;
   }>();
   useEffect(() => {
     const image = ref.current;
@@ -30,13 +29,33 @@ export function useSuperResolution(
   useEffect(() => {
     if (!enabled || !visible || !ready || !url) return;
     const controller = new AbortController();
-    setResult({ source: url, progress: 0 });
-    void enhancePhoto(url, controller.signal, (progress) => {
-      if (!controller.signal.aborted) setResult({ source: url, progress });
-    }).then((value) => {
-      if (!controller.signal.aborted) setResult({ source: url, ...value });
+    usePersonFocus.setState((s) => ({ enhancing: s.enhancing + 1 }));
+    let pending = true;
+    const finish = () => {
+      if (!pending) return;
+      pending = false;
+      usePersonFocus.setState((s) => ({
+        enhancing: Math.max(0, s.enhancing - 1),
+      }));
+    };
+    setResult({ source: url });
+    void enhancePhoto(
+      url,
+      controller.signal,
+      () => {},
+      ref.current ?? undefined,
+    ).then((value) => {
+      finish();
+      if (!controller.signal.aborted) {
+        setResult({ source: url, ...value });
+        if (value.error)
+          usePersonFocus.setState({ enhancementError: value.error });
+      }
     });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+      finish();
+    };
   }, [enabled, visible, ready, url]);
   return enabled && ready && result?.source === url ? result : undefined;
 }

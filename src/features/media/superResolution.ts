@@ -8,6 +8,7 @@ type Job = {
   url: string;
   subscribers: Set<Subscriber>;
   cancelled?: boolean;
+  image?: HTMLImageElement;
 };
 const cache = new Map<string, string>();
 const jobs = new Map<string, Job>();
@@ -84,11 +85,45 @@ function pump() {
       };
     }
     timer = setTimeout(fail, 300_000);
-    worker.postMessage({
+    const message = {
       id: job.id,
       url: new URL(job.url, window.location.href).href,
       baseUrl: new URL(import.meta.env.BASE_URL, window.location.href).href,
-    });
+    };
+    const current = job;
+    const target = worker;
+    const currentJob = job;
+    const sendUrl = () => {
+      if (active !== currentJob) return;
+      try {
+        target.postMessage(message);
+      } catch {
+        fail();
+      }
+    };
+    if (job.image && typeof createImageBitmap !== "undefined") {
+      void createImageBitmap(job.image)
+        .then((bitmap) => {
+          if (active !== current) {
+            bitmap.close();
+            return;
+          }
+          if (current.cancelled || !current.subscribers.size) {
+            bitmap.close();
+            finish({});
+            return;
+          }
+          try {
+            target.postMessage({ ...message, bitmap }, [bitmap]);
+          } catch {
+            bitmap.close();
+            sendUrl();
+          }
+        })
+        .catch(() => {
+          sendUrl();
+        });
+    } else sendUrl();
   } catch {
     fail();
   }
@@ -99,6 +134,7 @@ export function enhancePhoto(
   url: string,
   signal: AbortSignal,
   progress: (value: number) => void,
+  image?: HTMLImageElement,
 ): Promise<Result> {
   if (signal.aborted || typeof Worker === "undefined")
     return Promise.resolve({ error: "Super Resolution unavailable" });
@@ -107,7 +143,7 @@ export function enhancePhoto(
   return new Promise((resolve) => {
     let job = jobs.get(url);
     if (!job || job.cancelled) {
-      job = { id: ++nextId, url, subscribers: new Set() };
+      job = { id: ++nextId, url, subscribers: new Set(), image };
       jobs.set(url, job);
       queue.push(job);
     }
