@@ -126,9 +126,6 @@ export function ArchiveControlBar({
     strength,
     setStrength,
     pending,
-    superResolution,
-    enhancing,
-    enhancementError,
     autoRotate,
     peopleOnly,
     detectionError,
@@ -280,30 +277,15 @@ export function ArchiveControlBar({
             role="group"
             aria-label="View Options"
           >
-            <label className="view-option">
-              <span>Super Resolution</span>
-              <button
-                type="button"
-                role="switch"
-                aria-label="Super Resolution"
-                aria-checked={superResolution}
-                className="view-option-switch"
-                title="Local AI 2× enhancement; originals remain visible during processing"
-                onClick={() =>
-                  usePersonFocus.setState({
-                    superResolution: !superResolution,
-                    enhancementError: undefined,
-                  })
-                }
-              >
-                <span aria-hidden="true" />
-              </button>
-            </label>
-            <label className="view-option">
+            <label
+              className="view-option"
+              title="Turn sideways people upright for easier viewing."
+            >
               <span>Auto Rotate</span>
               <button
                 type="button"
                 role="switch"
+                title="Turn sideways people upright for easier viewing."
                 aria-label="Auto Rotate"
                 aria-checked={autoRotate}
                 className="view-option-switch"
@@ -314,11 +296,15 @@ export function ArchiveControlBar({
                 <span aria-hidden="true" />
               </button>
             </label>
-            <label className="view-option">
+            <label
+              className="view-option"
+              title="Show only photos with people. Turn off to see all photos again."
+            >
               <span>Human Only</span>
               <button
                 type="button"
                 role="switch"
+                title="Show only photos with people. Turn off to see all photos again."
                 aria-label="Human Only"
                 aria-checked={peopleOnly}
                 className="view-option-switch"
@@ -332,18 +318,6 @@ export function ArchiveControlBar({
                 <span aria-hidden="true" />
               </button>
             </label>
-            {superResolution && enhancing > 0 ? (
-              <span className="view-options-status" role="status">
-                Enhancing photos…
-              </span>
-            ) : null}
-            {superResolution && enhancementError ? (
-              <span className="view-options-status" role="status">
-                {enhancementError.includes("4 MP")
-                  ? "Photos over 4 MP retain their originals."
-                  : "Some photos could not be enhanced. Originals are shown."}
-              </span>
-            ) : null}
             {peopleOnly && pending > 0 ? (
               <span className="view-options-status" role="status">
                 Checking photos…

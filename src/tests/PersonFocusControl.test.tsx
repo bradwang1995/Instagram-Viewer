@@ -32,8 +32,11 @@ it("does not snap pointer releases to a different strength", () => {
 it("toggles browser-local display options", () => {
   render(<ArchiveControlBar />);
   fireEvent.click(screen.getByText("View Options"));
-  for (const name of ["Super Resolution", "Auto Rotate", "Human Only"]) {
+  expect(screen.queryByText("Super Resolution")).toBeNull();
+  for (const name of ["Auto Rotate", "Human Only"]) {
     const button = screen.getByRole("switch", { name });
+    expect(button.title).not.toBe("");
+    expect(button.closest("label")).toHaveAttribute("title", button.title);
     fireEvent.click(button);
     expect(button).toHaveAttribute("aria-checked", "true");
     fireEvent.click(button);

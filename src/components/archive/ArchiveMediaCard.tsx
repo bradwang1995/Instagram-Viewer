@@ -1,6 +1,5 @@
 import { LoaderCircle } from "lucide-react";
 import { usePersonFocusStyle } from "../../hooks/usePersonFocusStyle";
-import { useSuperResolution } from "../../hooks/useSuperResolution";
 import {
   memo,
   useCallback,
@@ -94,11 +93,6 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     loadMedia && !visuallyHidden && !isLoading && !hasFailed,
     loadMedia && !visuallyHidden && !hasFailed,
     media.id,
-  );
-  const enhanced = useSuperResolution(
-    imageRef,
-    resolvedUrl,
-    loadMedia && !visuallyHidden && !isLoading && !hasFailed,
   );
   const shellRef = useCallback(
     (node: HTMLElement | null) => registerShell?.(media.id, node),
@@ -302,22 +296,6 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 }}
                 onError={handleImageError}
               />
-              {enhanced?.url ? (
-                <img
-                  src={enhanced.url}
-                  alt=""
-                  aria-hidden="true"
-                  className="super-resolution-photo"
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    ...focusStyle,
-                  }}
-                  draggable={false}
-                />
-              ) : null}
               {isLoading ? (
                 <MediaLoadingState className="archive-image-loading" />
               ) : null}

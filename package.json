@@ -15,8 +15,6 @@
   "dependencies": {
     "@gsap/react": "^2.1.2",
     "@mediapipe/tasks-vision": "^1.2.2",
-    "@tensorflow/tfjs": "^4.11.0",
-    "@tensorflow/tfjs-backend-wasm": "^4.11.0",
     "@vitejs/plugin-react": "^4.3.4",
     "clsx": "^2.1.1",
     "dexie": "^4.0.11",
@@ -28,7 +26,6 @@
     "react-dom": "^18.3.1",
     "react-router-dom": "^7.1.1",
     "tailwind-merge": "^2.6.0",
-    "upscaler": "^1.0.0",
     "zustand": "^5.0.2"
   },
   "devDependencies": {
@@ -38,7 +35,6 @@
     "@types/react-dom": "^18.3.5",
     "@typescript-eslint/eslint-plugin": "^8.18.2",
     "@typescript-eslint/parser": "^8.18.2",
-    "@upscalerjs/esrgan-slim": "^1.0.0",
     "eslint": "^9.17.0",
     "fake-indexeddb": "^6.2.5",
     "jsdom": "^25.0.1",
