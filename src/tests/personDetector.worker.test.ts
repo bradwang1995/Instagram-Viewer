@@ -3,9 +3,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const detect = vi.hoisted(() => vi.fn());
 const detectFaces = vi.hoisted(() => vi.fn());
 const createDetector = vi.hoisted(() => vi.fn());
+const createFaceDetector = vi.hoisted(() => vi.fn());
 vi.mock("@mediapipe/tasks-vision", () => ({
   ObjectDetector: { createFromOptions: createDetector },
-  FaceDetector: { createFromOptions: async () => ({ detect: detectFaces }) },
+  FaceDetector: { createFromOptions: createFaceDetector },
 }));
 const result = (
   x: number,
@@ -29,6 +30,7 @@ beforeEach(() => {
   vi.resetModules();
   detect.mockReset();
   createDetector.mockReset().mockResolvedValue({ detect });
+  createFaceDetector.mockReset().mockResolvedValue({ detect: detectFaces });
   detectFaces.mockReset().mockReturnValue({ detections: [] });
   worker = { postMessage: vi.fn() };
   vi.stubGlobal("self", worker);
@@ -94,6 +96,27 @@ it("orients a reclining foreground person even when quarter-turn person detectio
     { originX: 15, originY: 50, width: 900, height: 700, rotation: 90 },
   ]);
   expect(detect).toHaveBeenCalledTimes(1);
+  expect(createFaceDetector.mock.calls[0][0].wasmLoaderPath).not.toBe(
+    createDetector.mock.calls[0][0].wasmLoaderPath,
+  );
+});
+it("finds a dark profile face in a rotated body-end crop and ignores a weaker false face", async () => {
+  detect.mockReturnValue(result(238, 650, 475, 199));
+  detectFaces
+    .mockReturnValueOnce(result(0, 0, 30, 30, 0.99))
+    .mockReturnValueOnce(result(183, 63, 50, 50, 0.634))
+    .mockReturnValueOnce({ detections: [] })
+    .mockReturnValueOnce({ detections: [] })
+    .mockReturnValueOnce(result(188, 38, 51, 51, 0.65))
+    .mockReturnValueOnce({ detections: [] })
+    .mockReturnValueOnce(result(34, 45, 47, 47, 0.843));
+  const close = vi.fn();
+  expect(
+    (await run(912, 1086, { width: 912, height: 1086, close })).boxes[0]
+      .rotation,
+  ).toBe(-90);
+  expect(detect).toHaveBeenCalledTimes(1);
+  expect(close).toHaveBeenCalledOnce();
 });
 it("does not rotate an upright person with a wide pose when its face is already above its body", async () => {
   detect.mockReturnValue(result(15, 50, 900, 700));

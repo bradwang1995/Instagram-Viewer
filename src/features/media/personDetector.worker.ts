@@ -1,9 +1,18 @@
 import { FaceDetector, ObjectDetector } from "@mediapipe/tasks-vision";
 import { personCrop, type PersonBox } from "./personFocus";
-import { portraitRotation } from "./personOrientation";
+import { portraitRotation, restoreFaceBox } from "./personOrientation";
 
 let detector: Promise<ObjectDetector> | undefined;
 let faceDetector: Promise<FaceDetector> | undefined;
+let moduleInstance = 0;
+function taskFiles(baseUrl: string) {
+  return {
+    // Tasks clears self.ModuleFactory after initialization. A module worker must
+    // execute the loader again for each task instead of reusing its ESM cache.
+    wasmLoaderPath: `${baseUrl}person-focus/wasm/vision_wasm_module_internal.js?instance=${++moduleInstance}`,
+    wasmBinaryPath: `${baseUrl}person-focus/wasm/vision_wasm_module_internal.wasm`,
+  };
+}
 
 self.onmessage = async (
   event: MessageEvent<{
@@ -18,23 +27,16 @@ self.onmessage = async (
   const { id, url, width, height, baseUrl } = event.data;
   let bitmap: ImageBitmap | undefined = event.data.bitmap;
   try {
-    detector ??= ObjectDetector.createFromOptions(
-      {
-        // The ESM loader supports module workers in both Vite dev and Pages builds.
-        wasmLoaderPath: `${baseUrl}person-focus/wasm/vision_wasm_module_internal.js`,
-        wasmBinaryPath: `${baseUrl}person-focus/wasm/vision_wasm_module_internal.wasm`,
+    detector ??= ObjectDetector.createFromOptions(taskFiles(baseUrl), {
+      baseOptions: {
+        modelAssetPath: `${baseUrl}person-focus/efficientdet_lite0.tflite`,
       },
-      {
-        baseOptions: {
-          modelAssetPath: `${baseUrl}person-focus/efficientdet_lite0.tflite`,
-        },
-        runningMode: "IMAGE",
-        categoryAllowlist: ["person"],
-        scoreThreshold: 0.35,
-        maxResults: 8,
-        canvas: new OffscreenCanvas(1, 1),
-      },
-    ).catch((error) => {
+      runningMode: "IMAGE",
+      categoryAllowlist: ["person"],
+      scoreThreshold: 0.35,
+      maxResults: 8,
+      canvas: new OffscreenCanvas(1, 1),
+    }).catch((error) => {
       detector = undefined;
       throw error;
     });
@@ -110,42 +112,90 @@ self.onmessage = async (
     let portraitTurn: 90 | -90 | 0 | undefined;
     if (dominant && dominant.width > dominant.height * 0.8) {
       try {
-        faceDetector ??= FaceDetector.createFromOptions(
-          {
-            wasmLoaderPath: `${baseUrl}person-focus/wasm/vision_wasm_module_internal.js`,
-            wasmBinaryPath: `${baseUrl}person-focus/wasm/vision_wasm_module_internal.wasm`,
+        const body: PersonBox = {
+          originX: dominant.x,
+          originY: dominant.y,
+          width: dominant.width,
+          height: dominant.height,
+        };
+        faceDetector ??= FaceDetector.createFromOptions(taskFiles(baseUrl), {
+          baseOptions: {
+            modelAssetPath: `${baseUrl}person-focus/blaze_face_short_range.tflite`,
           },
-          {
-            baseOptions: {
-              modelAssetPath: `${baseUrl}person-focus/blaze_face_short_range.tflite`,
-            },
-            runningMode: "IMAGE",
-            minDetectionConfidence: 0.5,
-          },
+          runningMode: "IMAGE",
+          minDetectionConfidence: 0.5,
+        }).catch((error) => {
+          faceDetector = undefined;
+          throw error;
+        });
+        const faceModel = await faceDetector;
+        const faces = faceModel.detect(bitmap).detections.flatMap((d) =>
+          d.boundingBox
+            ? [
+                {
+                  originX: (d.boundingBox.originX * width) / bitmap!.width,
+                  originY: (d.boundingBox.originY * height) / bitmap!.height,
+                  width: (d.boundingBox.width * width) / bitmap!.width,
+                  height: (d.boundingBox.height * height) / bitmap!.height,
+                  confidence: d.categories[0]?.score ?? 0,
+                },
+              ]
+            : [],
         );
-        const faces = (await faceDetector)
-          .detect(bitmap)
-          .detections.flatMap((d) =>
-            d.boundingBox
-              ? [
-                  {
-                    originX: (d.boundingBox.originX * width) / bitmap!.width,
-                    originY: (d.boundingBox.originY * height) / bitmap!.height,
-                    width: (d.boundingBox.width * width) / bitmap!.width,
-                    height: (d.boundingBox.height * height) / bitmap!.height,
-                  },
-                ]
-              : [],
-          );
-        portraitTurn = portraitRotation(
-          {
-            originX: dominant.x,
-            originY: dominant.y,
-            width: dominant.width,
-            height: dominant.height,
-          },
-          faces,
-        );
+        if (portraitRotation(body, faces) === undefined) {
+          // Small/profile faces disappear at whole-photo resolution. Keep the
+          // original pixels and inspect overlapping body ends in all quarter-turns.
+          for (const side of [0, 0.4]) {
+            const region: PersonBox = {
+              originX: dominant.x + dominant.width * side,
+              originY: dominant.y,
+              width: dominant.width * 0.6,
+              height: dominant.height,
+            };
+            const crop = new OffscreenCanvas(
+              Math.max(1, Math.round((region.width * bitmap.width) / width)),
+              Math.max(1, Math.round((region.height * bitmap.height) / height)),
+            );
+            const context = crop.getContext("2d");
+            if (!context) continue;
+            context.drawImage(
+              bitmap,
+              (region.originX * bitmap.width) / width,
+              (region.originY * bitmap.height) / height,
+              (region.width * bitmap.width) / width,
+              (region.height * bitmap.height) / height,
+              0,
+              0,
+              crop.width,
+              crop.height,
+            );
+            for (const angle of [0, 90, -90] as const) {
+              const rotated = new OffscreenCanvas(
+                angle ? crop.height : crop.width,
+                angle ? crop.width : crop.height,
+              );
+              const rotatedContext = rotated.getContext("2d");
+              if (!rotatedContext) continue;
+              rotatedContext.translate(rotated.width / 2, rotated.height / 2);
+              rotatedContext.rotate((angle * Math.PI) / 180);
+              rotatedContext.drawImage(crop, -crop.width / 2, -crop.height / 2);
+              for (const detection of faceModel.detect(rotated).detections) {
+                if (detection.boundingBox)
+                  faces.push({
+                    ...restoreFaceBox(
+                      detection.boundingBox,
+                      region,
+                      crop.width,
+                      crop.height,
+                      angle,
+                    ),
+                    confidence: detection.categories[0]?.score ?? 0,
+                  });
+              }
+            }
+          }
+        }
+        portraitTurn = portraitRotation(body, faces);
         if (portraitTurn) {
           const main = boxes.find(
             (b) =>
