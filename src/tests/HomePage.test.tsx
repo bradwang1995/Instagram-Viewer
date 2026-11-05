@@ -122,17 +122,53 @@ describe("Photo archive preview", () => {
     });
     render(<HomePage />);
     await act(async () => undefined);
-    fireEvent.click(screen.getByRole("button", { name: "People only" }));
+    if (!screen.getByText("View Options").closest("details")!.open)
+      fireEvent.click(screen.getByText("View Options"));
+    fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
     const card = (id: string) =>
       document.querySelector(`article[data-media-id="${id}"]`);
     expect(card(person.media.id)).not.toHaveAttribute("hidden");
     expect(card(scenery.media.id)).toBeNull();
     expect(card(unknown.media.id)).not.toHaveAttribute("hidden");
-    fireEvent.click(screen.getByRole("button", { name: "People only" }));
+    if (!screen.getByText("View Options").closest("details")!.open)
+      fireEvent.click(screen.getByText("View Options"));
+    fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
     expect(card(scenery.media.id)).not.toHaveAttribute("hidden");
   });
 
-  it("keeps a way to disable People only when every photo is filtered", async () => {
+  it.each(["Horizontal View", "Grid View"])(
+    "reloads restored scenery after Human Only changes the admitted window in %s",
+    async (tab) => {
+      testState.queue = Array.from({ length: 100 }, (_, index) =>
+        createQueueItem(createPost(`HUMAN${index}`, "@test", "Saved"), 0, 1),
+      );
+      usePersonFocus.setState({
+        people: Object.fromEntries(
+          testState.queue.map((item, index) => [
+            item.media.id,
+            index >= 80 && index < 90,
+          ]),
+        ),
+      });
+      render(<HomePage />);
+      await act(async () => undefined);
+      if (tab === "Grid View")
+        fireEvent.click(screen.getByRole("tab", { name: tab }));
+      const image = (index: number) =>
+        document.querySelector(
+          `img[data-media-id="${testState.queue[index].media.id}"]`,
+        );
+      await waitFor(() => expect(image(0)).toHaveAttribute("src"));
+      fireEvent.click(screen.getByText("View Options"));
+      fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
+      await waitFor(() => expect(image(80)).toHaveAttribute("src"));
+      expect(image(0)).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
+      await waitFor(() => expect(image(0)).toHaveAttribute("src"));
+    },
+  );
+
+  it("keeps a way to disable Human Only when every photo is filtered", async () => {
     usePersonFocus.setState({
       people: Object.fromEntries(
         testState.queue.map((item) => [item.media.id, false]),
@@ -140,11 +176,15 @@ describe("Photo archive preview", () => {
     });
     render(<HomePage />);
     await act(async () => undefined);
-    fireEvent.click(screen.getByRole("button", { name: "People only" }));
+    if (!screen.getByText("View Options").closest("details")!.open)
+      fireEvent.click(screen.getByText("View Options"));
+    fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
     expect(
-      screen.getByText("Turn off People only to show all photos."),
+      screen.getByText("Turn off Human Only to show all photos."),
     ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "People only" }));
+    if (!screen.getByText("View Options").closest("details")!.open)
+      fireEvent.click(screen.getByText("View Options"));
+    fireEvent.click(screen.getByRole("button", { name: "Human Only" }));
     expect(screen.queryByText("No photos with detected people.")).toBeNull();
     expect(screen.getAllByTestId("archive-media-card")).toHaveLength(3);
   });

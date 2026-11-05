@@ -122,8 +122,14 @@ export function ArchiveControlBar({
   dateRange,
   slideshow,
 }: ArchiveControlBarProps) {
-  const { strength, setStrength, pending, sharpen, autoRotate, peopleOnly } =
-    usePersonFocus();
+  const {
+    strength,
+    setStrength,
+    pending,
+    superResolution,
+    autoRotate,
+    peopleOnly,
+  } = usePersonFocus();
   const { months, startIndex, endIndex, onStartChange, onEndChange } =
     dateRange ?? {
       months: [],
@@ -221,75 +227,91 @@ export function ArchiveControlBar({
       ) : (
         <div className="slideshow-settings-placeholder" />
       )}
-      <label
-        className="person-focus-slider"
-        style={{ "--focus-strength": `${strength / 2}%` } as CSSProperties}
-      >
-        <span>Focus on Person</span>
-        {pending > 0 ? (
-          <span className="person-focus-loading" role="status">
-            <LoaderCircle size={18} /> Preparing…
-          </span>
-        ) : (
-          <>
-            <span className="person-focus-endpoint" aria-hidden="true">
-              0%
+      <div className="photo-view-controls">
+        <label
+          className="person-focus-slider"
+          style={{ "--focus-strength": `${strength}%` } as CSSProperties}
+        >
+          <span>Focus on Person</span>
+          {pending > 0 ? (
+            <span className="person-focus-loading" role="status">
+              <LoaderCircle size={18} /> Preparing…
             </span>
-            <input
-              type="range"
-              aria-label="Focus on person"
-              aria-valuetext={
-                strength === 0 ? "Original" : `${strength}% focus`
+          ) : (
+            <>
+              <span className="person-focus-endpoint" aria-hidden="true">
+                0%
+              </span>
+              <input
+                type="range"
+                aria-label="Focus on person"
+                aria-valuetext={
+                  strength === 0 ? "Original" : `${strength}% focus`
+                }
+                min={0}
+                max={100}
+                step={1}
+                value={strength}
+                onChange={(event) => setStrength(Number(event.target.value))}
+              />
+              <span className="person-focus-endpoint" aria-hidden="true">
+                100%
+              </span>
+            </>
+          )}
+        </label>
+        <details
+          className="view-options"
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              event.stopPropagation();
+              event.currentTarget.open = false;
+              event.currentTarget.querySelector("summary")?.focus();
+            }
+          }}
+        >
+          <summary className="viewer-control">View Options</summary>
+          <div
+            className="view-options-menu"
+            role="group"
+            aria-label="View Options"
+          >
+            <button
+              type="button"
+              className={`viewer-control${superResolution ? " is-active" : ""}`}
+              aria-pressed={superResolution}
+              title="Local AI 2× super resolution for photos up to 4 megapixels; keeps the original while processing"
+              onClick={() =>
+                usePersonFocus.setState({ superResolution: !superResolution })
               }
-              min={0}
-              max={200}
-              step={1}
-              value={strength}
-              onChange={(event) => setStrength(Number(event.target.value))}
-              onPointerUp={(event) => {
-                const value = Number(event.currentTarget.value);
-                setStrength(Math.abs(value - 100) <= 3 ? 100 : value);
-              }}
-            />
-            <span className="person-focus-endpoint" aria-hidden="true">
-              200%
-            </span>
-          </>
-        )}
-      </label>
-      <div
-        className="photo-display-toggles"
-        role="group"
-        aria-label="Photo Display"
-      >
-        <button
-          type="button"
-          className={`viewer-control${sharpen ? " is-active" : ""}`}
-          aria-pressed={sharpen}
-          title="Local edge sharpening; does not recover missing image detail"
-          onClick={() => usePersonFocus.setState({ sharpen: !sharpen })}
-        >
-          Sharpen
-        </button>
-        <button
-          type="button"
-          className={`viewer-control${autoRotate ? " is-active" : ""}`}
-          aria-pressed={autoRotate}
-          title="Automatically turn detected sideways people upright"
-          onClick={() => usePersonFocus.setState({ autoRotate: !autoRotate })}
-        >
-          Auto rotate 90°
-        </button>
-        <button
-          type="button"
-          className={`viewer-control${peopleOnly ? " is-active" : ""}`}
-          aria-pressed={peopleOnly}
-          title="Hide photos with no detected person as they load; detection errors remain visible"
-          onClick={() => usePersonFocus.setState({ peopleOnly: !peopleOnly })}
-        >
-          People only
-        </button>
-        <span aria-live="polite">{strength}%</span>
+            >
+              Super Resolution
+            </button>
+            <button
+              type="button"
+              className={`viewer-control${autoRotate ? " is-active" : ""}`}
+              aria-pressed={autoRotate}
+              title="Automatically turn detected sideways people upright"
+              onClick={() =>
+                usePersonFocus.setState({ autoRotate: !autoRotate })
+              }
+            >
+              Auto Rotate
+            </button>
+            <button
+              type="button"
+              className={`viewer-control${peopleOnly ? " is-active" : ""}`}
+              aria-pressed={peopleOnly}
+              title="Hide photos with no detected person as they load; detection errors remain visible"
+              onClick={() =>
+                usePersonFocus.setState({ peopleOnly: !peopleOnly })
+              }
+            >
+              Human Only
+            </button>
+          </div>
+        </details>
       </div>
     </footer>
   );

@@ -12,9 +12,9 @@ describe("person focus strength", () => {
     usePersonFocus.getState().setStrength(45);
     expect(usePersonFocus.getState().strength).toBe(45);
     usePersonFocus.getState().setStrength(120);
-    expect(usePersonFocus.getState().strength).toBe(120);
+    expect(usePersonFocus.getState().strength).toBe(100);
     usePersonFocus.getState().setStrength(250);
-    expect(usePersonFocus.getState().strength).toBe(200);
+    expect(usePersonFocus.getState().strength).toBe(100);
   });
   it("selects the dominant foreground person independently of background people and order", () => {
     const main = { originX: 300, originY: 400, width: 250, height: 500 };
@@ -114,14 +114,11 @@ describe("person focus strength", () => {
     ])!;
     expect(personZoom(900, 1200, 600, 600, crop, "cover")!.scale).toBe(1);
   });
-  it("frames roughly the upper half at 200%, keeping the head at the top", () => {
+  it("keeps the 100 percent endpoint when given an out-of-range strength", () => {
     const crop = { x: 300, y: 100, width: 250, height: 900 };
-    const full = personZoom(1000, 1200, 500, 600, crop, "contain", 100)!;
-    const close = personZoom(1000, 1200, 500, 600, crop, "contain", 200)!;
-    const pixels = (close.drawnHeight / 1200) * close.scale;
-    expect(close.scale).toBeGreaterThan(full.scale);
-    expect(600 / pixels).toBeCloseTo(crop.height * 0.5);
-    expect(300 + (crop.y - 600) * pixels + close.y).toBeCloseTo(0);
+    expect(personZoom(1000, 1200, 500, 600, crop, "contain", 200)).toEqual(
+      personZoom(1000, 1200, 500, 600, crop, "contain", 100),
+    );
   });
   it("keeps the original image footprint covered for edge subjects at every strength", () => {
     for (const fit of ["cover", "contain"])

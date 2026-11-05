@@ -1,7 +1,9 @@
-import { ObjectDetector } from "@mediapipe/tasks-vision";
+import { FaceDetector, ObjectDetector } from "@mediapipe/tasks-vision";
 import { personCrop, type PersonBox } from "./personFocus";
+import { portraitRotation } from "./personOrientation";
 
 let detector: Promise<ObjectDetector> | undefined;
+let faceDetector: Promise<FaceDetector> | undefined;
 
 self.onmessage = async (
   event: MessageEvent<{
@@ -101,9 +103,65 @@ self.onmessage = async (
       }
     }
     const dominant = personCrop(width, height, boxes);
+    let portraitTurn: 90 | -90 | 0 | undefined;
+    if (dominant && dominant.width > dominant.height * 0.8) {
+      try {
+        faceDetector ??= FaceDetector.createFromOptions(
+          {
+            wasmLoaderPath: `${baseUrl}person-focus/wasm/vision_wasm_module_internal.js`,
+            wasmBinaryPath: `${baseUrl}person-focus/wasm/vision_wasm_module_internal.wasm`,
+          },
+          {
+            baseOptions: {
+              modelAssetPath: `${baseUrl}person-focus/blaze_face_short_range.tflite`,
+            },
+            runningMode: "IMAGE",
+            minDetectionConfidence: 0.5,
+          },
+        );
+        const faces = (await faceDetector)
+          .detect(bitmap)
+          .detections.flatMap((d) =>
+            d.boundingBox
+              ? [
+                  {
+                    originX: (d.boundingBox.originX * width) / bitmap!.width,
+                    originY: (d.boundingBox.originY * height) / bitmap!.height,
+                    width: (d.boundingBox.width * width) / bitmap!.width,
+                    height: (d.boundingBox.height * height) / bitmap!.height,
+                  },
+                ]
+              : [],
+          );
+        portraitTurn = portraitRotation(
+          {
+            originX: dominant.x,
+            originY: dominant.y,
+            width: dominant.width,
+            height: dominant.height,
+          },
+          faces,
+        );
+        if (portraitTurn) {
+          const main = boxes.find(
+            (b) =>
+              b.originX <= dominant.x &&
+              b.originY <= dominant.y &&
+              b.originX + b.width >= dominant.x + dominant.width &&
+              b.originY + b.height >= dominant.y + dominant.height,
+          );
+          if (main) main.rotation = portraitTurn;
+        }
+      } catch {
+        // Optional orientation evidence must not discard successful person detection.
+      }
+    }
     // Upright subjects stay untouched. For sideways/undetected subjects, ask the
     // same local model which quarter-turn produces a confident upright person.
-    if (!dominant || dominant.width > dominant.height * 1.2) {
+    if (
+      portraitTurn === undefined &&
+      (!dominant || dominant.width > dominant.height * 1.2)
+    ) {
       let bestScore = 0;
       let rotatedBoxes: PersonBox[] | undefined;
       for (const rotation of [90, -90] as const) {

@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg">
-  <filter id="sharpen" color-interpolation-filters="sRGB" x="0" y="0" width="100%" height="100%">
-    <feConvolveMatrix order="3" kernelMatrix="0 -0.25 0 -0.25 2 -0.25 0 -0.25 0" preserveAlpha="true" edgeMode="duplicate"/>
-  </filter>
-</svg>

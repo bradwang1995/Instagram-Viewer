@@ -174,3 +174,13 @@ it("packs mixed photo ratios without cropping or empty sidebars and bounds the f
   expect(layouts[4].left + layouts[4].width).toBeCloseTo(1920);
   expect(layouts[5].top).toBeGreaterThan(layouts[0].top + layouts[0].height);
 });
+
+it.each([
+  [390, 654],
+  [1280, 720],
+  [1920, 1080],
+])("keeps every horizontal card the same size at %s by %s", (width, height) => {
+  const { layouts } = getRibbonMetrics([0.5, 0.78, 1, 1.8, 3], width, height);
+  expect(new Set(layouts.map((item) => item.width)).size).toBe(1);
+  expect(new Set(layouts.map((item) => item.height)).size).toBe(1);
+});

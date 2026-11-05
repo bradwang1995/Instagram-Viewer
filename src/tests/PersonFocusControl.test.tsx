@@ -3,7 +3,7 @@ import { afterEach, expect, it } from "vitest";
 import { ArchiveControlBar } from "../components/archive/ArchiveChrome";
 import { usePersonFocus } from "../features/media/personFocus";
 afterEach(() => usePersonFocus.setState({ strength: 0, pending: 0 }));
-it("shares a labeled 0–200 focus slider across footers", () => {
+it("shares a labeled 0–100 focus slider across footers", () => {
   render(
     <>
       <ArchiveControlBar />
@@ -12,8 +12,8 @@ it("shares a labeled 0–200 focus slider across footers", () => {
   );
   const sliders = screen.getAllByRole("slider", { name: "Focus on person" });
   expect(sliders[0]).toHaveValue("0");
-  expect(sliders[0]).toHaveAttribute("max", "200");
-  expect(screen.getAllByText("200%")).toHaveLength(2);
+  expect(sliders[0]).toHaveAttribute("max", "100");
+  expect(screen.getAllByText("100%")).toHaveLength(2);
   fireEvent.change(sliders[0], { target: { value: "50" } });
   expect(sliders[1]).toHaveValue("50");
   expect(usePersonFocus.getState().strength).toBe(50);
@@ -21,25 +21,37 @@ it("shares a labeled 0–200 focus slider across footers", () => {
   expect(sliders[0]).toHaveAttribute("aria-valuetext", "Original");
 });
 
-it("snaps a released pointer near 100 without trapping keyboard adjustments", () => {
+it("does not snap pointer releases to a different strength", () => {
   render(<ArchiveControlBar />);
   const slider = screen.getByRole("slider", { name: "Focus on person" });
-  fireEvent.change(slider, { target: { value: "102" } });
+  fireEvent.change(slider, { target: { value: "97" } });
   fireEvent.pointerUp(slider);
-  expect(slider).toHaveValue("100");
-  fireEvent.change(slider, { target: { value: "101" } });
-  expect(slider).toHaveValue("101");
+  expect(slider).toHaveValue("97");
 });
 
 it("toggles browser-local display options", () => {
   render(<ArchiveControlBar />);
-  for (const name of ["Sharpen", "Auto rotate 90°", "People only"]) {
+  fireEvent.click(screen.getByText("View Options"));
+  for (const name of ["Super Resolution", "Auto Rotate", "Human Only"]) {
     const button = screen.getByRole("button", { name });
     fireEvent.click(button);
     expect(button).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(button);
     expect(button).toHaveAttribute("aria-pressed", "false");
   }
+});
+it("closes View Options with Escape without dismissing its containing photo dialog", () => {
+  render(<ArchiveControlBar />);
+  const summary = screen.getByText("View Options");
+  fireEvent.click(summary);
+  expect(summary.closest("details")).toHaveAttribute("open");
+  expect(
+    fireEvent.keyDown(screen.getByRole("button", { name: "Auto Rotate" }), {
+      key: "Escape",
+    }),
+  ).toBe(false);
+  expect(summary.closest("details")).not.toHaveAttribute("open");
+  expect(summary).toHaveFocus();
 });
 
 it("shows date labels and values without dashes", () => {

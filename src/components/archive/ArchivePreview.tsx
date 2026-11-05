@@ -265,7 +265,7 @@ export const ArchivePreview = memo(function ArchivePreview({
 
       // Hiding a failed card changes geometry, but is not a scroll gesture.
       // Freeze this window's request cohort until navigation actually changes.
-      const key = `${viewMode}:${viewport.width}:${viewport.height}:${offset}:${loadGeneration}:${loadScope}`;
+      const key = `${viewMode}:${viewport.width}:${viewport.height}:${offset}:${loadGeneration}:${loadScope}:${peopleOnly}`;
       if (retainedIds.size && admittedWindowRef.current?.key !== key) {
         admittedWindowRef.current = { key, ids: new Set(retainedIds) };
       }
@@ -295,6 +295,7 @@ export const ArchivePreview = memo(function ArchivePreview({
       visibleOrderedItems,
       loadGeneration,
       loadScope,
+      peopleOnly,
     ],
   );
 
@@ -835,7 +836,7 @@ export const ArchivePreview = memo(function ArchivePreview({
               </strong>
               <span>
                 {peopleOnly
-                  ? "Turn off People only to show all photos."
+                  ? "Turn off Human Only to show all photos."
                   : hasFilters
                     ? "Widen the date range to bring photos back."
                     : "You can return later to load your posts again."}

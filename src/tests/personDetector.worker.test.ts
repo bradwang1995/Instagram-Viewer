@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const detect = vi.hoisted(() => vi.fn());
+const detectFaces = vi.hoisted(() => vi.fn());
 vi.mock("@mediapipe/tasks-vision", () => ({
   ObjectDetector: { createFromOptions: async () => ({ detect }) },
+  FaceDetector: { createFromOptions: async () => ({ detect: detectFaces }) },
 }));
 const result = (
   x: number,
@@ -25,6 +27,7 @@ let worker: {
 beforeEach(() => {
   vi.resetModules();
   detect.mockReset();
+  detectFaces.mockReset().mockReturnValue({ detections: [] });
   worker = { postMessage: vi.fn() };
   vi.stubGlobal("self", worker);
   vi.stubGlobal(
@@ -62,6 +65,20 @@ it("leaves an upright person untouched", async () => {
   expect((await run()).boxes).toEqual([
     { originX: 100, originY: 100, width: 200, height: 600 },
   ]);
+  expect(detect).toHaveBeenCalledTimes(1);
+});
+it("orients a reclining foreground person even when quarter-turn person detection would miss it", async () => {
+  detect.mockReturnValue(result(15, 50, 900, 700));
+  detectFaces.mockReturnValue(result(150, 220, 100, 100));
+  expect((await run()).boxes).toEqual([
+    { originX: 15, originY: 50, width: 900, height: 700, rotation: 90 },
+  ]);
+  expect(detect).toHaveBeenCalledTimes(1);
+});
+it("does not rotate an upright person with a wide pose when its face is already above its body", async () => {
+  detect.mockReturnValue(result(15, 50, 900, 700));
+  detectFaces.mockReturnValue(result(400, 80, 100, 100));
+  expect((await run()).boxes[0]).not.toHaveProperty("rotation");
   expect(detect).toHaveBeenCalledTimes(1);
 });
 it("recovers a missed foreground person from overlapping regions instead of focusing a swimmer", async () => {

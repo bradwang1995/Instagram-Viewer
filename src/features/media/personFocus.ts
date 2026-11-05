@@ -4,7 +4,7 @@ import { create } from "zustand";
 export const usePersonFocus = create<{
   strength: number;
   pending: number;
-  sharpen: boolean;
+  superResolution: boolean;
   autoRotate: boolean;
   peopleOnly: boolean;
   people: Record<string, boolean | undefined>;
@@ -12,13 +12,13 @@ export const usePersonFocus = create<{
 }>((set) => ({
   strength: 0,
   pending: 0,
-  sharpen: false,
+  superResolution: false,
   autoRotate: false,
   peopleOnly: false,
   people: {},
   setStrength: (value) =>
     set({
-      strength: Number.isFinite(value) ? Math.max(0, Math.min(200, value)) : 0,
+      strength: Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0,
     }),
 }));
 export type PersonBox = {
@@ -85,11 +85,7 @@ export function personZoom(
   // Each photo fills the frame vertically with its own subject. At full focus,
   // the head reaches the top and the lowest ~4% may fall below the bottom.
   // A width cap would leave short/seated subjects and beach photos far away.
-  const closeup = Math.max(0, Math.min(1, (strength - 100) / 100));
-  const target = Math.max(
-    base,
-    viewHeight / (crop.height * (0.96 - 0.46 * closeup)),
-  );
+  const target = Math.max(base, viewHeight / (crop.height * 0.96));
   const centerX = crop.x + crop.width / 2;
   const scale = target / base;
   const drawnWidth = width * base,

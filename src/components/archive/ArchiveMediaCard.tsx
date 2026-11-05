@@ -1,6 +1,6 @@
 import { LoaderCircle } from "lucide-react";
 import { usePersonFocusStyle } from "../../hooks/usePersonFocusStyle";
-import { usePersonFocus } from "../../features/media/personFocus";
+import { useSuperResolution } from "../../hooks/useSuperResolution";
 import {
   memo,
   useCallback,
@@ -53,7 +53,6 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   onAspectChange,
 }: ArchiveMediaCardProps) {
   const { media, post } = item;
-  const sharpen = usePersonFocus((s) => s.sharpen);
   const sourceRevision = `${media.id}\u0000${post.shortcode ?? ""}\u0000${media.sourceIndex}`;
   const [proxy, setProxy] = useState<{
     revision: string;
@@ -95,6 +94,11 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     loadMedia && !visuallyHidden && !isLoading && !hasFailed,
     loadMedia && !visuallyHidden && !hasFailed,
     media.id,
+  );
+  const enhanced = useSuperResolution(
+    imageRef,
+    resolvedUrl,
+    loadMedia && !visuallyHidden && !isLoading && !hasFailed,
   );
   const shellRef = useCallback(
     (node: HTMLElement | null) => registerShell?.(media.id, node),
@@ -251,9 +255,6 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 src={resolvedUrl}
                 style={{
                   ...focusStyle,
-                  filter: sharpen
-                    ? `url("${import.meta.env.BASE_URL}photo-sharpen.svg#sharpen")`
-                    : undefined,
                   visibility: isLoading ? "hidden" : undefined,
                 }}
                 data-media-id={media.id}
@@ -301,6 +302,34 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 }}
                 onError={handleImageError}
               />
+              {enhanced?.url ? (
+                <img
+                  src={enhanced.url}
+                  alt=""
+                  aria-hidden="true"
+                  className="super-resolution-photo"
+                  style={{
+                    position: "absolute",
+                    inset: 0,
+                    width: "100%",
+                    height: "100%",
+                    ...focusStyle,
+                  }}
+                  draggable={false}
+                />
+              ) : enhanced ? (
+                <span
+                  className="super-resolution-status"
+                  role="status"
+                  title={enhanced.error}
+                >
+                  {enhanced.error
+                    ? enhanced.error.includes("4 MP")
+                      ? "Super Resolution: photo exceeds 4 MP"
+                      : "Super Resolution unavailable"
+                    : `Super Resolution ${enhanced.progress ?? 0}%`}
+                </span>
+              ) : null}
               {isLoading ? (
                 <MediaLoadingState className="archive-image-loading" />
               ) : null}

@@ -22,9 +22,6 @@ export function usePersonFocusStyle(
 ) {
   const strength = usePersonFocus((s) => s.strength);
   const autoRotate = usePersonFocus((s) => s.autoRotate);
-  const strengthRef = useRef(strength);
-  strengthRef.current = strength;
-  const updateGeometry = useRef<() => void>();
   const [rotation, setRotation] = useState(0);
 
   // Loading photos also hold the control, so it cannot accept a setting before
@@ -39,7 +36,6 @@ export function usePersonFocusStyle(
   useEffect(() => {
     setGeometry(null);
     setRotation(0);
-    updateGeometry.current = undefined;
     const image = ref.current;
     if (!ready || !url || !image) return;
     usePersonFocus.setState((s) => ({ pending: s.pending + 1 }));
@@ -96,10 +92,8 @@ export function usePersonFocusStyle(
             surface.clientHeight,
             orientedCrop,
             getComputedStyle(image).objectFit,
-            Math.max(100, strengthRef.current),
           ),
         );
-      updateGeometry.current = update;
       update();
       observer = new ResizeObserver(update);
       observer.observe(surface);
@@ -110,7 +104,6 @@ export function usePersonFocusStyle(
       observer?.disconnect();
     };
   }, [ready, url, ref, autoRotate, mediaId]);
-  useEffect(() => updateGeometry.current?.(), [strength]);
   const progress = Math.min(100, strength) / 100;
   const originalTransform =
     "translate(-50%, -50%) translate(0px, 0px) scale(1)";

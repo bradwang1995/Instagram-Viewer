@@ -200,8 +200,8 @@ export function getRibbonMetrics(
   const safeHeight = Math.max(320, viewportHeight);
   const mediaHeight = clamp(safeHeight * 0.99, 300, safeHeight);
   const gap = clamp(safeWidth * 0.011, 9, 22);
-  const widths = aspects.map((aspect) =>
-    clamp(clamp(aspect, 0.62, 1.65) * mediaHeight, 240, safeWidth * 0.82),
+  const widths = aspects.map(() =>
+    clamp(0.78 * mediaHeight, 240, safeWidth * 0.82),
   );
   const firstWidth = widths[0] ?? safeWidth * 0.62;
   let cursor = Math.max(24, (safeWidth - firstWidth) / 2);
