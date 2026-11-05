@@ -39,6 +39,10 @@ beforeEach(() => {
   vi.stubGlobal(
     "OffscreenCanvas",
     class {
+      constructor(
+        public width: number,
+        public height: number,
+      ) {}
       getContext() {
         return { translate() {}, rotate() {}, drawImage() {} };
       }
@@ -46,10 +50,10 @@ beforeEach(() => {
   );
 });
 afterEach(() => vi.unstubAllGlobals());
-async function run() {
+async function run(width = 1000, height = 800) {
   await import("../features/media/personDetector.worker");
   await worker.onmessage!({
-    data: { id: 1, url: "photo", width: 1000, height: 800, baseUrl: "/" },
+    data: { id: 1, url: "photo", width, height, baseUrl: "/" },
   });
   return worker.postMessage.mock.calls[0][0];
 }
@@ -59,6 +63,67 @@ it("leaves an upright person untouched", async () => {
     { originX: 100, originY: 100, width: 200, height: 600 },
   ]);
   expect(detect).toHaveBeenCalledTimes(1);
+});
+it("recovers a missed foreground person from overlapping regions instead of focusing a swimmer", async () => {
+  const swimmer = result(290, 480, 12, 28);
+  detect
+    .mockReturnValueOnce(swimmer)
+    .mockReturnValueOnce({ detections: [] })
+    .mockReturnValueOnce(result(180, 250, 140, 540))
+    .mockReturnValueOnce({ detections: [] });
+  const { boxes } = await run();
+  expect(boxes).toContainEqual({
+    originX: 380,
+    originY: 250,
+    width: 140,
+    height: 540,
+  });
+  const { personCrop } = await import("../features/media/personFocus");
+  expect(personCrop(1000, 800, boxes)).toEqual({
+    x: 380,
+    y: 250,
+    width: 140,
+    height: 540,
+  });
+  expect(detect).toHaveBeenCalledTimes(4);
+});
+it("maps recovery regions back to full-resolution source coordinates", async () => {
+  detect
+    .mockReturnValueOnce(result(290, 480, 12, 28))
+    .mockReturnValueOnce({ detections: [] })
+    .mockReturnValueOnce(result(180, 250, 140, 540))
+    .mockReturnValueOnce({ detections: [] });
+  expect((await run(2000, 1600)).boxes).toContainEqual({
+    originX: 760,
+    originY: 500,
+    width: 280,
+    height: 1080,
+  });
+});
+it("preserves a successful no-person result without extra region recovery work", async () => {
+  detect.mockReturnValue({ detections: [] });
+  expect(await run()).toEqual({ id: 1, boxes: [] });
+  expect(detect).toHaveBeenCalledTimes(3);
+});
+it("keeps small bystanders available for People Only without inventing a focus or rotation", async () => {
+  detect.mockReturnValue(result(290, 480, 12, 28));
+  const { boxes } = await run();
+  expect(boxes.length).toBeGreaterThan(0);
+  expect(boxes.every((b: { rotation?: number }) => !b.rotation)).toBe(true);
+  const { personCrop } = await import("../features/media/personFocus");
+  expect(personCrop(1000, 800, boxes)).toBeNull();
+});
+it("rejects a foreground fragment touching an interior region edge", async () => {
+  detect
+    .mockReturnValueOnce(result(290, 480, 12, 28))
+    .mockReturnValueOnce(result(520, 100, 80, 600))
+    .mockReturnValueOnce(result(0, 100, 150, 600))
+    .mockReturnValueOnce(result(0, 100, 150, 600))
+    .mockReturnValue({ detections: [] });
+  const { boxes } = await run();
+  expect(boxes).toEqual([
+    { originX: 290, originY: 480, width: 12, height: 28 },
+  ]);
 });
 it.each([90, -90])(
   "chooses the confident upright direction %s and maps back to original pixels",

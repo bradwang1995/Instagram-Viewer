@@ -38,9 +38,22 @@ describe("person focus strength", () => {
     ).toBeNull();
     expect(
       personCrop(1000, 1000, [
-        { originX: -20, originY: 900, width: 100, height: 200 },
+        { originX: -20, originY: 800, width: 100, height: 300 },
       ]),
-    ).toEqual({ x: 0, y: 900, width: 80, height: 100 });
+    ).toEqual({ x: 0, y: 800, width: 80, height: 200 });
+  });
+  it("does not focus distant bystanders when the main person was missed", () => {
+    expect(
+      personCrop(918, 1125, [
+        { originX: 288, originY: 597, width: 10, height: 30 },
+        { originX: 866, originY: 574, width: 19, height: 62 },
+      ]),
+    ).toBeNull();
+    expect(
+      personCrop(1000, 800, [
+        { originX: 100, originY: 200, width: 500, height: 140, rotation: 90 },
+      ]),
+    ).toEqual({ x: 100, y: 200, width: 500, height: 140, rotation: 90 });
   });
   it("keeps 0 original and interpolates to a head-aligned close crop", () => {
     const width = 900,
@@ -119,10 +132,10 @@ describe("person focus strength", () => {
       ])
         for (const [x, y] of [
           [0, 0],
-          [width - 100, height - 150],
+          [width - 150, height - 300],
         ]) {
           const crop = personCrop(width, height, [
-            { originX: x, originY: y, width: 100, height: 150 },
+            { originX: x, originY: y, width: 150, height: 300 },
           ])!;
           for (const amount of [1, 25, 50, 75, 100]) {
             const z = personZoom(width, height, vw, vh, crop, fit, amount);

@@ -49,7 +49,15 @@ export function personCrop(width: number, height: number, boxes: PersonBox[]) {
         ...(b.rotation ? { rotation: b.rotation } : {}),
       };
     })
-    .filter((b) => b.width > 0 && b.height > 0);
+    .filter((b) => b.width > 0 && b.height > 0)
+    // Keep tiny detections in the worker result for People Only, but do not
+    // mistake a distant bystander for the intended focus subject.
+    .filter((b) => {
+      const relativeHeight = b.rotation ? b.width / width : b.height / height;
+      return (
+        relativeHeight >= 0.2 || b.width * b.height >= width * height * 0.02
+      );
+    });
   candidates.sort(
     (a, b) =>
       b.width * b.height - a.width * a.height ||

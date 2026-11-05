@@ -58,6 +58,48 @@ self.onmessage = async (
           ]
         : [],
     );
+    // A whole-image pass can miss a large, unusually posed foreground person
+    // while detecting only swimmers/bystanders. Retry overlapping full-height
+    // regions at the same confidence threshold before accepting that result.
+    if (boxes.length && !personCrop(width, height, boxes)) {
+      const regionWidth = Math.max(1, Math.round(bitmap.width * 0.6));
+      const canvas = new OffscreenCanvas(regionWidth, bitmap.height);
+      const context = canvas.getContext("2d");
+      if (context) {
+        for (const fraction of [0, 0.5, 1]) {
+          const offsetX = Math.round((bitmap.width - regionWidth) * fraction);
+          context.drawImage(
+            bitmap,
+            offsetX,
+            0,
+            regionWidth,
+            bitmap.height,
+            0,
+            0,
+            regionWidth,
+            bitmap.height,
+          );
+          for (const detection of model.detect(canvas).detections) {
+            const b = detection.boundingBox;
+            if (!b) continue;
+            // Interior crop edges must not turn a cut-off body into a subject.
+            const margin = regionWidth * 0.01;
+            if (
+              (offsetX > 0 && b.originX <= margin) ||
+              (offsetX + regionWidth < bitmap.width &&
+                b.originX + b.width >= regionWidth - margin)
+            )
+              continue;
+            boxes.push({
+              originX: ((offsetX + b.originX) * width) / bitmap.width,
+              originY: (b.originY * height) / bitmap.height,
+              width: (b.width * width) / bitmap.width,
+              height: (b.height * height) / bitmap.height,
+            });
+          }
+        }
+      }
+    }
     const dominant = personCrop(width, height, boxes);
     // Upright subjects stay untouched. For sideways/undetected subjects, ask the
     // same local model which quarter-turn produces a confident upright person.
@@ -74,7 +116,9 @@ self.onmessage = async (
         const detections = model.detect(canvas).detections;
         const upright = detections.filter(
           (d) =>
-            d.boundingBox && d.boundingBox.height > d.boundingBox.width * 1.2,
+            d.boundingBox &&
+            d.boundingBox.height > d.boundingBox.width * 1.2 &&
+            personCrop(canvas.width, canvas.height, [d.boundingBox]),
         );
         const score = Math.max(
           0,
