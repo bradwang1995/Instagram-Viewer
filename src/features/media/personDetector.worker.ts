@@ -34,7 +34,10 @@ self.onmessage = async (
         maxResults: 8,
         canvas: new OffscreenCanvas(1, 1),
       },
-    );
+    ).catch((error) => {
+      detector = undefined;
+      throw error;
+    });
     const model = await detector;
     if (!bitmap) {
       const response = await fetch(url, {

@@ -2,8 +2,9 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const detect = vi.hoisted(() => vi.fn());
 const detectFaces = vi.hoisted(() => vi.fn());
+const createDetector = vi.hoisted(() => vi.fn());
 vi.mock("@mediapipe/tasks-vision", () => ({
-  ObjectDetector: { createFromOptions: async () => ({ detect }) },
+  ObjectDetector: { createFromOptions: createDetector },
   FaceDetector: { createFromOptions: async () => ({ detect: detectFaces }) },
 }));
 const result = (
@@ -27,6 +28,7 @@ let worker: {
 beforeEach(() => {
   vi.resetModules();
   detect.mockReset();
+  createDetector.mockReset().mockResolvedValue({ detect });
   detectFaces.mockReset().mockReturnValue({ detections: [] });
   worker = { postMessage: vi.fn() };
   vi.stubGlobal("self", worker);
@@ -66,6 +68,14 @@ it("leaves an upright person untouched", async () => {
     { originX: 100, originY: 100, width: 200, height: 600 },
   ]);
   expect(detect).toHaveBeenCalledTimes(1);
+});
+it("reinitializes after a failed model download instead of caching a rejected model forever", async () => {
+  createDetector.mockRejectedValueOnce(new Error("Temporary download failure"));
+  detect.mockReturnValue(result(100, 100, 200, 600));
+  expect((await run()).failed).toBe(true);
+  worker.postMessage.mockClear();
+  expect((await run()).boxes).toHaveLength(1);
+  expect(createDetector).toHaveBeenCalledTimes(2);
 });
 it("detects transferred pixels even when refetching the source would fail", async () => {
   const close = vi.fn();
