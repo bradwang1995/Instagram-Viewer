@@ -71,7 +71,6 @@ self.onmessage = async ({
       output: "tensor",
       patchSize: 64,
       padding: 12,
-      awaitNextFrame: true,
       signal: controller.signal,
       progress: (progress: number) => self.postMessage({ id, progress }),
     });

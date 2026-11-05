@@ -160,7 +160,16 @@ export function enhancePhoto(
       subscriber.resolve({});
       if (subscribed === active && !subscribed.subscribers.size) {
         subscribed.cancelled = true;
-        worker?.postMessage({ id: subscribed.id, cancel: true });
+        // Inference must not depend on animation frames (hidden tabs may pause
+        // them). Terminate CPU work directly when nobody needs this result.
+        if (worker) {
+          worker.onmessage = null;
+          worker.onerror = null;
+          worker.onmessageerror = null;
+          worker.terminate();
+          worker = undefined;
+        }
+        finish({});
       }
     };
     subscribed.subscribers.add(subscriber);

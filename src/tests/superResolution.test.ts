@@ -83,15 +83,23 @@ it("allows a new request after a rapid off/on without attaching it to cancelled 
   const worker = FakeWorker.instances[0];
   c.abort();
   expect(await first).toEqual({});
-  expect(worker.postMessage).toHaveBeenLastCalledWith({ id: 1, cancel: true });
+  expect(worker.terminate).toHaveBeenCalledOnce();
   const retry = enhancePhoto("a", new AbortController().signal, vi.fn());
   worker.reply({ error: "Cancelled" });
-  expect(
-    worker.postMessage.mock.calls[worker.postMessage.mock.calls.length - 1][0]
-      .id,
-  ).toBe(2);
-  worker.reply({ blob: new Blob(["output"]) });
+  expect(FakeWorker.instances).toHaveLength(2);
+  FakeWorker.instances[1].reply({ blob: new Blob(["output"]) });
   expect((await retry).url).toContain("blob:enhanced");
+});
+it("does not interrupt inference while another photo still needs the shared result", async () => {
+  const { enhancePhoto } = await import("../features/media/superResolution");
+  const controller = new AbortController();
+  const first = enhancePhoto("a", controller.signal, vi.fn());
+  const second = enhancePhoto("a", new AbortController().signal, vi.fn());
+  controller.abort();
+  expect(await first).toEqual({});
+  expect(FakeWorker.instances[0].terminate).not.toHaveBeenCalled();
+  FakeWorker.instances[0].reply({ blob: new Blob(["output"]) });
+  expect((await second).url).toContain("blob:enhanced");
 });
 it("settles queued requests on worker failure and can retry without replacing original photos", async () => {
   const { enhancePhoto } = await import("../features/media/superResolution");
