@@ -30,8 +30,9 @@ export function usePersonFocusStyle(
   useEffect(() => {
     if (!preparing || ready) return;
     usePersonFocus.setState((s) => ({ pending: s.pending + 1 }));
-    return () =>
+    return () => {
       usePersonFocus.setState((s) => ({ pending: Math.max(0, s.pending - 1) }));
+    };
   }, [preparing, ready]);
   const [geometry, setGeometry] = useState<ReturnType<typeof personZoom>>(null);
   useEffect(() => {

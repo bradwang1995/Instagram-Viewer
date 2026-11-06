@@ -103,13 +103,43 @@ type ArchiveControlBarProps = {
   };
 };
 
-const PRESETS: Array<{ value: TransitionPreset; label: string }> = [
-  { value: "crossfade", label: "Crossfade" },
-  { value: "directional-wipe", label: "Directional wipe" },
-  { value: "depth-zoom", label: "Depth zoom" },
-  { value: "film-burn", label: "Film burn" },
-  { value: "rgb-split", label: "RGB split" },
-  { value: "ken-burns", label: "Ken Burns" },
+const PRESETS: Array<{
+  value: TransitionPreset;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "crossfade",
+    label: "Crossfade",
+    description: "One photo gently fades into the next.",
+  },
+  {
+    value: "directional-wipe",
+    label: "Directional wipe",
+    description:
+      "The next photo is revealed from left to right while staying in place.",
+  },
+  {
+    value: "depth-zoom",
+    label: "Depth zoom",
+    description: "A soft zoom and blur bring the next photo into focus.",
+  },
+  {
+    value: "film-burn",
+    label: "Film burn",
+    description: "A warm flash fades away like light leaking onto film.",
+  },
+  {
+    value: "rgb-split",
+    label: "RGB split",
+    description:
+      "Colorful cyan and magenta edges briefly separate for a glitch effect.",
+  },
+  {
+    value: "ken-burns",
+    label: "Ken Burns",
+    description: "A slow, gentle zoom adds movement while each photo is shown.",
+  },
 ];
 
 export function ArchiveControlBar({
@@ -181,6 +211,9 @@ export function ArchiveControlBar({
             <span>Transition style</span>
             <select
               aria-label="Transition style"
+              title={PRESETS.map((p) => `${p.label}: ${p.description}`).join(
+                "\n",
+              )}
               value={slideshow.transitionPreset}
               onChange={(event) =>
                 slideshow.onTransitionPresetChange(
@@ -189,7 +222,11 @@ export function ArchiveControlBar({
               }
             >
               {PRESETS.map((preset) => (
-                <option key={preset.value} value={preset.value}>
+                <option
+                  key={preset.value}
+                  value={preset.value}
+                  title={preset.description}
+                >
                   {preset.label}
                 </option>
               ))}

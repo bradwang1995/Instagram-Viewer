@@ -64,6 +64,7 @@ vi.mock("../features/media/instagramMedia", async (importOriginal) => ({
 
 describe("Photo archive preview", () => {
   beforeEach(() => {
+    localStorage.clear();
     vi.clearAllMocks();
     vi.spyOn(Math, "random").mockReturnValue(0.999);
     HTMLDialogElement.prototype.showModal = function () {
@@ -113,6 +114,28 @@ describe("Photo archive preview", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.restoreAllMocks();
+  });
+
+  it("restores date filters after remount and toggles photo-only mode", async () => {
+    testState.posts[1] = {
+      ...testState.posts[1],
+      savedAt: "2026-03-20T12:00:00.000Z",
+    };
+    testState.queue[2] = createQueueItem(testState.posts[1], 0, 1);
+    const view = render(<HomePage />);
+    await act(async () => undefined);
+    const start = screen.getByRole("slider", { name: "Start time" });
+    fireEvent.change(start, { target: { value: "1" } });
+    view.unmount();
+    render(<HomePage />);
+    await act(async () => undefined);
+    expect(screen.getByRole("slider", { name: "Start time" })).toHaveValue("1");
+    fireEvent.keyDown(window, { key: "F11", shiftKey: true });
+    expect(document.querySelector(".archive-app")).toHaveClass("is-immersive");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(document.querySelector(".archive-app")).not.toHaveClass(
+      "is-immersive",
+    );
   });
 
   it("hides only confirmed non-person photos and restores them when disabled", async () => {

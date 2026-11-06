@@ -1,6 +1,7 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 
-// Start each page visit at the original framing, even after an earlier high setting.
+// Keep viewing preferences across visits.
 export const usePersonFocus = create<{
   strength: number;
   pending: number;
@@ -9,18 +10,32 @@ export const usePersonFocus = create<{
   detectionError: boolean;
   people: Record<string, boolean | undefined>;
   setStrength: (value: number) => void;
-}>((set) => ({
-  strength: 0,
-  pending: 0,
-  autoRotate: false,
-  peopleOnly: false,
-  detectionError: false,
-  people: {},
-  setStrength: (value) =>
-    set({
-      strength: Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0,
+}>()(
+  persist(
+    (set) => ({
+      strength: 0,
+      pending: 0,
+      autoRotate: false,
+      peopleOnly: false,
+      detectionError: false,
+      people: {},
+      setStrength: (value) =>
+        set({
+          strength: Number.isFinite(value)
+            ? Math.max(0, Math.min(100, value))
+            : 0,
+        }),
     }),
-}));
+    {
+      name: "viewer-person-preferences",
+      partialize: ({ strength, autoRotate, peopleOnly }) => ({
+        strength,
+        autoRotate,
+        peopleOnly,
+      }),
+    },
+  ),
+);
 export type PersonBox = {
   originX: number;
   originY: number;

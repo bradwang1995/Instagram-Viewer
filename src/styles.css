@@ -1699,7 +1699,7 @@ button.viewer-control.post-panel-close {
 }
 .archive-preview.is-grid .archive-media-surface { border: 0; box-shadow: none; }
 .archive-preview.is-grid .archive-media-surface > img { object-fit: cover; }
-.archive-preview.is-ribbon .archive-card { transform: none; }
+
 .local-server-dialog { position: relative; padding: 30px; background: radial-gradient(ellipse at top left, #34202f, transparent 65%), #151116; }
 .local-server-heading { display: flex; align-items: center; gap: 12px; padding-right: 38px; }
 .local-server-heading > svg { color: var(--acid); }
@@ -1768,3 +1768,20 @@ button.viewer-control.post-panel-close:hover { background: transparent; color: v
   .post-photo-panel .archive-dock { padding-left: 12px; padding-bottom: 34px; }
   .post-photo-count { bottom: 8px; }
 }
+
+.archive-preview .archive-card { contain: layout style; border-radius: 22px; }
+.archive-preview .archive-card:hover, .archive-preview .archive-card:focus-within { transform: translateY(-6px) scale(1.015); box-shadow: 0 18px 38px #000c, 0 0 22px #000b, 0 0 8px #e7c4dc55; }
+.immersive-enter { position: fixed; right: 12px; top: 72px; z-index: 65; opacity: 0; }
+.immersive-enter:hover, .immersive-enter:focus-visible { opacity: 1; }
+.is-immersive .archive-header, .is-immersive .archive-dock { display: none; }
+.is-immersive .archive-scroller { top: 0; bottom: 0; }
+.is-immersive .slideshow-frame { inset: 0; height: 100dvh; }
+.immersive-exit-zone { position: fixed; left: 0; right: 0; height: 52px; z-index: 200; display: flex; justify-content: center; align-items: center; }
+.immersive-exit-zone.is-top { top: 0; }
+.immersive-exit-zone.is-bottom { bottom: 0; }
+.immersive-exit-zone button { opacity: 0; pointer-events: none; }
+.immersive-exit-zone:hover button, .immersive-exit-zone:focus-within button { opacity: 1; pointer-events: auto; }
+.immersive-hint { position: fixed; top: 60px; left: 50%; transform: translateX(-50%); z-index: 201; padding: 12px 20px; border-radius: 12px; background: #242129ed; color: white; pointer-events: none; }
+
+.is-immersive .slideshow-arrow { opacity: 0; }
+.is-immersive .slideshow-arrow:hover, .is-immersive .slideshow-arrow:focus-visible { opacity: 1; }

@@ -301,7 +301,6 @@ function getSlideshowFrames(
 
 function getFrameMotion(preset: TransitionPreset, slot: -1 | 0 | 1) {
   const isCurrent = slot === 0;
-  const directionalX = `${slot * 100}%`;
 
   const base = {
     opacity: isCurrent ? 1 : 0,
@@ -315,14 +314,13 @@ function getFrameMotion(preset: TransitionPreset, slot: -1 | 0 | 1) {
       return {
         ...base,
         opacity: isCurrent ? 1 : 0,
-        x: directionalX,
-        clipPath: isCurrent ? "inset(0 0 0 0%)" : "inset(0 12% 0 12%)",
+
+        clipPath: isCurrent ? "inset(0 0 0 0%)" : "inset(0 0 0 100%)",
       };
     case "depth-zoom":
       return {
         ...base,
         opacity: isCurrent ? 1 : 0,
-        x: `${slot * 10}%`,
         scale: isCurrent ? 1 : 1.06,
         filter: isCurrent ? "blur(0px)" : "blur(8px)",
       };
@@ -330,7 +328,6 @@ function getFrameMotion(preset: TransitionPreset, slot: -1 | 0 | 1) {
       return {
         ...base,
         opacity: isCurrent ? 1 : 0,
-        x: `${slot * 8}%`,
         filter: isCurrent
           ? "contrast(1) saturate(1)"
           : "contrast(1.6) saturate(1.7) drop-shadow(-14px 0 0 cyan) drop-shadow(14px 0 0 magenta)",
@@ -339,14 +336,12 @@ function getFrameMotion(preset: TransitionPreset, slot: -1 | 0 | 1) {
       return {
         ...base,
         opacity: isCurrent ? 1 : 0,
-        x: `${slot * 6}%`,
         scale: isCurrent ? [1, 1.045] : 1,
       };
     case "film-burn":
       return {
         ...base,
         opacity: isCurrent ? 1 : 0,
-        x: `${slot * 8}%`,
         scale: isCurrent ? 1 : 1.02,
         filter: isCurrent
           ? "sepia(0) contrast(1)"

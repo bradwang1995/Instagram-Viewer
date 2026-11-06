@@ -19,6 +19,17 @@ import {
 import { useMediaLibrary } from "../hooks/useMediaLibrary";
 import { usePeopleFilter } from "../hooks/usePeopleFilter";
 
+import { extendSessionMediaOrder } from "../features/media/sessionMediaOrder";
+function readDatePreference(key: string): number | undefined {
+  try {
+    const value = JSON.parse(localStorage.getItem(key) ?? "null");
+    return typeof value === "number" && Number.isFinite(value)
+      ? value
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
 const FILTER_DEBOUNCE_MS = 300;
 const MIN_SLIDESHOW_DWELL_MS = 3_000;
 
@@ -51,6 +62,26 @@ function formatDateInput(value: number, endOfMonth = false): string {
 }
 
 export function HomePage() {
+  const [immersive, setImmersive] = useState(false);
+  const [immersiveHint, setImmersiveHint] = useState(false);
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.repeat) return;
+      if (event.key === "F11" && event.shiftKey) {
+        event.preventDefault();
+        setImmersive((value) => !value);
+      } else if (event.key === "Escape") setImmersive(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+  useEffect(() => {
+    window.dispatchEvent(new Event("resize"));
+    if (!immersive) return;
+    setImmersiveHint(true);
+    const timer = window.setTimeout(() => setImmersiveHint(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [immersive]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { queue, isLoading, error, refresh } = useMediaLibrary();
   const postQueue = useMemo(() => firstPhotoPerPost(queue), [queue]);
@@ -69,10 +100,32 @@ export function HomePage() {
   const [transitionPreset, setTransitionPreset] = useState<TransitionPreset>(
     DEFAULT_SETTINGS.slideshowTransitionPreset,
   );
-  const [dateStartMonth, setDateStartMonth] = useState<number>();
-  const [dateEndMonth, setDateEndMonth] = useState<number>();
-  const [appliedDateStartMonth, setAppliedDateStartMonth] = useState<number>();
-  const [appliedDateEndMonth, setAppliedDateEndMonth] = useState<number>();
+  const [dateStartMonth, setDateStartMonth] = useState<number | undefined>(() =>
+    readDatePreference("viewer-date-start"),
+  );
+  const [dateEndMonth, setDateEndMonth] = useState<number | undefined>(() =>
+    readDatePreference("viewer-date-end"),
+  );
+  const [appliedDateStartMonth, setAppliedDateStartMonth] = useState<
+    number | undefined
+  >(() => readDatePreference("viewer-date-start"));
+  const [appliedDateEndMonth, setAppliedDateEndMonth] = useState<
+    number | undefined
+  >(() => readDatePreference("viewer-date-end"));
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        "viewer-date-start",
+        JSON.stringify(dateStartMonth ?? null),
+      );
+      localStorage.setItem(
+        "viewer-date-end",
+        JSON.stringify(dateEndMonth ?? null),
+      );
+    } catch {
+      /* Storage can be unavailable in private browsing. */
+    }
+  }, [dateStartMonth, dateEndMonth]);
   const [slideshowDirection, setSlideshowDirection] = useState<1 | -1>(1);
   const [isImporting, setIsImporting] = useState(false);
   const [actionError, setActionError] = useState("");
@@ -217,7 +270,18 @@ export function HomePage() {
       }),
     [dateFrom, dateTo, sessionItems],
   );
-  const visibleItems = usePeopleFilter(dateFilteredItems);
+  const filteredItems = usePeopleFilter(dateFilteredItems);
+  const slideOrder = useRef<string[]>([]);
+  slideOrder.current = extendSessionMediaOrder(
+    slideOrder.current,
+    postQueue.map((item) => item.media.id),
+  );
+  const visibleItems = useMemo(() => {
+    const byId = new Map(filteredItems.map((item) => [item.media.id, item]));
+    return slideOrder.current
+      .map((id) => byId.get(id))
+      .filter((item): item is MediaQueueItem => !!item);
+  }, [filteredItems]);
   const visibleItemIds = useMemo(
     () => new Set(visibleItems.map((item) => item.media.id)),
     [visibleItems],
@@ -302,6 +366,7 @@ export function HomePage() {
   }, [setSlideshowRoute]);
 
   const openSlideshow = useCallback(() => {
+    setSelectedMediaId(undefined);
     setSlideshowRoute(true);
   }, [setSlideshowRoute]);
 
@@ -338,7 +403,35 @@ export function HomePage() {
   );
 
   return (
-    <div className="archive-app">
+    <div className={`archive-app${immersive ? " is-immersive" : ""}`}>
+      {immersive ? (
+        <>
+          {immersiveHint ? (
+            <div className="immersive-hint" role="status">
+              Photo-only mode · Press Shift+F11 or Esc to exit
+            </div>
+          ) : null}
+          {["top", "bottom"].map((edge) => (
+            <div key={edge} className={`immersive-exit-zone is-${edge}`}>
+              <button
+                className="viewer-control"
+                onClick={() => setImmersive(false)}
+                title="Show header and footer (Shift+F11 or Esc)"
+              >
+                Exit photo-only mode
+              </button>
+            </div>
+          ))}
+        </>
+      ) : (
+        <button
+          className="viewer-control immersive-enter"
+          onClick={() => setImmersive(true)}
+          title="Hide header and footer (Shift+F11)"
+        >
+          Photo-only mode
+        </button>
+      )}
       <LocalServiceSettings />
       <input
         ref={fileInputRef}
