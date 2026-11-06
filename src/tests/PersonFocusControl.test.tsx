@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { ArchiveControlBar } from "../components/archive/ArchiveChrome";
 import { usePersonFocus } from "../features/media/personFocus";
@@ -77,13 +77,23 @@ it("shows date labels and values without dashes", () => {
   );
 });
 
-it("replaces the focus slider with a loading indicator until preparation finishes", () => {
-  usePersonFocus.setState({ pending: 1 });
+it("keeps filter updates silent and the focus slider available", () => {
+  usePersonFocus.setState({ pending: 1, detectionError: true });
   render(<ArchiveControlBar />);
-  expect(screen.queryByRole("slider", { name: "Focus on person" })).toBeNull();
-  expect(screen.getByRole("status")).toHaveTextContent("Preparing");
-  act(() => usePersonFocus.setState({ pending: 0 }));
+  fireEvent.click(screen.getByText("View Options"));
+  for (const name of ["Auto Rotate", "Human Only"]) {
+    fireEvent.click(screen.getByRole("switch", { name }));
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(
+      screen.getByRole("slider", { name: "Focus on person" }),
+    ).toBeInTheDocument();
+  }
   expect(
-    screen.getByRole("slider", { name: "Focus on person" }),
-  ).toBeInTheDocument();
+    screen.queryByText(/Preparing|Checking photos|could not be checked/),
+  ).toBeNull();
+  usePersonFocus.setState({
+    autoRotate: false,
+    peopleOnly: false,
+    detectionError: false,
+  });
 });

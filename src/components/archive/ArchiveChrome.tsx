@@ -1,10 +1,4 @@
-import {
-  Grid2X2,
-  LoaderCircle,
-  MoveHorizontal,
-  Play,
-  Upload,
-} from "lucide-react";
+import { Grid2X2, MoveHorizontal, Play, Upload } from "lucide-react";
 import { usePersonFocus } from "../../features/media/personFocus";
 import type { CSSProperties } from "react";
 import type { TransitionPreset } from "../../db/schema";
@@ -122,14 +116,7 @@ export function ArchiveControlBar({
   dateRange,
   slideshow,
 }: ArchiveControlBarProps) {
-  const {
-    strength,
-    setStrength,
-    pending,
-    autoRotate,
-    peopleOnly,
-    detectionError,
-  } = usePersonFocus();
+  const { strength, setStrength, autoRotate, peopleOnly } = usePersonFocus();
   const { months, startIndex, endIndex, onStartChange, onEndChange } =
     dateRange ?? {
       months: [],
@@ -233,32 +220,22 @@ export function ArchiveControlBar({
           style={{ "--focus-strength": `${strength}%` } as CSSProperties}
         >
           <span>Focus on Person</span>
-          {pending > 0 ? (
-            <span className="person-focus-loading" role="status">
-              <LoaderCircle size={18} /> Preparing…
-            </span>
-          ) : (
-            <>
-              <span className="person-focus-endpoint" aria-hidden="true">
-                0%
-              </span>
-              <input
-                type="range"
-                aria-label="Focus on person"
-                aria-valuetext={
-                  strength === 0 ? "Original" : `${strength}% focus`
-                }
-                min={0}
-                max={100}
-                step={1}
-                value={strength}
-                onChange={(event) => setStrength(Number(event.target.value))}
-              />
-              <span className="person-focus-endpoint" aria-hidden="true">
-                100%
-              </span>
-            </>
-          )}
+          <span className="person-focus-endpoint" aria-hidden="true">
+            0%
+          </span>
+          <input
+            type="range"
+            aria-label="Focus on person"
+            aria-valuetext={strength === 0 ? "Original" : `${strength}% focus`}
+            min={0}
+            max={100}
+            step={1}
+            value={strength}
+            onChange={(event) => setStrength(Number(event.target.value))}
+          />
+          <span className="person-focus-endpoint" aria-hidden="true">
+            100%
+          </span>
         </label>
         <details
           className="view-options"
@@ -318,17 +295,6 @@ export function ArchiveControlBar({
                 <span aria-hidden="true" />
               </button>
             </label>
-            {peopleOnly && pending > 0 ? (
-              <span className="view-options-status" role="status">
-                Checking photos…
-              </span>
-            ) : null}
-            {peopleOnly && pending === 0 && detectionError ? (
-              <span className="view-options-status" role="status">
-                Some photos could not be checked. Switch Human Only off and on
-                to retry.
-              </span>
-            ) : null}
           </div>
         </details>
       </div>
