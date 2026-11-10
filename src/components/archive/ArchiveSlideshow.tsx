@@ -210,6 +210,19 @@ export function ArchiveSlideshow({
                   ...(transitionPreset === "ken-burns" && frame.slot === 0
                     ? { scale: { duration: dwellMs / 1000, ease: "linear" } }
                     : {}),
+                  ...(transitionPreset === "directional-wipe" &&
+                  frame.slot !== 0
+                    ? {
+                        opacity: {
+                          duration: 0,
+                          delay: TRANSITION_DURATION_SECONDS,
+                        },
+                        clipPath: {
+                          duration: 0,
+                          delay: TRANSITION_DURATION_SECONDS,
+                        },
+                      }
+                    : {}),
                   ease: [0.22, 1, 0.36, 1],
                 }}
               >
@@ -247,10 +260,14 @@ export function ArchiveSlideshow({
         {item && transitionPreset === "film-burn" ? (
           <motion.span
             key={item.media.id}
-            className="slideshow-film-flash"
-            initial={{ opacity: 0.42 }}
-            animate={{ opacity: 0 }}
-            transition={{ duration: TRANSITION_DURATION_SECONDS }}
+            className="slideshow-film-tint"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: [0, 0.22, 0] }}
+            transition={{
+              duration: 1.15,
+              times: [0, 0.4, 1],
+              ease: "easeInOut",
+            }}
             aria-hidden="true"
           />
         ) : null}
@@ -304,7 +321,6 @@ function getFrameMotion(preset: TransitionPreset, slot: -1 | 0 | 1) {
 
   const base = {
     opacity: isCurrent ? 1 : 0,
-    x: "0%",
     scale: 1,
     filter: "none",
     clipPath: "inset(0 0 0 0%)",
@@ -313,45 +329,34 @@ function getFrameMotion(preset: TransitionPreset, slot: -1 | 0 | 1) {
     case "directional-wipe":
       return {
         ...base,
-        opacity: isCurrent ? 1 : 0,
-
-        clipPath: isCurrent ? "inset(0 0 0 0%)" : "inset(0 0 0 100%)",
+        clipPath: isCurrent ? "inset(0 0% 0 0)" : "inset(0 100% 0 0)",
       };
     case "depth-zoom":
       return {
         ...base,
         opacity: isCurrent ? 1 : 0,
-        scale: isCurrent ? 1 : 1.06,
-        filter: isCurrent ? "blur(0px)" : "blur(8px)",
+        scale: isCurrent ? 1 : 1.24,
+        filter: isCurrent ? "blur(0px)" : "blur(20px)",
       };
     case "rgb-split":
       return {
         ...base,
         opacity: isCurrent ? 1 : 0,
         filter: isCurrent
-          ? "contrast(1) saturate(1)"
-          : "contrast(1.6) saturate(1.7) drop-shadow(-14px 0 0 cyan) drop-shadow(14px 0 0 magenta)",
+          ? [
+              "hue-rotate(-55deg) saturate(1.9)",
+              "hue-rotate(65deg) saturate(1.55)",
+              "hue-rotate(0deg) saturate(1)",
+            ]
+          : "hue-rotate(0deg) saturate(1)",
       };
     case "ken-burns":
       return {
         ...base,
         opacity: isCurrent ? 1 : 0,
-        scale: isCurrent ? [1, 1.045] : 1,
-      };
-    case "film-burn":
-      return {
-        ...base,
-        opacity: isCurrent ? 1 : 0,
-        scale: isCurrent ? 1 : 1.02,
-        filter: isCurrent
-          ? "sepia(0) contrast(1)"
-          : "sepia(0.55) contrast(1.12)",
+        scale: isCurrent ? [1, 1.14] : 1,
       };
     default:
-      return {
-        ...base,
-        opacity: isCurrent ? 1 : 0,
-        x: "0%",
-      };
+      return base;
   }
 }

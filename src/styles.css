@@ -772,9 +772,10 @@ input:not([type="range"]):not([type="checkbox"]),
   border: 1px solid #3a2b3d;
   border-radius: 11px;
   outline: none;
-  background: #151117;
+  appearance: none;
+  background: #151117 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m4 7 6 6 6-6' fill='none' stroke='%23f5ecf2' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") right 12px center / 18px 18px no-repeat;
   color: var(--paper);
-  padding: 0 30px 0 12px;
+  padding: 0 38px 0 12px;
   font-size: 0.62rem;
 }
 
@@ -1139,12 +1140,11 @@ input:not([type="range"]):not([type="checkbox"]),
   object-fit: contain;
 }
 
-.slideshow-film-flash {
+.slideshow-film-tint {
   position: absolute;
-  z-index: 3;
+  z-index: 4;
   inset: 0;
-  background: #d87b35;
-  mix-blend-mode: screen;
+  background: radial-gradient(ellipse at left bottom, #be5c36, transparent 68%);
   pointer-events: none;
 }
 

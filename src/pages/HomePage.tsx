@@ -62,20 +62,38 @@ function formatDateInput(value: number, endOfMonth = false): string {
 }
 
 export function HomePage() {
-  const [immersive, setImmersive] = useState(false);
+  const [immersive, setImmersive] = useState(() => {
+    try {
+      return localStorage.getItem("viewer-fullscreen") === "true";
+    } catch {
+      return false;
+    }
+  });
   const [immersiveHint, setImmersiveHint] = useState(false);
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.repeat) return;
+      if (event.repeat || event.defaultPrevented) return;
       if (event.key === "F11" && event.shiftKey) {
         event.preventDefault();
         setImmersive((value) => !value);
-      } else if (event.key === "Escape") setImmersive(false);
+      } else if (
+        event.key === "Escape" &&
+        !document.querySelector(
+          'dialog[open], [role="dialog"][aria-modal="true"]',
+        )
+      ) {
+        setImmersive(false);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
   useEffect(() => {
+    try {
+      localStorage.setItem("viewer-fullscreen", String(immersive));
+    } catch {
+      // Fullscreen still works when storage is unavailable.
+    }
     window.dispatchEvent(new Event("resize"));
     if (!immersive) return;
     setImmersiveHint(true);
@@ -408,7 +426,7 @@ export function HomePage() {
         <>
           {immersiveHint ? (
             <div className="immersive-hint" role="status">
-              Photo-only mode · Press Shift+F11 or Esc to exit
+              Fullscreen mode · Press Shift+F11 or Esc to exit
             </div>
           ) : null}
           {["top", "bottom"].map((edge) => (
@@ -418,7 +436,7 @@ export function HomePage() {
                 onClick={() => setImmersive(false)}
                 title="Show header and footer (Shift+F11 or Esc)"
               >
-                Exit photo-only mode
+                Exit fullscreen mode
               </button>
             </div>
           ))}
@@ -429,7 +447,7 @@ export function HomePage() {
           onClick={() => setImmersive(true)}
           title="Hide header and footer (Shift+F11)"
         >
-          Photo-only mode
+          Fullscreen mode
         </button>
       )}
       <LocalServiceSettings />

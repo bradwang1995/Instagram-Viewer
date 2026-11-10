@@ -122,23 +122,25 @@ const PRESETS: Array<{
   {
     value: "depth-zoom",
     label: "Depth zoom",
-    description: "A soft zoom and blur bring the next photo into focus.",
+    description:
+      "The next photo starts close and blurred, then pulls back into sharp focus.",
   },
   {
     value: "film-burn",
     label: "Film burn",
-    description: "A warm flash fades away like light leaking onto film.",
+    description: "A soft amber tint blooms at the edge, then fades away.",
   },
   {
     value: "rgb-split",
-    label: "RGB split",
+    label: "RGB glitch",
     description:
-      "Colorful cyan and magenta edges briefly separate for a glitch effect.",
+      "The photo briefly cycles through strong colors before returning to normal.",
   },
   {
     value: "ken-burns",
     label: "Ken Burns",
-    description: "A slow, gentle zoom adds movement while each photo is shown.",
+    description:
+      "The photo slowly zooms in over the whole time it is on screen.",
   },
 ];
 

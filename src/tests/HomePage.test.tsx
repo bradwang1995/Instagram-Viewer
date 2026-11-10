@@ -116,7 +116,7 @@ describe("Photo archive preview", () => {
     vi.restoreAllMocks();
   });
 
-  it("restores date filters after remount and toggles photo-only mode", async () => {
+  it("restores date filters after remount", async () => {
     testState.posts[1] = {
       ...testState.posts[1],
       savedAt: "2026-03-20T12:00:00.000Z",
@@ -130,8 +130,25 @@ describe("Photo archive preview", () => {
     render(<HomePage />);
     await act(async () => undefined);
     expect(screen.getByRole("slider", { name: "Start time" })).toHaveValue("1");
+  });
+
+  it("restores fullscreen with the shortcut hint and gives the post dialog the first Escape", async () => {
+    const view = render(<HomePage />);
+    await act(async () => undefined);
     fireEvent.keyDown(window, { key: "F11", shiftKey: true });
+    view.unmount();
+    render(<HomePage />);
+    await act(async () => undefined);
+    expect(
+      screen.getByText("Fullscreen mode · Press Shift+F11 or Esc to exit"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Open post A" }));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.keyDown(dialog, { key: "Escape" });
     expect(document.querySelector(".archive-app")).toHaveClass("is-immersive");
+    // jsdom does not translate Escape into the native dialog cancel event.
+    fireEvent(dialog, new Event("cancel", { cancelable: true }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     fireEvent.keyDown(window, { key: "Escape" });
     expect(document.querySelector(".archive-app")).not.toHaveClass(
       "is-immersive",
