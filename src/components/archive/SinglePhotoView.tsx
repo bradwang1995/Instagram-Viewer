@@ -1,6 +1,27 @@
-import { RotateCw, X } from "lucide-react";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { RotateCw, Sparkles, X } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { personZoom } from "../../features/media/personFocus";
+import {
+  enhancePhotoRegion,
+  MAX_ENHANCEMENT_PIXELS,
+  type PhotoRegion,
+} from "../../features/media/photoEnhancement";
+import {
+  clampPan,
+  easeZoom,
+  fitPhoto,
+  MAX_ZOOM,
+  visiblePhotoRegion,
+  zoomAt,
+  type Camera,
+  type Size,
+} from "../../features/media/singlePhotoCamera";
 import type { PersonFraming } from "../../hooks/usePersonFocusStyle";
 
 export type OpenedPhoto = {
@@ -12,28 +33,13 @@ export type OpenedPhoto = {
   framing?: PersonFraming | Promise<PersonFraming | undefined>;
 };
 
-type Size = { width: number; height: number };
-// Pan is in image coordinates so resizing the dialog preserves the view.
-type Camera = { zoom: number; x: number; y: number; rotation: number };
-const MAX_ZOOM = 6;
-
-function fitPhoto(photo: Size, view: Size, rotation: number) {
-  const sideways = rotation % 180 !== 0;
-  const width = sideways ? photo.height : photo.width;
-  const height = sideways ? photo.width : photo.height;
-  const scale = Math.min(view.width / width, view.height / height);
-  return { width, height, scale };
-}
-
-function clampPan(camera: Camera, photo: Size, view: Size): Camera {
-  const { width, height, scale } = fitPhoto(photo, view, camera.rotation);
-  const limitX = Math.max(0, (width * camera.zoom - view.width / scale) / 2);
-  const limitY = Math.max(0, (height * camera.zoom - view.height / scale) / 2);
-  return {
-    ...camera,
-    x: Math.max(-limitX, Math.min(limitX, camera.x)),
-    y: Math.max(-limitY, Math.min(limitY, camera.y)),
-  };
+function covers(region: PhotoRegion, area: PhotoRegion) {
+  return (
+    region.x <= area.x &&
+    region.y <= area.y &&
+    region.x + region.width >= area.x + area.width &&
+    region.y + region.height >= area.y + area.height
+  );
 }
 
 function initialCamera(
@@ -77,7 +83,23 @@ export function SinglePhotoView({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const drag = useRef<{ id: number; x: number; y: number }>();
+  const displayedCamera = useRef<Camera>();
+  const zoomAnimation = useRef<{
+    target: Camera;
+    frame: number;
+    lastTime: number;
+  }>();
+  const enhancementJob = useRef<AbortController>();
+  const enhancementUrl = useRef<string>();
+  const [enhanced, setEnhanced] = useState<{
+    region: PhotoRegion;
+    url: string;
+  }>();
+  const [showEnhanced, setShowEnhanced] = useState(false);
+  const [progress, setProgress] = useState<number>();
+  const [enhanceError, setEnhanceError] = useState<string>();
   const [view, setView] = useState<Size>();
   const [framing, setFraming] = useState(() =>
     photo.framing instanceof Promise ? undefined : photo.framing,
@@ -87,6 +109,23 @@ export function SinglePhotoView({
     "loading",
   );
   const [dragging, setDragging] = useState(false);
+
+  const stopZoom = useCallback(() => {
+    const animation = zoomAnimation.current;
+    if (animation) window.cancelAnimationFrame(animation.frame);
+    zoomAnimation.current = undefined;
+  }, []);
+  useLayoutEffect(() => stopZoom, [stopZoom, view]);
+
+  useEffect(
+    () => () => {
+      const job = enhancementJob.current;
+      enhancementJob.current = undefined;
+      job?.abort();
+      if (enhancementUrl.current) URL.revokeObjectURL(enhancementUrl.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!(photo.framing instanceof Promise)) return;
@@ -107,7 +146,12 @@ export function SinglePhotoView({
     const measure = () => {
       const width = stage.clientWidth;
       const height = stage.clientHeight;
-      if (width && height) setView({ width, height });
+      if (width && height)
+        setView((previous) =>
+          previous?.width === width && previous.height === height
+            ? previous
+            : { width, height },
+        );
     };
     measure();
     const observer = new ResizeObserver(measure);
@@ -123,43 +167,65 @@ export function SinglePhotoView({
   useLayoutEffect(() => {
     const stage = stageRef.current!;
     if (!view) return;
+    const advance = (timestamp: number) => {
+      const animation = zoomAnimation.current;
+      const current = displayedCamera.current;
+      if (!animation || !current) return;
+      const { scale } = fitPhoto(photo, view, current.rotation);
+      const next = easeZoom(
+        current,
+        animation.target,
+        timestamp - animation.lastTime,
+        scale,
+      );
+      displayedCamera.current = next;
+      setCamera(next);
+      if (next === animation.target) {
+        zoomAnimation.current = undefined;
+        return;
+      }
+      animation.lastTime = timestamp;
+      animation.frame = window.requestAnimationFrame(advance);
+    };
     const zoomPhoto = (event: WheelEvent) => {
       event.preventDefault();
-      if (loadState !== "ready" || !event.deltaY) return;
+      const unit =
+        event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? view.height : 1;
+      if (loadState !== "ready" || !event.deltaY || drag.current) return;
+      const current = displayedCamera.current;
+      if (!current) return;
       const { left, top } = stage.getBoundingClientRect();
       const cursorX = event.clientX - left - view.width / 2;
       const cursorY = event.clientY - top - view.height / 2;
-      const unit =
-        event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? view.height : 1;
-      setCamera((previous) => {
-        const camera = previous
-          ? clampPan(previous, photo, view)
-          : initialCamera(photo, view, framing);
-        const zoom = Math.max(
-          1,
-          Math.min(
-            MAX_ZOOM,
-            camera.zoom * Math.exp(-event.deltaY * unit * 0.002),
-          ),
-        );
-        const ratio = zoom / camera.zoom;
-        const { scale } = fitPhoto(photo, view, camera.rotation);
-        // Keep the pixel under the pointer stationary until reaching an edge.
-        return clampPan(
-          {
-            ...camera,
-            zoom,
-            x: camera.x * ratio + (cursorX / scale) * (1 - ratio),
-            y: camera.y * ratio + (cursorY / scale) * (1 - ratio),
-          },
-          photo,
-          view,
-        );
-      });
+      const animation = zoomAnimation.current;
+      const start = animation?.target ?? current;
+      const target = zoomAt(
+        start,
+        photo,
+        view,
+        cursorX,
+        cursorY,
+        event.deltaY * unit,
+      );
+      if (target.zoom === start.zoom) return;
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+        stopZoom();
+        displayedCamera.current = target;
+        setCamera(target);
+      } else if (animation) {
+        animation.target = target;
+      } else {
+        setCamera(current);
+        zoomAnimation.current = {
+          target,
+          lastTime: performance.now(),
+          frame: window.requestAnimationFrame(advance),
+        };
+      }
     };
     stage.addEventListener("wheel", zoomPhoto, { passive: false });
     return () => stage.removeEventListener("wheel", zoomPhoto);
-  }, [framing, loadState, photo, view]);
+  }, [loadState, photo, stopZoom, view]);
 
   const camera =
     view &&
@@ -171,6 +237,64 @@ export function SinglePhotoView({
   const canPan = Boolean(
     view && camera && loadState === "ready" && camera.zoom > 1,
   );
+  useLayoutEffect(() => {
+    displayedCamera.current = camera;
+  }, [camera]);
+  const area = view && camera && visiblePhotoRegion(photo, view, camera);
+  const enhancedHere = Boolean(
+    area && enhanced && covers(enhanced.region, area),
+  );
+
+  async function enhance() {
+    if (enhancementJob.current) {
+      enhancementJob.current.abort();
+      return;
+    }
+    if (!view || !camera || !area || !imageRef.current || loadState !== "ready")
+      return;
+    setEnhanceError(undefined);
+    if (enhancedHere) {
+      setShowEnhanced((value) => !value);
+      return;
+    }
+    const padded = visiblePhotoRegion(photo, view, camera, 28);
+    const region =
+      padded.width * padded.height <= MAX_ENHANCEMENT_PIXELS ? padded : area;
+    if (region.width * region.height > MAX_ENHANCEMENT_PIXELS) {
+      setEnhanceError("Zoom in to enhance a smaller area.");
+      return;
+    }
+    const job = new AbortController();
+    enhancementJob.current = job;
+    setProgress(0);
+    try {
+      const result = await enhancePhotoRegion(
+        imageRef.current,
+        photo.src,
+        region,
+        job.signal,
+        setProgress,
+      );
+      if (job.signal.aborted) return;
+      const url = URL.createObjectURL(result);
+      if (enhancementUrl.current) URL.revokeObjectURL(enhancementUrl.current);
+      enhancementUrl.current = url;
+      setEnhanced({ region, url });
+      setShowEnhanced(true);
+    } catch (error) {
+      if (!job.signal.aborted)
+        setEnhanceError(
+          error instanceof Error
+            ? error.message
+            : "Could not enhance this photo.",
+        );
+    } finally {
+      if (enhancementJob.current === job) {
+        enhancementJob.current = undefined;
+        setProgress(undefined);
+      }
+    }
+  }
 
   function stopDrag(pointerId: number) {
     if (drag.current?.id !== pointerId) return;
@@ -201,6 +325,7 @@ export function SinglePhotoView({
         className={`single-photo-stage${dragging ? " is-dragging" : canPan ? " can-pan" : ""}`}
         onPointerDown={(event) => {
           if (!canPan || drag.current || event.button !== 0) return;
+          stopZoom();
           event.currentTarget.setPointerCapture(event.pointerId);
           drag.current = {
             id: event.pointerId,
@@ -237,14 +362,8 @@ export function SinglePhotoView({
         onLostPointerCapture={(event) => stopDrag(event.pointerId)}
       >
         {loadState !== "failed" && (
-          <img
-            src={photo.src}
-            alt={photo.alt}
-            crossOrigin={photo.crossOrigin}
-            referrerPolicy="no-referrer"
-            draggable={false}
-            onLoad={() => setLoadState("ready")}
-            onError={() => setLoadState("failed")}
+          <div
+            className="single-photo-image"
             style={
               camera && {
                 width: photo.width * scale,
@@ -252,7 +371,32 @@ export function SinglePhotoView({
                 transform: `translate(-50%, -50%) translate(${camera.x * scale}px, ${camera.y * scale}px) scale(${camera.zoom}) rotate(${camera.rotation}deg)`,
               }
             }
-          />
+          >
+            <img
+              ref={imageRef}
+              src={photo.src}
+              alt={photo.alt}
+              crossOrigin={photo.crossOrigin}
+              referrerPolicy="no-referrer"
+              draggable={false}
+              onLoad={() => setLoadState("ready")}
+              onError={() => setLoadState("failed")}
+            />
+            {showEnhanced && enhanced && (
+              <img
+                className="single-photo-enhanced-region"
+                src={enhanced.url}
+                alt=""
+                draggable={false}
+                style={{
+                  left: `${(enhanced.region.x / photo.width) * 100}%`,
+                  top: `${(enhanced.region.y / photo.height) * 100}%`,
+                  width: `${(enhanced.region.width / photo.width) * 100}%`,
+                  height: `${(enhanced.region.height / photo.height) * 100}%`,
+                }}
+              />
+            )}
+          </div>
         )}
         {loadState === "loading" && (
           <span className="single-photo-status" role="status">
@@ -265,6 +409,30 @@ export function SinglePhotoView({
           </span>
         )}
       </div>
+      <div className="single-photo-enhancement">
+        {enhanceError && <span role="status">{enhanceError}</span>}
+        <button
+          type="button"
+          className="viewer-control single-photo-enhance"
+          aria-label={progress !== undefined ? "Cancel enhancement" : undefined}
+          title={
+            progress !== undefined
+              ? "Cancel enhancement"
+              : enhancedHere && showEnhanced
+                ? "Show original photo"
+                : "Use AI to enhance the visible area (2×)"
+          }
+          disabled={!view || loadState !== "ready"}
+          onClick={() => void enhance()}
+        >
+          <Sparkles size={18} aria-hidden="true" />
+          {progress !== undefined
+            ? `Enhancing… ${progress}%`
+            : enhancedHere && showEnhanced
+              ? "Original"
+              : "Enhance"}
+        </button>
+      </div>
       <button
         type="button"
         className="viewer-control single-photo-rotate"
@@ -273,6 +441,7 @@ export function SinglePhotoView({
         disabled={!view || loadState !== "ready"}
         onClick={() => {
           if (!view) return;
+          stopZoom();
           setCamera((previous) => {
             const current = previous
               ? clampPan(previous, photo, view)

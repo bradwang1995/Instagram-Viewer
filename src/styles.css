@@ -1503,12 +1503,42 @@ input:not([type="range"]):not([type="checkbox"]),
 }
 .single-photo-stage.can-pan { cursor: grab; }
 .single-photo-stage.is-dragging { cursor: grabbing; }
-.single-photo-stage img {
+.single-photo-image {
   position: absolute;
   left: 50%;
   top: 50%;
-  max-width: none;
   pointer-events: none;
+}
+.single-photo-image > img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+}
+.single-photo-enhanced-region { position: absolute; }
+.single-photo-enhancement {
+  position: absolute;
+  z-index: 1;
+  left: max(16px, env(safe-area-inset-left));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  display: grid;
+  justify-items: start;
+  gap: 8px;
+  max-width: min(300px, calc(100% - 96px));
+}
+.single-photo-enhancement > span {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgb(12 10 13 / 90%);
+  color: var(--paper);
+  font-size: 0.72rem;
+}
+button.viewer-control.single-photo-enhance {
+  min-width: 48px;
+  height: 48px;
+  padding: 0 14px;
+  background: rgb(12 10 13 / 85%);
+  color: var(--paper);
 }
 .single-photo-status {
   position: absolute;
