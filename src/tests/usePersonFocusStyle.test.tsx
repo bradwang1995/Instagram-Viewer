@@ -24,7 +24,7 @@ it("prepares loaded photos at zero while leaving the original framing", async ()
   const ref = { current: new Image() };
   const { result } = renderHook(() => usePersonFocusStyle(ref, "photo", true));
   await act(async () => {});
-  expect(result.current).toEqual({ transition: "none" });
+  expect(result.current.style).toEqual({ transition: "none" });
   expect(detectPerson).toHaveBeenCalledTimes(1);
   expect(usePersonFocus.getState().pending).toBe(0);
 });
@@ -50,7 +50,7 @@ it("keeps preparation active at zero and cancels when the photo is no longer rea
     { initialProps: { ready: true } },
   );
   expect(usePersonFocus.getState().pending).toBe(1);
-  expect(result.current?.transition).toBe("none");
+  expect(result.current.style?.transition).toBe("none");
   const signal = vi.mocked(detectPerson).mock.calls[0][3];
   act(() => usePersonFocus.setState({ strength: 0 }));
   expect(signal.aborted).toBe(false);
@@ -60,7 +60,7 @@ it("keeps preparation active at zero and cancels when the photo is no longer rea
   await act(async () =>
     complete([{ originX: 100, originY: 200, width: 200, height: 500 }]),
   );
-  expect(result.current).toEqual({ transition: "none" });
+  expect(result.current.style).toEqual({ transition: "none" });
 });
 it("animates a delayed detected crop from the original framing and cancels on unmount", async () => {
   vi.stubGlobal(
@@ -87,13 +87,15 @@ it("animates a delayed detected crop from the original framing and cancels on un
   const { result, unmount } = renderHook(() =>
     usePersonFocusStyle(ref, "photo", true),
   );
-  await waitFor(() => expect(result.current?.transform).toContain("scale("));
-  expect(result.current?.transition).toBe("none");
+  await waitFor(() =>
+    expect(result.current.style?.transform).toContain("scale("),
+  );
+  expect(result.current.style?.transition).toBe("none");
   const signal = vi.mocked(detectPerson).mock.calls[0][3];
   expect(animate).toHaveBeenCalledWith(
     [
       { transform: "translate(-50%, -50%) translate(0px, 0px) scale(1)" },
-      { transform: result.current.transform },
+      { transform: result.current.style.transform },
     ],
     expect.objectContaining({ duration: 600 }),
   );
@@ -126,9 +128,9 @@ it("never zooms out an already-large cover image", async () => {
   const ref = { current: image };
   const { result } = renderHook(() => usePersonFocusStyle(ref, "large", true));
   await act(async () => {});
-  expect(result.current?.transform).toContain("scale(1)");
-  expect(result.current?.transition).toBe("none");
-  expect(result.current).not.toHaveProperty("objectFit");
+  expect(result.current.style?.transform).toContain("scale(1)");
+  expect(result.current.style?.transition).toBe("none");
+  expect(result.current.style).not.toHaveProperty("objectFit");
   vi.restoreAllMocks();
 });
 
@@ -152,16 +154,18 @@ it("updates slider strength without restarting detection", async () => {
   });
   const ref = { current: image };
   const { result } = renderHook(() => usePersonFocusStyle(ref, "photo", true));
-  await waitFor(() => expect(result.current?.transform).toContain("scale("));
-  const full = result.current?.transform;
+  await waitFor(() =>
+    expect(result.current.style?.transform).toContain("scale("),
+  );
+  const full = result.current.style?.transform;
   act(() => usePersonFocus.setState({ strength: 50 }));
-  expect(result.current?.transform).not.toEqual(full);
+  expect(result.current.style?.transform).not.toEqual(full);
   expect(detectPerson).toHaveBeenCalledTimes(1);
   act(() => usePersonFocus.setState({ strength: 0 }));
-  expect(result.current.transform).toBe(
+  expect(result.current.style.transform).toBe(
     "translate(-50%, -50%) translate(0px, 0px) scale(1)",
   );
-  expect(result.current.position).toBe("absolute");
+  expect(result.current.style.position).toBe("absolute");
 });
 
 it("holds focus readiness while a photo is still loading and releases it on unmount", () => {

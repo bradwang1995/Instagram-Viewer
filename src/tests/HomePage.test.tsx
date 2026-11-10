@@ -301,6 +301,58 @@ describe("Photo archive preview", () => {
     expect(document.querySelector("iframe")).toBeNull();
   });
 
+  it("opens the chosen photo above its post and restores focus when it is dismissed", async () => {
+    HTMLDialogElement.prototype.close = function () {
+      this.removeAttribute("open");
+    };
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        observe() {}
+        disconnect() {}
+      },
+    );
+    const post = testState.posts[0];
+    testState.queue = [
+      createQueueItem(post, 0, 2),
+      createQueueItem(post, 1, 2),
+    ];
+    render(<HomePage />);
+    await act(async () => undefined);
+    fireEvent.click(screen.getByRole("button", { name: "Open post A" }));
+    const panel = await screen.findByRole("dialog", {
+      name: "Photos in post A",
+    });
+    const trigger = await within(panel).findByRole("button", {
+      name: "Open photo 2",
+    });
+    expect(trigger).toHaveAttribute("aria-disabled", "true");
+    fireEvent.click(trigger);
+    expect(
+      screen.queryByRole("dialog", { name: "Single photo view" }),
+    ).toBeNull();
+    const image = trigger.querySelector("img")!;
+    Object.defineProperties(image, {
+      naturalWidth: { value: 1200 },
+      naturalHeight: { value: 800 },
+    });
+    fireEvent.load(image);
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: "Enter" });
+
+    const single = screen.getByRole("dialog", { name: "Single photo view" });
+    expect(within(single).getAllByRole("img")).toEqual([
+      within(single).getByAltText(image.alt),
+    ]);
+    expect(within(single).getByRole("img")).toHaveAttribute("src", image.src);
+    expect(within(single).getAllByRole("button")).toHaveLength(2);
+    fireEvent(single, new Event("cancel", { cancelable: true }));
+    expect(single).not.toBeInTheDocument();
+    expect(panel).toHaveAttribute("open");
+    expect(within(panel).getByText("2 / 2 photos")).toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+  });
+
   it("hides only a failed carousel photo while keeping the post and its other photos", async () => {
     const post = createPost("PARTIAL-FAILURE", "@partial", "Saved");
     testState.posts = [post];

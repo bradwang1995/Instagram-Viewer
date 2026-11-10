@@ -1477,6 +1477,64 @@ input:not([type="range"]):not([type="checkbox"]),
   background: rgb(8 8 12 / 75%);
   backdrop-filter: blur(8px);
 }
+.single-photo-dialog {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100dvh;
+  max-width: none;
+  max-height: none;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  background: var(--black);
+  color: var(--paper);
+  overflow: hidden;
+}
+.single-photo-dialog::backdrop {
+  background: var(--black);
+}
+.single-photo-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  user-select: none;
+}
+.single-photo-stage.can-pan { cursor: grab; }
+.single-photo-stage.is-dragging { cursor: grabbing; }
+.single-photo-stage img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  max-width: none;
+  pointer-events: none;
+}
+.single-photo-status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  pointer-events: none;
+}
+button.viewer-control.single-photo-close,
+button.viewer-control.single-photo-rotate {
+  position: absolute;
+  z-index: 1;
+  right: max(16px, env(safe-area-inset-right));
+  width: 48px;
+  min-width: 48px;
+  height: 48px;
+  padding: 0;
+  justify-content: center;
+  background: rgb(12 10 13 / 85%);
+  color: var(--paper);
+}
+button.viewer-control.single-photo-close { top: max(16px, env(safe-area-inset-top)); }
+button.viewer-control.single-photo-close svg { width: 36px; height: 36px; flex-basis: 36px; }
+button.viewer-control.single-photo-rotate { bottom: max(16px, env(safe-area-inset-bottom)); }
+button.viewer-control.single-photo-rotate svg { width: 24px; height: 24px; flex-basis: 24px; }
 .post-photo-panel .archive-preview,
 .post-photo-panel .archive-slideshow {
   position: absolute;

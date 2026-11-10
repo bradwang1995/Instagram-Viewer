@@ -13,6 +13,12 @@ import {
 } from "../features/media/personFocus";
 import { detectPerson } from "../features/media/personDetector";
 
+export type PersonFraming = {
+  crop: NonNullable<ReturnType<typeof personCrop>>;
+  rotation: number;
+  strength: number;
+};
+
 export function usePersonFocusStyle(
   ref: RefObject<HTMLImageElement>,
   url: string | undefined,
@@ -23,7 +29,6 @@ export function usePersonFocusStyle(
   const strength = usePersonFocus((s) => s.strength);
   const autoRotate = usePersonFocus((s) => s.autoRotate);
   const peopleOnly = usePersonFocus((s) => s.peopleOnly);
-  const [rotation, setRotation] = useState(0);
 
   // Loading photos also hold the control, so it cannot accept a setting before
   // the first inference has even started.
@@ -34,10 +39,13 @@ export function usePersonFocusStyle(
       usePersonFocus.setState((s) => ({ pending: Math.max(0, s.pending - 1) }));
     };
   }, [preparing, ready]);
-  const [geometry, setGeometry] = useState<ReturnType<typeof personZoom>>(null);
+  const [layout, setLayout] = useState<{
+    crop: PersonFraming["crop"];
+    rotation: number;
+    geometry: ReturnType<typeof personZoom>;
+  }>();
   useEffect(() => {
-    setGeometry(null);
-    setRotation(0);
+    setLayout(undefined);
     const image = ref.current;
     if (!ready || !url || !image) return;
     usePersonFocus.setState((s) => ({ pending: s.pending + 1 }));
@@ -82,7 +90,6 @@ export function usePersonFocusStyle(
       const crop = personCrop(image.naturalWidth, image.naturalHeight, boxes);
       if (!crop) return;
       const angle = autoRotate ? (crop.rotation ?? 0) : 0;
-      setRotation(angle);
       const width = angle ? image.naturalHeight : image.naturalWidth;
       const height = angle ? image.naturalWidth : image.naturalHeight;
       const orientedCrop =
@@ -102,8 +109,10 @@ export function usePersonFocusStyle(
               }
             : crop;
       const update = () =>
-        setGeometry(
-          personZoom(
+        setLayout({
+          crop: orientedCrop,
+          rotation: angle,
+          geometry: personZoom(
             width,
             height,
             surface.clientWidth,
@@ -111,7 +120,7 @@ export function usePersonFocusStyle(
             orientedCrop,
             getComputedStyle(image).objectFit,
           ),
-        );
+        });
       update();
       observer = new ResizeObserver(update);
       observer.observe(surface);
@@ -122,6 +131,7 @@ export function usePersonFocusStyle(
       observer?.disconnect();
     };
   }, [ready, url, ref, autoRotate, peopleOnly, mediaId]);
+  const { geometry, rotation = 0 } = layout ?? {};
   const progress = Math.min(100, strength) / 100;
   const originalTransform =
     "translate(-50%, -50%) translate(0px, 0px) scale(1)";
@@ -160,17 +170,21 @@ export function usePersonFocusStyle(
   }, [geometry, ready, url, transform, ref]);
   useEffect(() => () => animation.current?.cancel(), []);
   const style: CSSProperties = { transition: "none" };
-  if (!geometry) return style;
+  const framing = layout && { crop: layout.crop, rotation, strength };
+  if (!geometry) return { style, framing };
   // Render the full image at its original fitted size before scaling/panning it.
   // Transforming an object-fit-clipped element would permanently cut off limbs.
   return {
-    ...style,
-    position: "absolute",
-    left: "50%",
-    top: "50%",
-    width: rotation ? geometry.drawnHeight : geometry.drawnWidth,
-    height: rotation ? geometry.drawnWidth : geometry.drawnHeight,
-    maxWidth: "none",
-    transform,
-  } satisfies CSSProperties;
+    framing,
+    style: {
+      ...style,
+      position: "absolute",
+      left: "50%",
+      top: "50%",
+      width: rotation ? geometry.drawnHeight : geometry.drawnWidth,
+      height: rotation ? geometry.drawnWidth : geometry.drawnHeight,
+      maxWidth: "none",
+      transform,
+    } satisfies CSSProperties,
+  };
 }

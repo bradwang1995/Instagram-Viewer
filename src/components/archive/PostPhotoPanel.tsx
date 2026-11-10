@@ -7,6 +7,7 @@ import type { MediaQueueItem } from "../../features/media/mediaQueue";
 import { ArchiveControlBar, type ArchiveTab } from "./ArchiveChrome";
 import { ArchivePreview } from "./ArchivePreview";
 import { ArchiveSlideshow } from "./ArchiveSlideshow";
+import { SinglePhotoView, type OpenedPhoto } from "./SinglePhotoView";
 import { usesPersonalMedia } from "../../features/media/personalMedia";
 import {
   errorFailure,
@@ -34,6 +35,7 @@ export function PostPhotoPanel({
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<ArchiveTab>("ribbon");
   const [selectedId, setSelectedId] = useState<string>();
+  const [openedPhoto, setOpenedPhoto] = useState<OpenedPhoto>();
   const [direction, setDirection] = useState<1 | -1>(1);
   const [slideGeneration, setSlideGeneration] = useState(0);
   const [dwellMs, setDwellMs] = useState(initialDwellMs);
@@ -112,95 +114,107 @@ export function PostPhotoPanel({
   );
 
   return (
-    <dialog
-      ref={dialogRef}
-      className="post-photo-panel"
-      aria-label={`Photos in post ${item.post.shortcode ?? item.post.id}`}
-      onCancel={(event) => {
-        event.preventDefault();
-        onClose();
-      }}
-      onClick={(event) => {
-        if (event.target === event.currentTarget) {
-          const bounds = event.currentTarget.getBoundingClientRect();
-          if (
-            event.clientX < bounds.left ||
-            event.clientX > bounds.right ||
-            event.clientY < bounds.top ||
-            event.clientY > bounds.bottom
-          )
-            onClose();
-        }
-      }}
-    >
-      <button
-        className="viewer-control post-panel-close"
-        aria-label="Close post photos"
-        onClick={onClose}
+    <>
+      <dialog
+        ref={dialogRef}
+        className="post-photo-panel"
+        aria-label={`Photos in post ${item.post.shortcode ?? item.post.id}`}
+        onCancel={(event) => {
+          event.preventDefault();
+          onClose();
+        }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) {
+            const bounds = event.currentTarget.getBoundingClientRect();
+            if (
+              event.clientX < bounds.left ||
+              event.clientX > bounds.right ||
+              event.clientY < bounds.top ||
+              event.clientY > bounds.bottom
+            )
+              onClose();
+          }
+        }}
       >
-        <X size={22} />
-      </button>
-      {loading || !items.length ? (
-        <div className="post-panel-message" role="status">
-          <strong>
-            {loading
-              ? "Loading post photos…"
-              : "No matching photos in this post."}
-          </strong>
-          {!loading && <ArchiveControlBar />}
-        </div>
-      ) : (
-        <>
-          {tab !== "slideshow" ? (
-            <ArchivePreview
-              items={items}
-              visibleItemIds={visibleIds}
-              selectedId={selected?.media.id}
-              viewMode={tab}
-              hasFilters={false}
-              isImporting={false}
-              keyboardNavigationEnabled
-              photoLevel
-              onSelect={setSelectedId}
-              onMediaUnavailable={onPhotoUnavailable}
-              onImport={() => {}}
-              onViewModeChange={setTab}
-              onStartSlideshow={() => setTab("slideshow")}
-            />
-          ) : (
-            <ArchiveSlideshow
-              loadGeneration={slideGeneration}
-              open
-              photoLevel
-              item={selected}
-              direction={direction}
-              previousItem={
-                items.length > 1
-                  ? items[(selectedIndex - 1 + items.length) % items.length]
-                  : undefined
-              }
-              nextItem={
-                items.length > 1
-                  ? items[(selectedIndex + 1) % items.length]
-                  : undefined
-              }
-              dwellMs={dwellMs}
-              transitionPreset={preset}
-              isImporting={false}
-              onPrevious={() => move(-1)}
-              onNext={() => move(1)}
-              onTabChange={setTab}
-              onImport={() => {}}
-              onDwellChange={setDwellMs}
-              onTransitionPresetChange={setPreset}
-              onUnavailable={onPhotoUnavailable}
-            />
-          )}
-          <span className="post-photo-count">
-            {selectedIndex + 1} / {items.length} photos
-          </span>
-        </>
+        <button
+          className="viewer-control post-panel-close"
+          aria-label="Close post photos"
+          onClick={onClose}
+        >
+          <X size={22} />
+        </button>
+        {loading || !items.length ? (
+          <div className="post-panel-message" role="status">
+            <strong>
+              {loading
+                ? "Loading post photos…"
+                : "No matching photos in this post."}
+            </strong>
+            {!loading && <ArchiveControlBar />}
+          </div>
+        ) : (
+          <>
+            {tab !== "slideshow" ? (
+              <ArchivePreview
+                items={items}
+                visibleItemIds={visibleIds}
+                selectedId={selected?.media.id}
+                viewMode={tab}
+                hasFilters={false}
+                isImporting={false}
+                keyboardNavigationEnabled={!openedPhoto}
+                photoLevel
+                onSelect={setSelectedId}
+                onOpenPhoto={setOpenedPhoto}
+                onMediaUnavailable={onPhotoUnavailable}
+                onImport={() => {}}
+                onViewModeChange={setTab}
+                onStartSlideshow={() => setTab("slideshow")}
+              />
+            ) : (
+              <ArchiveSlideshow
+                loadGeneration={slideGeneration}
+                open
+                photoLevel
+                playing={!openedPhoto}
+                keyboardNavigationEnabled={!openedPhoto}
+                onOpenPhoto={setOpenedPhoto}
+                item={selected}
+                direction={direction}
+                previousItem={
+                  items.length > 1
+                    ? items[(selectedIndex - 1 + items.length) % items.length]
+                    : undefined
+                }
+                nextItem={
+                  items.length > 1
+                    ? items[(selectedIndex + 1) % items.length]
+                    : undefined
+                }
+                dwellMs={dwellMs}
+                transitionPreset={preset}
+                isImporting={false}
+                onPrevious={() => move(-1)}
+                onNext={() => move(1)}
+                onTabChange={setTab}
+                onImport={() => {}}
+                onDwellChange={setDwellMs}
+                onTransitionPresetChange={setPreset}
+                onUnavailable={onPhotoUnavailable}
+              />
+            )}
+            <span className="post-photo-count">
+              {selectedIndex + 1} / {items.length} photos
+            </span>
+          </>
+        )}
+      </dialog>
+      {openedPhoto && (
+        <SinglePhotoView
+          photo={openedPhoto}
+          onClose={() => setOpenedPhoto(undefined)}
+        />
       )}
-    </dialog>
+    </>
   );
 }

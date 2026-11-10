@@ -21,6 +21,7 @@ import {
   usesPersonalMedia,
 } from "../../features/media/personalMedia";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
+import type { OpenedPhoto } from "./SinglePhotoView";
 
 const resolvedCandidateByRevision = new Map<string, string>();
 
@@ -33,6 +34,7 @@ type ArchiveMediaCardProps = {
   visuallyHidden?: boolean;
   registerShell?: (itemId: string, node: HTMLElement | null) => void;
   onSelect: (mediaId: string) => void;
+  onOpenPhoto?: (photo: OpenedPhoto) => void;
   onUnavailable: (mediaId: string) => void;
   onAspectChange?: (mediaId: string, aspect: number) => void;
   onLoadStateChange?: (mediaId: string, ready: boolean) => void;
@@ -47,6 +49,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   visuallyHidden = false,
   registerShell,
   onSelect,
+  onOpenPhoto,
   onUnavailable,
   onLoadStateChange,
   onAspectChange,
@@ -64,7 +67,9 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
       : undefined;
   const [attempt, setAttempt] = useState(0);
   const directUrl = mediaSource(item);
-  const previewUrl = usesPersonalMedia(item) ? undefined : media.previewUrl;
+  const personalMedia = usesPersonalMedia(item);
+  const crossOrigin = personalMedia ? "anonymous" : undefined;
+  const previewUrl = personalMedia ? undefined : media.previewUrl;
   const url = directUrl ?? proxyUrl;
   const mediaRevision = `${media.id}\u0000${url ?? ""}\u0000${media.previewUrl ?? ""}`;
   const creator =
@@ -87,7 +92,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   const unavailableReportedRef = useRef(false);
   const imageRef = useRef<HTMLImageElement>(null);
   const resolvedUrl = candidateUrls[candidateIndex];
-  const focusStyle = usePersonFocusStyle(
+  const { style: focusStyle, framing } = usePersonFocusStyle(
     imageRef,
     resolvedUrl,
     loadMedia && !visuallyHidden && !isLoading && !hasFailed,
@@ -197,6 +202,27 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
     reportUnavailable();
   }
 
+  const canOpenPhoto = Boolean(
+    resolvedUrl && loadMedia && !isLoading && !hasFailed,
+  );
+  function activate() {
+    if (!onOpenPhoto) {
+      onSelect(media.id);
+      return;
+    }
+    const image = imageRef.current;
+    if (!canOpenPhoto || !image?.naturalWidth || !image.naturalHeight) return;
+    onSelect(media.id);
+    onOpenPhoto({
+      src: image.currentSrc || image.src,
+      alt: image.alt,
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      crossOrigin,
+      framing,
+    });
+  }
+
   return (
     <article
       ref={shellRef}
@@ -213,13 +239,18 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
         className="archive-card-hit"
         role="button"
         tabIndex={0}
-        aria-label={`Open post ${post.shortcode ?? post.id}`}
-        onClick={() => onSelect(media.id)}
+        aria-label={
+          onOpenPhoto
+            ? `Open photo ${media.sourceIndex + 1}`
+            : `Open post ${post.shortcode ?? post.id}`
+        }
+        aria-disabled={onOpenPhoto && !canOpenPhoto ? true : undefined}
+        onClick={activate}
         onKeyDown={(event) => {
           if (event.target !== event.currentTarget) return;
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            onSelect(media.id);
+            activate();
           }
         }}
       >
@@ -256,7 +287,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
                 loading="eager"
                 decoding="async"
                 referrerPolicy="no-referrer"
-                crossOrigin={usesPersonalMedia(item) ? "anonymous" : undefined}
+                crossOrigin={crossOrigin}
                 draggable={false}
                 onLoad={(event) => {
                   const image = event.currentTarget;

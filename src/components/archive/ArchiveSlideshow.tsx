@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useSlideshowPlayback } from "../../hooks/useSlideshowPlayback";
 import type { TransitionPreset } from "../../db/schema";
 import { ArchiveMediaCard } from "./ArchiveMediaCard";
+import type { OpenedPhoto } from "./SinglePhotoView";
 import type { MediaQueueItem } from "../../features/media/mediaQueue";
 import {
   ArchiveControlBar,
@@ -15,6 +16,7 @@ import {
 type ArchiveSlideshowProps = {
   open: boolean;
   active?: boolean;
+  playing?: boolean;
   loadGeneration?: number;
   loadScope?: string;
   item?: MediaQueueItem;
@@ -27,6 +29,7 @@ type ArchiveSlideshowProps = {
   photoLevel?: boolean;
   keyboardNavigationEnabled?: boolean;
   onOpenPost?: (mediaId: string) => void;
+  onOpenPhoto?: (photo: OpenedPhoto) => void;
   isImporting: boolean;
   onPrevious: () => void;
   onNext: () => void;
@@ -47,6 +50,7 @@ const TRANSITION_DURATION_SECONDS = 0.7;
 export function ArchiveSlideshow({
   open,
   active = true,
+  playing = true,
   loadGeneration = 0,
   loadScope = "",
   item,
@@ -59,6 +63,7 @@ export function ArchiveSlideshow({
   photoLevel = false,
   keyboardNavigationEnabled = true,
   onOpenPost,
+  onOpenPhoto,
   isImporting,
   onPrevious,
   onNext,
@@ -82,7 +87,7 @@ export function ArchiveSlideshow({
     );
   }, []);
   const visible = useSlideshowPlayback(
-    open && active,
+    open && active && playing,
     item?.media.id,
     !!item && readyIds.includes(item.media.id),
     dwellMs,
@@ -237,6 +242,7 @@ export function ArchiveSlideshow({
                   }
                   layoutStyle={{ width: "100%", height: "100%" }}
                   onSelect={onOpenPost ?? (() => {})}
+                  onOpenPhoto={frame.slot === 0 ? onOpenPhoto : undefined}
                   onUnavailable={onUnavailable}
                   onLoadStateChange={onLoadStateChange}
                 />

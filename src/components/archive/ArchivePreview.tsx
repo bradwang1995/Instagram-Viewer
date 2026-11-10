@@ -25,6 +25,7 @@ import {
   ArchiveHeader,
 } from "./ArchiveChrome";
 import { ArchiveMediaCard } from "./ArchiveMediaCard";
+import type { OpenedPhoto } from "./SinglePhotoView";
 import { usePersonFocus } from "../../features/media/personFocus";
 
 export type ArchiveViewMode = "ribbon" | "grid";
@@ -40,6 +41,7 @@ type ArchivePreviewProps = {
   hasFilters: boolean;
   dateRange?: ArchiveDateRange;
   onOpenPost?: (mediaId: string) => void;
+  onOpenPhoto?: (photo: OpenedPhoto) => void;
   photoLevel?: boolean;
   isImporting: boolean;
   keyboardNavigationEnabled: boolean;
@@ -79,6 +81,7 @@ export const ArchivePreview = memo(function ArchivePreview({
   hasFilters,
   dateRange,
   onOpenPost,
+  onOpenPhoto,
   photoLevel = false,
   isImporting,
   keyboardNavigationEnabled,
@@ -824,6 +827,7 @@ export const ArchivePreview = memo(function ArchivePreview({
                   registerShell={registerShell}
                   layoutStyle={layoutStyle ?? HIDDEN_CARD_STYLE}
                   onSelect={onOpenPost ?? onSelect}
+                  onOpenPhoto={onOpenPhoto}
                   onUnavailable={onMediaUnavailable}
                 />
               );
