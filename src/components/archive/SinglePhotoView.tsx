@@ -1,5 +1,5 @@
 import { RotateCw, X } from "lucide-react";
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { personZoom } from "../../features/media/personFocus";
 import type { PersonFraming } from "../../hooks/usePersonFocusStyle";
 
@@ -9,7 +9,7 @@ export type OpenedPhoto = {
   width: number;
   height: number;
   crossOrigin?: "anonymous";
-  framing?: PersonFraming;
+  framing?: PersonFraming | Promise<PersonFraming | undefined>;
 };
 
 type Size = { width: number; height: number };
@@ -36,19 +36,23 @@ function clampPan(camera: Camera, photo: Size, view: Size): Camera {
   };
 }
 
-function initialCamera(photo: OpenedPhoto, view: Size): Camera {
-  const rotation = photo.framing?.rotation ?? 0;
+function initialCamera(
+  photo: Size,
+  view: Size,
+  framing?: PersonFraming,
+): Camera {
+  const rotation = framing?.rotation ?? 0;
   const { width, height, scale } = fitPhoto(photo, view, rotation);
   const focus =
-    photo.framing &&
+    framing &&
     personZoom(
       width,
       height,
       view.width,
       view.height,
-      photo.framing.crop,
+      framing.crop,
       "contain",
-      photo.framing.strength,
+      framing.strength,
     );
   const zoom = Math.min(MAX_ZOOM, focus?.scale ?? 1);
   const ratio = zoom / (focus?.scale ?? 1);
@@ -75,11 +79,25 @@ export function SinglePhotoView({
   const stageRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ id: number; x: number; y: number }>();
   const [view, setView] = useState<Size>();
+  const [framing, setFraming] = useState(() =>
+    photo.framing instanceof Promise ? undefined : photo.framing,
+  );
   const [manualCamera, setCamera] = useState<Camera>();
   const [loadState, setLoadState] = useState<"loading" | "ready" | "failed">(
     "loading",
   );
   const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    if (!(photo.framing instanceof Promise)) return;
+    let active = true;
+    void photo.framing.then((result) => {
+      if (active) setFraming(result);
+    });
+    return () => {
+      active = false;
+    };
+  }, [photo.framing]);
 
   useLayoutEffect(() => {
     const dialog = dialogRef.current!;
@@ -116,7 +134,7 @@ export function SinglePhotoView({
       setCamera((previous) => {
         const camera = previous
           ? clampPan(previous, photo, view)
-          : initialCamera(photo, view);
+          : initialCamera(photo, view, framing);
         const zoom = Math.max(
           1,
           Math.min(
@@ -141,13 +159,13 @@ export function SinglePhotoView({
     };
     stage.addEventListener("wheel", zoomPhoto, { passive: false });
     return () => stage.removeEventListener("wheel", zoomPhoto);
-  }, [loadState, photo, view]);
+  }, [framing, loadState, photo, view]);
 
   const camera =
     view &&
     (manualCamera
       ? clampPan(manualCamera, photo, view)
-      : initialCamera(photo, view));
+      : initialCamera(photo, view, framing));
   const scale =
     view && camera ? fitPhoto(photo, view, camera.rotation).scale : 0;
   const canPan = Boolean(
@@ -201,7 +219,7 @@ export function SinglePhotoView({
           setCamera((previous) => {
             const current = previous
               ? clampPan(previous, photo, view)
-              : initialCamera(photo, view);
+              : initialCamera(photo, view, framing);
             const { scale } = fitPhoto(photo, view, current.rotation);
             return clampPan(
               {
@@ -258,7 +276,7 @@ export function SinglePhotoView({
           setCamera((previous) => {
             const current = previous
               ? clampPan(previous, photo, view)
-              : initialCamera(photo, view);
+              : initialCamera(photo, view, framing);
             return clampPan(
               {
                 ...current,

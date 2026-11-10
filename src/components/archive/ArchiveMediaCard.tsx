@@ -92,7 +92,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
   const unavailableReportedRef = useRef(false);
   const imageRef = useRef<HTMLImageElement>(null);
   const resolvedUrl = candidateUrls[candidateIndex];
-  const { style: focusStyle, framing } = usePersonFocusStyle(
+  const { style: focusStyle, getFraming } = usePersonFocusStyle(
     imageRef,
     resolvedUrl,
     loadMedia && !visuallyHidden && !isLoading && !hasFailed,
@@ -219,7 +219,7 @@ export const ArchiveMediaCard = memo(function ArchiveMediaCard({
       width: image.naturalWidth,
       height: image.naturalHeight,
       crossOrigin,
-      framing,
+      framing: getFraming(),
     });
   }
 

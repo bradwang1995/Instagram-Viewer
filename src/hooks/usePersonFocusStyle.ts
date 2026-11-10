@@ -18,6 +18,7 @@ export type PersonFraming = {
   rotation: number;
   strength: number;
 };
+type DetectedFraming = Omit<PersonFraming, "strength">;
 
 export function usePersonFocusStyle(
   ref: RefObject<HTMLImageElement>,
@@ -29,6 +30,7 @@ export function usePersonFocusStyle(
   const strength = usePersonFocus((s) => s.strength);
   const autoRotate = usePersonFocus((s) => s.autoRotate);
   const peopleOnly = usePersonFocus((s) => s.peopleOnly);
+  const framingRequest = useRef<Promise<DetectedFraming | undefined>>();
 
   // Loading photos also hold the control, so it cannot accept a setting before
   // the first inference has even started.
@@ -40,8 +42,7 @@ export function usePersonFocusStyle(
     };
   }, [preparing, ready]);
   const [layout, setLayout] = useState<{
-    crop: PersonFraming["crop"];
-    rotation: number;
+    framing: DetectedFraming;
     geometry: ReturnType<typeof personZoom>;
   }>();
   useEffect(() => {
@@ -76,7 +77,7 @@ export function usePersonFocusStyle(
         );
       return boxes;
     };
-    void request().then((boxes) => {
+    framingRequest.current = request().then((boxes) => {
       finish();
       if (controller.signal.aborted) return;
       if (boxes === null) {
@@ -108,10 +109,10 @@ export function usePersonFocusStyle(
                 height: crop.width,
               }
             : crop;
+      const framing = { crop: orientedCrop, rotation: angle };
       const update = () =>
         setLayout({
-          crop: orientedCrop,
-          rotation: angle,
+          framing,
           geometry: personZoom(
             width,
             height,
@@ -124,14 +125,17 @@ export function usePersonFocusStyle(
       update();
       observer = new ResizeObserver(update);
       observer.observe(surface);
+      return framing;
     });
     return () => {
+      framingRequest.current = undefined;
       finish();
       controller.abort();
       observer?.disconnect();
     };
   }, [ready, url, ref, autoRotate, peopleOnly, mediaId]);
-  const { geometry, rotation = 0 } = layout ?? {};
+  const geometry = layout?.geometry;
+  const rotation = layout?.framing.rotation ?? 0;
   const progress = Math.min(100, strength) / 100;
   const originalTransform =
     "translate(-50%, -50%) translate(0px, 0px) scale(1)";
@@ -170,12 +174,19 @@ export function usePersonFocusStyle(
   }, [geometry, ready, url, transform, ref]);
   useEffect(() => () => animation.current?.cancel(), []);
   const style: CSSProperties = { transition: "none" };
-  const framing = layout && { crop: layout.crop, rotation, strength };
-  if (!geometry) return { style, framing };
+  const getFraming = () => {
+    if (!strength && !autoRotate) return;
+    if (layout) return { ...layout.framing, strength };
+    // A photo can be opened while the card's existing detection is still running.
+    return framingRequest.current?.then(
+      (framing) => framing && { ...framing, strength },
+    );
+  };
+  if (!geometry) return { style, getFraming };
   // Render the full image at its original fitted size before scaling/panning it.
   // Transforming an object-fit-clipped element would permanently cut off limbs.
   return {
-    framing,
+    getFraming,
     style: {
       ...style,
       position: "absolute",

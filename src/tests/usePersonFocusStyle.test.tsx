@@ -87,9 +87,16 @@ it("animates a delayed detected crop from the original framing and cancels on un
   const { result, unmount } = renderHook(() =>
     usePersonFocusStyle(ref, "photo", true),
   );
+  const openingFraming = result.current.getFraming();
+  expect(openingFraming).toBeInstanceOf(Promise);
   await waitFor(() =>
     expect(result.current.style?.transform).toContain("scale("),
   );
+  await expect(openingFraming).resolves.toEqual({
+    crop: { x: 200, y: 300, width: 200, height: 500 },
+    rotation: 0,
+    strength: 100,
+  });
   expect(result.current.style?.transition).toBe("none");
   const signal = vi.mocked(detectPerson).mock.calls[0][3];
   expect(animate).toHaveBeenCalledWith(
