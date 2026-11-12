@@ -1,4 +1,4 @@
-import { RotateCw, Sparkles, X } from "lucide-react";
+import { RotateCw, X } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -8,16 +8,10 @@ import {
 } from "react";
 import { personZoom } from "../../features/media/personFocus";
 import {
-  enhancePhotoRegion,
-  MAX_ENHANCEMENT_PIXELS,
-  type PhotoRegion,
-} from "../../features/media/photoEnhancement";
-import {
   clampPan,
   easeZoom,
   fitPhoto,
   MAX_ZOOM,
-  visiblePhotoRegion,
   zoomAt,
   type Camera,
   type Size,
@@ -32,15 +26,6 @@ export type OpenedPhoto = {
   crossOrigin?: "anonymous";
   framing?: PersonFraming | Promise<PersonFraming | undefined>;
 };
-
-function covers(region: PhotoRegion, area: PhotoRegion) {
-  return (
-    region.x <= area.x &&
-    region.y <= area.y &&
-    region.x + region.width >= area.x + area.width &&
-    region.y + region.height >= area.y + area.height
-  );
-}
 
 function initialCamera(
   photo: Size,
@@ -83,7 +68,6 @@ export function SinglePhotoView({
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
-  const imageRef = useRef<HTMLImageElement>(null);
   const drag = useRef<{ id: number; x: number; y: number }>();
   const displayedCamera = useRef<Camera>();
   const zoomAnimation = useRef<{
@@ -91,15 +75,6 @@ export function SinglePhotoView({
     frame: number;
     lastTime: number;
   }>();
-  const enhancementJob = useRef<AbortController>();
-  const enhancementUrl = useRef<string>();
-  const [enhanced, setEnhanced] = useState<{
-    region: PhotoRegion;
-    url: string;
-  }>();
-  const [showEnhanced, setShowEnhanced] = useState(false);
-  const [progress, setProgress] = useState<number>();
-  const [enhanceError, setEnhanceError] = useState<string>();
   const [view, setView] = useState<Size>();
   const [framing, setFraming] = useState(() =>
     photo.framing instanceof Promise ? undefined : photo.framing,
@@ -116,16 +91,6 @@ export function SinglePhotoView({
     zoomAnimation.current = undefined;
   }, []);
   useLayoutEffect(() => stopZoom, [stopZoom, view]);
-
-  useEffect(
-    () => () => {
-      const job = enhancementJob.current;
-      enhancementJob.current = undefined;
-      job?.abort();
-      if (enhancementUrl.current) URL.revokeObjectURL(enhancementUrl.current);
-    },
-    [],
-  );
 
   useEffect(() => {
     if (!(photo.framing instanceof Promise)) return;
@@ -240,62 +205,6 @@ export function SinglePhotoView({
   useLayoutEffect(() => {
     displayedCamera.current = camera;
   }, [camera]);
-  const area = view && camera && visiblePhotoRegion(photo, view, camera);
-  const enhancedHere = Boolean(
-    area && enhanced && covers(enhanced.region, area),
-  );
-
-  async function enhance() {
-    if (enhancementJob.current) {
-      enhancementJob.current.abort();
-      return;
-    }
-    if (!view || !camera || !area || !imageRef.current || loadState !== "ready")
-      return;
-    setEnhanceError(undefined);
-    if (enhancedHere) {
-      setShowEnhanced((value) => !value);
-      return;
-    }
-    const padded = visiblePhotoRegion(photo, view, camera, 28);
-    const region =
-      padded.width * padded.height <= MAX_ENHANCEMENT_PIXELS ? padded : area;
-    if (region.width * region.height > MAX_ENHANCEMENT_PIXELS) {
-      setEnhanceError("Zoom in to enhance a smaller area.");
-      return;
-    }
-    const job = new AbortController();
-    enhancementJob.current = job;
-    setProgress(0);
-    try {
-      const result = await enhancePhotoRegion(
-        imageRef.current,
-        photo.src,
-        region,
-        job.signal,
-        setProgress,
-      );
-      if (job.signal.aborted) return;
-      const url = URL.createObjectURL(result);
-      if (enhancementUrl.current) URL.revokeObjectURL(enhancementUrl.current);
-      enhancementUrl.current = url;
-      setEnhanced({ region, url });
-      setShowEnhanced(true);
-    } catch (error) {
-      if (!job.signal.aborted)
-        setEnhanceError(
-          error instanceof Error
-            ? error.message
-            : "Could not enhance this photo.",
-        );
-    } finally {
-      if (enhancementJob.current === job) {
-        enhancementJob.current = undefined;
-        setProgress(undefined);
-      }
-    }
-  }
-
   function stopDrag(pointerId: number) {
     if (drag.current?.id !== pointerId) return;
     drag.current = undefined;
@@ -373,7 +282,6 @@ export function SinglePhotoView({
             }
           >
             <img
-              ref={imageRef}
               src={photo.src}
               alt={photo.alt}
               crossOrigin={photo.crossOrigin}
@@ -382,20 +290,6 @@ export function SinglePhotoView({
               onLoad={() => setLoadState("ready")}
               onError={() => setLoadState("failed")}
             />
-            {showEnhanced && enhanced && (
-              <img
-                className="single-photo-enhanced-region"
-                src={enhanced.url}
-                alt=""
-                draggable={false}
-                style={{
-                  left: `${(enhanced.region.x / photo.width) * 100}%`,
-                  top: `${(enhanced.region.y / photo.height) * 100}%`,
-                  width: `${(enhanced.region.width / photo.width) * 100}%`,
-                  height: `${(enhanced.region.height / photo.height) * 100}%`,
-                }}
-              />
-            )}
           </div>
         )}
         {loadState === "loading" && (
@@ -408,30 +302,6 @@ export function SinglePhotoView({
             Photo could not load.
           </span>
         )}
-      </div>
-      <div className="single-photo-enhancement">
-        {enhanceError && <span role="status">{enhanceError}</span>}
-        <button
-          type="button"
-          className="viewer-control single-photo-enhance"
-          aria-label={progress !== undefined ? "Cancel enhancement" : undefined}
-          title={
-            progress !== undefined
-              ? "Cancel enhancement"
-              : enhancedHere && showEnhanced
-                ? "Show original photo"
-                : "Enhance the visible area with 4× AI and sharpening"
-          }
-          disabled={!view || loadState !== "ready"}
-          onClick={() => void enhance()}
-        >
-          <Sparkles size={18} aria-hidden="true" />
-          {progress !== undefined
-            ? `Enhancing… ${progress}%`
-            : enhancedHere && showEnhanced
-              ? "Original"
-              : "Enhance"}
-        </button>
       </div>
       <button
         type="button"

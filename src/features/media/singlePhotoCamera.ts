@@ -1,5 +1,3 @@
-import type { PhotoRegion } from "./photoEnhancement";
-
 export type Size = { width: number; height: number };
 // Pan is measured in unscaled image pixels, after rotation.
 export type Camera = { zoom: number; x: number; y: number; rotation: number };
@@ -71,37 +69,5 @@ export function easeZoom(
     x: current.x + dx * step,
     y: current.y + dy * step,
     zoom: current.zoom + dz * step,
-  };
-}
-
-export function visiblePhotoRegion(
-  photo: Size,
-  view: Size,
-  camera: Camera,
-  padding = 0,
-): PhotoRegion {
-  const { scale } = fitPhoto(photo, view, camera.rotation);
-  const angle = (camera.rotation + 360) % 360;
-  const sideways = angle % 180 !== 0;
-  // Invert translation and quarter turn to find the viewport in the original pixels.
-  const x = -camera.x / camera.zoom;
-  const y = -camera.y / camera.zoom;
-  const centerX =
-    photo.width / 2 +
-    (angle === 90 ? y : angle === 180 ? -x : angle === 270 ? -y : x);
-  const centerY =
-    photo.height / 2 +
-    (angle === 90 ? -x : angle === 180 ? -y : angle === 270 ? x : y);
-  const halfWidth =
-    (sideways ? view.height : view.width) / (2 * scale * camera.zoom) + padding;
-  const halfHeight =
-    (sideways ? view.width : view.height) / (2 * scale * camera.zoom) + padding;
-  const left = Math.max(0, Math.floor(centerX - halfWidth));
-  const top = Math.max(0, Math.floor(centerY - halfHeight));
-  return {
-    x: left,
-    y: top,
-    width: Math.min(photo.width, Math.ceil(centerX + halfWidth)) - left,
-    height: Math.min(photo.height, Math.ceil(centerY + halfHeight)) - top,
   };
 }

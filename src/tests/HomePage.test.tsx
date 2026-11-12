@@ -345,7 +345,7 @@ describe("Photo archive preview", () => {
       within(single).getByAltText(image.alt),
     ]);
     expect(within(single).getByRole("img")).toHaveAttribute("src", image.src);
-    expect(within(single).getByRole("button", { name: "Enhance" })).toBeDisabled();
+    expect(within(single).queryByRole("button", { name: "Enhance" })).toBeNull();
     fireEvent(single, new Event("cancel", { cancelable: true }));
     expect(single).not.toBeInTheDocument();
     expect(panel).toHaveAttribute("open");

@@ -15,9 +15,6 @@
   "dependencies": {
     "@gsap/react": "^2.1.2",
     "@mediapipe/tasks-vision": "^1.2.2",
-    "@tensorflow/tfjs-backend-webgl": "4.22.0",
-    "@tensorflow/tfjs-core": "4.22.0",
-    "@tensorflow/tfjs-layers": "4.22.0",
     "@vitejs/plugin-react": "^4.3.4",
     "clsx": "^2.1.1",
     "dexie": "^4.0.11",

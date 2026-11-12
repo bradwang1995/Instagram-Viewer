@@ -1515,31 +1515,6 @@ input:not([type="range"]):not([type="checkbox"]),
   height: 100%;
   max-width: none;
 }
-.single-photo-enhanced-region { position: absolute; }
-.single-photo-enhancement {
-  position: absolute;
-  z-index: 1;
-  left: max(16px, env(safe-area-inset-left));
-  bottom: max(16px, env(safe-area-inset-bottom));
-  display: grid;
-  justify-items: start;
-  gap: 8px;
-  max-width: min(300px, calc(100% - 96px));
-}
-.single-photo-enhancement > span {
-  padding: 8px 12px;
-  border-radius: 8px;
-  background: rgb(12 10 13 / 90%);
-  color: var(--paper);
-  font-size: 0.72rem;
-}
-button.viewer-control.single-photo-enhance {
-  min-width: 48px;
-  height: 48px;
-  padding: 0 14px;
-  background: rgb(12 10 13 / 85%);
-  color: var(--paper);
-}
 .single-photo-status {
   position: absolute;
   inset: 0;
