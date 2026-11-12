@@ -15,7 +15,7 @@ export type EnhancementRequest = {
 export type EnhancementResponse =
   { progress: number } | { blob: Blob } | { error: string };
 
-export const MAX_ENHANCEMENT_PIXELS = 1_500_000;
+export const MAX_ENHANCEMENT_PIXELS = 600_000;
 
 export async function enhancePhotoRegion(
   image: HTMLImageElement,
@@ -73,7 +73,7 @@ export async function enhancePhotoRegion(
     const request: EnhancementRequest = {
       source,
       modelUrl: new URL(
-        `${import.meta.env.BASE_URL}super-resolution/model.json`,
+        `${import.meta.env.BASE_URL}super-resolution/model.json?v=4`,
         window.location.href,
       ).href,
       region,

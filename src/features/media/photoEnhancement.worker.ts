@@ -15,7 +15,39 @@ import type {
 
 const TILE_SIZE = 96;
 const TILE_PADDING = 20;
-const SCALE = 2;
+const SCALE = 4;
+
+function luminance(pixels: ArrayLike<number>, offset: number) {
+  return (
+    0.2126 * pixels[offset] +
+    0.7152 * pixels[offset + 1] +
+    0.0722 * pixels[offset + 2]
+  );
+}
+
+function detailBoost(
+  pixels: ArrayLike<number>,
+  offset: number,
+  width: number,
+  height: number,
+) {
+  const index = offset / 3;
+  const x = index % width;
+  const y = Math.floor(index / width);
+  const radius = 5;
+  const neighbors =
+    (luminance(pixels, (y * width + Math.max(0, x - radius)) * 3) +
+      luminance(pixels, (y * width + Math.min(width - 1, x + radius)) * 3) +
+      luminance(pixels, (Math.max(0, y - radius) * width + x) * 3) +
+      luminance(pixels, (Math.min(height - 1, y + radius) * width + x) * 3)) /
+    4;
+  const difference = luminance(pixels, offset) - neighbors;
+  // Ignore small fluctuations and limit halos at strong edges.
+  return (
+    Math.sign(difference) *
+    Math.min(14, Math.max(0, Math.abs(difference) - 2) * 0.75)
+  );
+}
 
 function post(response: EnhancementResponse) {
   self.postMessage(response);
@@ -107,12 +139,17 @@ self.onmessage = async ({ data }: MessageEvent<EnhancementRequest>) => {
               ((row + (y - top) * SCALE) * outWidth + (x - left) * SCALE) * 3;
             for (let col = 0; col < tile.width; col++, from += 3) {
               const to = (row * tile.width + col) * 4;
-              tile.data[to] = pixels[from];
-              tile.data[to + 1] = pixels[from + 1];
-              tile.data[to + 2] = pixels[from + 2];
+              const boost = detailBoost(pixels, from, outWidth, outHeight);
+              tile.data[to] = pixels[from] + boost;
+              tile.data[to + 1] = pixels[from + 1] + boost;
+              tile.data[to + 2] = pixels[from + 2] + boost;
               tile.data[to + 3] =
                 sourcePixels.data[
-                  ((y + (row >> 1)) * width + x + (col >> 1)) * 4 + 3
+                  ((y + Math.floor(row / SCALE)) * width +
+                    x +
+                    Math.floor(col / SCALE)) *
+                    4 +
+                    3
                 ];
             }
           }

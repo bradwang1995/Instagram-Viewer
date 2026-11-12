@@ -1,6 +1,6 @@
 # Single Photo View enhancement model
 
-ESRGAN Slim 2×, from `@upscalerjs/esrgan-slim` 1.0.0, trained on DIV2K.
+ESRGAN Slim 4×, from `@upscalerjs/esrgan-slim` 1.0.0, trained on DIV2K.
 Source: https://github.com/thekevinscott/UpscalerJS/tree/main/models/esrgan-slim
 The model license is in `MODEL-LICENSE.txt`.
 

@@ -420,7 +420,7 @@ export function SinglePhotoView({
               ? "Cancel enhancement"
               : enhancedHere && showEnhanced
                 ? "Show original photo"
-                : "Use AI to enhance the visible area (2×)"
+                : "Enhance the visible area with 4× AI and sharpening"
           }
           disabled={!view || loadState !== "ready"}
           onClick={() => void enhance()}
