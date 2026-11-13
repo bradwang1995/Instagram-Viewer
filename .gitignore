@@ -16,3 +16,5 @@ savepost.json
 *savepost*.json
 .wrangler/
 worker/worker-configuration.d.ts
+!.env.example
+.dev.vars*

@@ -1,0 +1,20 @@
+{
+  "name": "instagram-viewer-access",
+  "main": "index.ts",
+  "compatibility_date": "2026-11-13",
+  "workers_dev": false,
+  "preview_urls": false,
+  "vars": {
+    "AYET_ENABLED": "false",
+    "NO_FILL_POLICY": "allow_access",
+    "SITE_ORIGIN": "",
+  },
+  "ratelimits": [
+    {
+      "name": "ACCESS_LIMIT",
+      "namespace_id": "1001",
+      "simple": { "limit": 60, "period": 60 },
+    },
+  ],
+  // Add the DB binding through the owner configuration documented in MONETIZATION-SETUP.md.
+}

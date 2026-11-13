@@ -1,0 +1,70 @@
+.monetization-entrance {
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  padding: clamp(1rem, 5vw, 3rem);
+  background: #141417;
+  color: #f8f6fb;
+}
+.monetization-card {
+  width: min(100%, 34rem);
+  padding: clamp(1.25rem, 5vw, 2.5rem);
+  background: #222126;
+  border: 1px solid #514b57;
+  border-radius: 1.25rem;
+}
+.monetization-card h1 {
+  font-size: clamp(1.6rem, 5vw, 2.4rem);
+  line-height: 1.15;
+}
+.monetization-card p {
+  line-height: 1.55;
+}
+.monetization-card label,
+.monetization-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-block: 1rem;
+}
+.monetization-card button,
+.monetization-card select,
+.monetization-status button {
+  color: #f8f6fb;
+  background: #34313b;
+  border: 1px solid #797181;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.8rem;
+  font: inherit;
+}
+.monetization-card button.monetization-primary {
+  background: #e9d7fb;
+  color: #211528;
+  font-weight: 650;
+}
+.monetization-card button:disabled {
+  opacity: 0.55;
+}
+.monetization-card :focus-visible,
+.monetization-status :focus-visible {
+  outline: 2px solid #e9d7fb;
+  outline-offset: 3px;
+}
+.monetization-status {
+  position: fixed;
+  bottom: max(0.75rem, env(safe-area-inset-bottom));
+  left: max(0.75rem, env(safe-area-inset-left));
+  z-index: 5;
+  font-size: 0.8rem;
+}
+.monetization-status > div {
+  margin-top: 0.25rem;
+  background: #222126;
+  color: #f8f6fb;
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.8rem;
+}
+.app-shell:has(.archive-app.is-immersive, .archive-slideshow, .post-photo-panel)
+  .monetization-status {
+  display: none;
+}
