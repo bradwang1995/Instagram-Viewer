@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -41,7 +42,8 @@ const demoOutcomes: MockOutcome[] = [
   "rewarded",
   ...(Object.keys(failureCopy) as Failure[]),
 ];
-const client = createAccessClient(config.apiOrigin);
+const accessUnavailable =
+  "Access service is temporarily unavailable. You can continue to the viewer.";
 
 export function MonetizationGate({ children }: PropsWithChildren) {
   if (config.inventory)
@@ -52,6 +54,9 @@ export function MonetizationGate({ children }: PropsWithChildren) {
 
 function AccessEntrance({ children }: PropsWithChildren) {
   const mock = config.mode === "mock";
+  const client = useMemo(() => createAccessClient(config.apiOrigin), []);
+  const [serviceUnavailable, setServiceUnavailable] = useState(false);
+  const [continueWithoutService, setContinueWithoutService] = useState(false);
   const consent = useSyncExternalStore(subscribeConsent, getConsent);
   const [status, setStatus] = useState<AccessStatus | null>(() =>
     mock ? mockStatus() : null,
@@ -69,10 +74,14 @@ function AccessEntrance({ children }: PropsWithChildren) {
     ReturnType<typeof prepareAyet>
   > | null>(null);
   const [premium, setPremium] = useState(false);
-  const [statusOpen, setStatusOpen] = useState(false);
   const operation = useRef<AbortController | null>(null);
+  const adOperation = useRef<AbortController | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
   const entered = useRef(false);
+  const visitRecorded = useRef(false);
+  const gateRecorded = useRef(false);
+  const statusDialog = useRef<HTMLDialogElement>(null);
+  const statusButton = useRef<HTMLButtonElement>(null);
   const refreshVersion = useRef(0);
   const watched = useRef(false);
   const left = useRef(false);
@@ -80,9 +89,12 @@ function AccessEntrance({ children }: PropsWithChildren) {
     status?.entitlement && remainingAccess(deadline, clock),
   );
   const eligible = mock || consent.rewarded;
+  const servicePaused = status?.rewardedAvailable === false;
 
   function accept(next: AccessStatus) {
     const now = performance.now();
+    setServiceUnavailable(false);
+    setMessage((previous) => (previous === accessUnavailable ? "" : previous));
     setStatus(next);
     setDeadline(accessDeadline(next, now));
     setClock(now);
@@ -90,8 +102,7 @@ function AccessEntrance({ children }: PropsWithChildren) {
 
   useEffect(() => {
     const controller = new AbortController();
-    if (!consent.analytics) telemetry.clear();
-    const version = refreshVersion.current;
+    const version = ++refreshVersion.current;
     if (!mock) {
       void client
         .status(controller.signal)
@@ -105,15 +116,20 @@ function AccessEntrance({ children }: PropsWithChildren) {
           }
         })
         .catch(() => {
-          if (!controller.signal.aborted)
-            setMessage("Access status is temporarily unavailable.");
+          if (
+            !controller.signal.aborted &&
+            refreshVersion.current === version
+          ) {
+            setServiceUnavailable(true);
+            setMessage(accessUnavailable);
+          }
         });
     }
     const refresh = () => {
       setClock(performance.now());
       if (mock) accept(mockStatus());
       else if (!operation.current && document.visibilityState === "visible") {
-        const currentVersion = refreshVersion.current;
+        const currentVersion = ++refreshVersion.current;
         void client
           .status(controller.signal)
           .then((next) => {
@@ -137,12 +153,15 @@ function AccessEntrance({ children }: PropsWithChildren) {
       window.removeEventListener("storage", storage);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [mock, consent.analytics]);
+  }, [client, mock]);
 
   useEffect(() => {
     if (entered.current && !hasAccess) event("access_expired");
     entered.current = hasAccess;
     if (hasAccess) {
+      gateRecorded.current = false;
+      if (document.activeElement === document.body)
+        statusButton.current?.focus();
       const tick = () => setClock(performance.now());
       const interval = window.setInterval(tick, 30_000);
       const expiry = window.setTimeout(
@@ -154,32 +173,46 @@ function AccessEntrance({ children }: PropsWithChildren) {
         clearTimeout(expiry);
       };
     }
-    heading.current?.focus();
-    watched.current = false;
-    left.current = false;
-    event("gate_shown");
+    if (mock || status || serviceUnavailable) heading.current?.focus();
+    if (!gateRecorded.current && (mock || status || serviceUnavailable)) {
+      gateRecorded.current = true;
+      watched.current = false;
+      left.current = false;
+      event("gate_shown");
+    }
     const exit = () => {
-      if (!watched.current && !left.current) event("exit_before_ad");
+      if (gateRecorded.current && !watched.current && !left.current)
+        event("exit_before_ad");
       left.current = true;
     };
     window.addEventListener("pagehide", exit);
     return () => window.removeEventListener("pagehide", exit);
-  }, [hasAccess, deadline]);
+  }, [hasAccess, deadline, mock, Boolean(status), serviceUnavailable]);
 
   useEffect(() => {
-    event("visit");
-    if (status?.entitlement) event("returning_session");
-    // A visit is counted once per mounted entrance.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!consent.analytics) {
+      telemetry.clear();
+      visitRecorded.current = false;
+    } else if (!visitRecorded.current) {
+      visitRecorded.current = true;
+      event("visit");
+    }
+  }, [consent.analytics]);
 
   useEffect(() => {
     if (!eligible) {
-      operation.current?.abort();
+      adOperation.current?.abort();
       setSdk(null);
     }
-    return () => operation.current?.abort();
   }, [eligible]);
+
+  useEffect(
+    () => () => {
+      operation.current?.abort();
+      operation.current = null;
+    },
+    [],
+  );
 
   function run(
     kind: NonNullable<typeof busy>,
@@ -189,6 +222,7 @@ function AccessEntrance({ children }: PropsWithChildren) {
     const controller = new AbortController();
     refreshVersion.current++;
     operation.current = controller;
+    if (kind !== "check") adOperation.current = controller;
     setBusy(kind);
     setMessage("");
     void task(controller.signal)
@@ -198,6 +232,7 @@ function AccessEntrance({ children }: PropsWithChildren) {
       .finally(() => {
         if (operation.current !== controller) return;
         operation.current = null;
+        adOperation.current = null;
         setBusy(null);
       });
   }
@@ -216,12 +251,19 @@ function AccessEntrance({ children }: PropsWithChildren) {
   }
 
   function watch() {
-    if (!eligible || (!mock && !getConsent().rewarded) || operation.current)
+    if (
+      servicePaused ||
+      !eligible ||
+      (!mock && !getConsent().rewarded) ||
+      operation.current
+    )
       return;
     if (!mock && !sdk) {
       run("prepare", async (signal) => {
         try {
           const id = await client.identifier(signal);
+          signal.throwIfAborted();
+          if (!getConsent().rewarded) return;
           const ready = await prepareAyet(
             config.placementId,
             id,
@@ -235,12 +277,15 @@ function AccessEntrance({ children }: PropsWithChildren) {
       });
       return;
     }
-    watched.current = true;
     event("watch_clicked");
     run("video", async (signal) => {
+      const videoEvent: typeof event = (name) => {
+        if (name === "ad_started") watched.current = true;
+        event(name);
+      };
       const result = await (sdk
-        ? playAyet(sdk, config.slot, signal, event)
-        : playMock(outcome, signal, event));
+        ? playAyet(sdk, config.slot, signal, videoEvent)
+        : playMock(outcome, signal, videoEvent));
       if (signal.aborted) return;
       if ("failure" in result) {
         if (result.failure === "complete") event("ad_completed_no_reward");
@@ -280,7 +325,7 @@ function AccessEntrance({ children }: PropsWithChildren) {
 
   function reset() {
     localStorage.removeItem(MOCK_KEY);
-    setStatusOpen(false);
+    statusDialog.current?.close();
     accept(mockStatus());
     setMessage("");
   }
@@ -290,6 +335,8 @@ function AccessEntrance({ children }: PropsWithChildren) {
     setMessage(failureCopy.cancelled);
   }
 
+  if (continueWithoutService) return <>{children}</>;
+
   if (hasAccess && status?.entitlement) {
     const minutes = Math.ceil(remainingAccess(deadline, clock) / 60_000);
     return (
@@ -298,23 +345,21 @@ function AccessEntrance({ children }: PropsWithChildren) {
         <aside className="monetization-status" aria-label="Access">
           <button
             type="button"
-            aria-expanded={statusOpen}
-            aria-controls="monetization-status-detail"
-            onClick={() => setStatusOpen(!statusOpen)}
+            ref={statusButton}
+            aria-haspopup="dialog"
+            onClick={() => statusDialog.current?.showModal()}
           >
             Access status
           </button>
-          <div
-            id="monetization-status-detail"
-            hidden={!statusOpen}
+          <dialog
+            ref={statusDialog}
+            aria-labelledby="monetization-status-title"
+            onClose={() => statusButton.current?.focus()}
             onKeyDown={(e) => {
-              if (e.key === "Escape") {
-                e.stopPropagation();
-                setStatusOpen(false);
-                e.currentTarget.parentElement?.querySelector("button")?.focus();
-              }
+              if (e.key === "Escape") e.stopPropagation();
             }}
           >
+            <h2 id="monetization-status-title">Access status</h2>
             <p>
               {status.entitlement.type === "no_fill_temporary"
                 ? "Temporary access"
@@ -327,12 +372,20 @@ function AccessEntrance({ children }: PropsWithChildren) {
             <p>
               {Math.floor(minutes / 60)}h {minutes % 60}m remaining
             </p>
-            {mock && (
-              <button type="button" onClick={reset}>
-                Reset demo access
+            <div className="monetization-dialog-actions">
+              {mock && (
+                <button type="button" onClick={reset}>
+                  Reset demo access
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => statusDialog.current?.close()}
+              >
+                Close
               </button>
-            )}
-          </div>
+            </div>
+          </dialog>
           <span className="sr-only" role="status">
             {message}
           </span>
@@ -385,7 +438,9 @@ function AccessEntrance({ children }: PropsWithChildren) {
           <button
             className="monetization-primary"
             type="button"
-            disabled={Boolean(busy) || !eligible}
+            disabled={
+              Boolean(busy) || !eligible || servicePaused || (!mock && !status)
+            }
             onClick={watch}
           >
             {mock || sdk
@@ -403,7 +458,16 @@ function AccessEntrance({ children }: PropsWithChildren) {
               disabled={Boolean(busy)}
               onClick={() =>
                 run("check", async (signal) => {
-                  const next = await client.status(signal);
+                  let next: AccessStatus;
+                  try {
+                    next = await client.status(signal);
+                  } catch {
+                    if (!signal.aborted) {
+                      setServiceUnavailable(true);
+                      setMessage(accessUnavailable);
+                    }
+                    return;
+                  }
                   if (signal.aborted) return;
                   accept(next);
                   if (!next.entitlement)
@@ -414,15 +478,28 @@ function AccessEntrance({ children }: PropsWithChildren) {
               Check access status
             </button>
           )}
-          {!mock && config.noFillPolicy === "allow_access" && (
+          {(serviceUnavailable || servicePaused) && (
             <button
               type="button"
               disabled={Boolean(busy)}
-              onClick={() => run("check", fallback)}
+              onClick={() => setContinueWithoutService(true)}
             >
-              Continue with temporary access
+              Continue to viewer
             </button>
           )}
+          {!mock &&
+            status &&
+            !serviceUnavailable &&
+            !servicePaused &&
+            config.noFillPolicy === "allow_access" && (
+              <button
+                type="button"
+                disabled={Boolean(busy)}
+                onClick={() => run("check", fallback)}
+              >
+                Continue with temporary access
+              </button>
+            )}
         </div>
         <p role="status">
           {busy
@@ -432,7 +509,14 @@ function AccessEntrance({ children }: PropsWithChildren) {
                 verify: "Verifying reward…",
                 check: "Checking access…",
               }[busy]
-            : message || (sdk ? "Video service ready." : "")}
+            : (servicePaused
+                ? "Rewarded video is paused. You can continue to the viewer."
+                : message) ||
+              (!mock && !status
+                ? "Checking access…"
+                : sdk
+                  ? "Video service ready."
+                  : "")}
         </p>
         {config.premiumInfo && (
           <button

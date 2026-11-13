@@ -18,7 +18,7 @@
 
 ## Rollback
 
-Set `VITE_MONETIZATION_ENABLED=false` or restore the previous disabled artifact to bypass the gate. Turn off each inventory flag independently. Turn off Worker `AYET_ENABLED` to stop new verification and grants. Preserve conversion rows during rollback so reactivation still rejects old replays. Verify the deployed viewer and network behavior after rollback.
+Set `VITE_MONETIZATION_ENABLED=false` or restore the previous disabled artifact to bypass the gate. Turn off each inventory flag independently. Turn off Worker `AYET_ENABLED` to stop new verification and grants while preserving read-only access to previously issued grants. Preserve conversion rows during rollback so reactivation still rejects old replays. Verify the deployed viewer and network behavior after rollback.
 
 [ayeT go-live checklist](https://docs.ayetstudios.com/v/product-docs/callbacks-and-testing/go-live-checklist/rewarded-video-checklist)
 

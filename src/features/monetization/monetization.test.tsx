@@ -33,11 +33,20 @@ beforeEach(() => {
     ],
   });
   localStorage.clear();
+  vi.stubGlobal("fetch", vi.fn());
+  HTMLDialogElement.prototype.showModal = function () {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function () {
+    this.open = false;
+    this.dispatchEvent(new Event("close"));
+  };
 });
 afterEach(() => {
   cleanup();
   config.mode = "disabled";
   config.premiumInfo = false;
+  config.apiOrigin = "";
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
@@ -51,6 +60,35 @@ describe("monetization entrance", () => {
     expect(screen.queryByRole("button", { name: /Watch an Ad/ })).toBeNull();
     expect(document.querySelector("script[src*='ayet']")).toBeNull();
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("offers an ad-free way to continue if access status fails", async () => {
+    config.mode = "live";
+    config.apiOrigin = "https://access.example";
+    vi.mocked(fetch).mockRejectedValue(new TypeError("Network unavailable"));
+    render(<MonetizationGate>{viewer}</MonetizationGate>);
+    await act(async () => {});
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "temporarily unavailable",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Continue to viewer" }));
+    expect(screen.getByText("Existing viewer")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Access status" })).toBeNull();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the SDK unloaded until both access status and consent are ready", async () => {
+    config.mode = "live";
+    config.apiOrigin = "https://access.example";
+    vi.mocked(fetch).mockResolvedValue(
+      Response.json({ serverTime: Date.now(), entitlement: null }),
+    );
+    render(<MonetizationGate>{viewer}</MonetizationGate>);
+    await act(async () => {});
+    expect(
+      screen.getByRole("button", { name: "Prepare rewarded video" }),
+    ).toBeDisabled();
+    expect(document.querySelector("script[src*='ayet']")).toBeNull();
   });
 
   it("unlocks once on rapid clicks, restores on remount and re-gates at expiry", async () => {
@@ -182,6 +220,7 @@ describe("vendor adapters", () => {
       VITE_MONETIZATION_ENABLED: "true",
       VITE_AD_MODE: "rewarded",
       VITE_AYET_ENABLED: "true",
+      VITE_AYET_ORIGIN_APPROVED: "true",
       VITE_MONETIZATION_SITE_ORIGIN: "https://viewer.example",
       VITE_MONETIZATION_API_ORIGIN: "https://access.example",
       VITE_AYET_PLACEMENT_ID: "12",

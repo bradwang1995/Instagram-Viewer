@@ -1,5 +1,8 @@
 .monetization-entrance {
   min-height: 100dvh;
+  font:
+    1rem/1.5 system-ui,
+    sans-serif;
   display: grid;
   place-items: center;
   padding: clamp(1rem, 5vw, 3rem);
@@ -50,21 +53,81 @@
   outline: 2px solid #e9d7fb;
   outline-offset: 3px;
 }
-.monetization-status {
-  position: fixed;
-  bottom: max(0.75rem, env(safe-area-inset-bottom));
-  left: max(0.75rem, env(safe-area-inset-left));
-  z-index: 5;
-  font-size: 0.8rem;
+.app-shell:has(> .monetization-entrance) {
+  height: auto;
+  min-height: 100dvh;
+  overflow: visible;
 }
-.monetization-status > div {
-  margin-top: 0.25rem;
+.app-shell:has(> .monetization-status):not(
+    :has(.archive-app.is-immersive, .archive-slideshow, .post-photo-panel)
+  ) {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+.app-shell:has(> .monetization-status):not(
+    :has(.archive-app.is-immersive, .archive-slideshow, .post-photo-panel)
+  )
+  > .archive-app,
+.app-shell:has(> .monetization-status):not(
+    :has(.archive-app.is-immersive, .archive-slideshow, .post-photo-panel)
+  )
+  > .archive-app
+  > .archive-preview {
+  height: 100%;
+  min-height: 0;
+}
+.monetization-status {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.25rem max(0.75rem, env(safe-area-inset-right))
+    max(0.25rem, env(safe-area-inset-bottom));
+  font:
+    0.875rem/1.4 system-ui,
+    sans-serif;
+}
+.monetization-status dialog {
+  width: min(calc(100% - 2rem), 23rem);
+  border: 1px solid #797181;
   background: #222126;
   color: #f8f6fb;
   border-radius: 0.6rem;
-  padding: 0.6rem 0.8rem;
+  padding: 1.25rem;
+}
+.monetization-status dialog::backdrop {
+  background: rgb(0 0 0 / 55%);
 }
 .app-shell:has(.archive-app.is-immersive, .archive-slideshow, .post-photo-panel)
   .monetization-status {
   display: none;
+}
+
+.monetization-card h1 {
+  margin: 0 0 0.5rem;
+}
+.monetization-card p {
+  margin-block: 0.5rem;
+}
+.monetization-card button,
+.monetization-card select,
+.monetization-status button {
+  min-height: 44px;
+}
+.monetization-card [role="status"]:empty {
+  margin: 0;
+}
+.monetization-dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.monetization-status dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+}
+.monetization-status dialog h2 {
+  margin: 0 0 0.75rem;
 }

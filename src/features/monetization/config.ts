@@ -22,6 +22,7 @@ export function readConfig(env: Record<string, unknown>, origin: string) {
     master &&
     env.PROD === true &&
     Boolean(productionOrigin) &&
+    !new URL(productionOrigin).hostname.endsWith(".github.io") &&
     origin === productionOrigin;
   const mock =
     master &&
@@ -35,9 +36,11 @@ export function readConfig(env: Record<string, unknown>, origin: string) {
     production &&
     mode === "rewarded" &&
     enabled("VITE_AYET_ENABLED") &&
+    enabled("VITE_AYET_ORIGIN_APPROVED") &&
+    /^[1-9]\d*$/.test(value("VITE_AYET_PLACEMENT_ID")) &&
     Number.isSafeInteger(placementId) &&
     placementId > 0 &&
-    Boolean(slot && apiOrigin);
+    Boolean(slot && apiOrigin && apiOrigin !== productionOrigin);
   return {
     mode: mock
       ? ("mock" as const)
@@ -51,7 +54,7 @@ export function readConfig(env: Record<string, unknown>, origin: string) {
     inventory:
       production &&
       mode === "inventory" &&
-      Boolean(apiOrigin) &&
+      Boolean(apiOrigin && apiOrigin !== productionOrigin) &&
       (enabled("VITE_ADSTERRA_ENABLED") || enabled("VITE_EXOCLICK_ENABLED")),
     inventoryExperiment: enabled("VITE_INVENTORY_EXPERIMENT"),
     inventoryCapMs:

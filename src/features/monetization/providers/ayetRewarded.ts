@@ -80,8 +80,10 @@ export async function prepareAyet(
   signal: AbortSignal,
   event: (name: AdEvent) => void,
 ) {
+  signal.throwIfAborted();
   const deadline = AbortSignal.any([signal, AbortSignal.timeout(15_000)]);
   const sdk = await abortable(loadSdk(), deadline);
+  deadline.throwIfAborted();
   event("sdk_loaded");
   if (
     initialized?.sdk !== sdk ||

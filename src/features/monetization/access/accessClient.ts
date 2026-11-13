@@ -18,6 +18,11 @@ export function guestToken() {
   return token;
 }
 
+async function requestGuestToken(signal: AbortSignal) {
+  if (!navigator.locks) return guestToken();
+  return navigator.locks.request(SESSION_KEY, { signal }, guestToken);
+}
+
 function isEntitlement(value: unknown): value is Entitlement {
   if (
     !value ||
@@ -45,7 +50,16 @@ export function parseStatus(data: unknown): AccessStatus {
   ) {
     throw new Error("Invalid access response");
   }
-  return { serverTime: data.serverTime, entitlement: data.entitlement };
+  return {
+    serverTime: data.serverTime,
+    ...("rewardedAvailable" in data && {
+      rewardedAvailable: data.rewardedAvailable === true,
+    }),
+    entitlement:
+      data.entitlement && data.entitlement.expiresAt > data.serverTime
+        ? data.entitlement
+        : null,
+  };
 }
 
 export function mockStatus(): AccessStatus {
@@ -80,10 +94,13 @@ export function mockGrant(
 
 export function createAccessClient(origin: string) {
   async function request(path: string, signal: AbortSignal, body?: object) {
+    const deadline = AbortSignal.any([signal, AbortSignal.timeout(10_000)]);
+    const token = await requestGuestToken(deadline);
+    deadline.throwIfAborted();
     const response = await fetch(origin + "/api/access/" + path, {
       method: body ? "POST" : "GET",
       headers: {
-        Authorization: "Bearer " + guestToken(),
+        Authorization: "Bearer " + token,
         ...(body && { "Content-Type": "application/json" }),
       },
       body: body ? JSON.stringify(body) : undefined,
@@ -91,7 +108,7 @@ export function createAccessClient(origin: string) {
       cache: "no-store",
       redirect: "error",
       referrerPolicy: "no-referrer",
-      signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]),
+      signal: deadline,
     });
     if (!response.ok) throw new Error("Access request failed");
     return response;

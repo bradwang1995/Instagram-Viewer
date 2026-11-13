@@ -24,6 +24,7 @@ beforeEach(() => {
   env = {
     SITE_ORIGIN: origin,
     AYET_ENABLED: "true",
+    AYET_DEDICATED_KEY_CONFIRMED: "true",
     AYET_REWARD_CURRENCY: "10",
     AYET_PUBLISHER_API_KEY: secret,
     SESSION_SIGNING_SECRET: "local fixture secret with 32 characters",
@@ -96,6 +97,7 @@ describe("access Worker with migration applied", () => {
     ).toEqual(["false", "false", "true"]);
     expect(await responses[0].json()).toEqual({
       serverTime: epoch,
+      rewardedAvailable: true,
       entitlement: { type: "free_rewarded", expiresAt: epoch + DAY },
     });
     vi.mocked(Date.now).mockReturnValue(epoch + DAY);
@@ -160,7 +162,12 @@ describe("access Worker with migration applied", () => {
     expect((await call("status", { token: "invalid" })).status).toBe(401);
     env.ACCESS_LIMIT.limit = async () => ({ success: false });
     expect((await call("status")).status).toBe(429);
+    env.ACCESS_LIMIT.limit = async () => ({ success: true });
     env.AYET_ENABLED = "false";
-    expect((await call("status")).status).toBe(503);
+    expect((await (await call("status")).json()).rewardedAvailable).toBe(false);
+    expect((await call("ayet/identity", { method: "POST" })).status).toBe(503);
+    env.AYET_ENABLED = "true";
+    env.AYET_DEDICATED_KEY_CONFIRMED = "false";
+    expect((await call("fallback", { method: "POST" })).status).toBe(503);
   });
 });

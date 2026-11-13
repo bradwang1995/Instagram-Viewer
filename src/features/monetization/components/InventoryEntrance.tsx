@@ -1,5 +1,6 @@
 import {
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
@@ -15,14 +16,14 @@ import {
   type Inventory,
 } from "../providers/inventory";
 
-const access = createAccessClient(config.apiOrigin);
-
 export function InventoryEntrance({ children }: PropsWithChildren) {
+  const access = useMemo(() => createAccessClient(config.apiOrigin), []);
   const consent = useSyncExternalStore(subscribeConsent, getConsent);
   const [entered, setEntered] = useState(false);
   const [unit, setUnit] = useState<Inventory | null>(null);
   const [status, setStatus] = useState("");
   const [eligible, setEligible] = useState(false);
+  const [pending, setPending] = useState(false);
   const requested = useRef(false);
   const continued = useRef(false);
   const context = {
@@ -51,7 +52,7 @@ export function InventoryEntrance({ children }: PropsWithChildren) {
       controller.abort();
       setEligible(false);
     };
-  }, [entered, consent.adsterra, consent.exoclick]);
+  }, [access, entered, consent.adsterra, consent.exoclick]);
 
   if (entered || !approvedInventory.length) return <>{children}</>;
   const available =
@@ -61,6 +62,8 @@ export function InventoryEntrance({ children }: PropsWithChildren) {
   async function show() {
     if (!eligible || requested.current) return;
     requested.current = true;
+    setPending(true);
+    setStatus("");
     try {
       const { entitlement } = await access.status(AbortSignal.timeout(10_000));
       if (entitlement || continued.current) {
@@ -93,7 +96,11 @@ export function InventoryEntrance({ children }: PropsWithChildren) {
         );
       }
     } catch {
-      setStatus("Sponsored content could not be loaded.");
+      if (!continued.current)
+        setStatus("Sponsored content could not be loaded.");
+    } finally {
+      requested.current = false;
+      if (!continued.current) setPending(false);
     }
   }
 
@@ -113,11 +120,12 @@ export function InventoryEntrance({ children }: PropsWithChildren) {
         {available && !visible && (
           <button
             type="button"
+            disabled={pending}
             onClick={() => {
               void show();
             }}
           >
-            Show sponsored content
+            {pending ? "Checking availability…" : "Show sponsored content"}
           </button>
         )}
         {visible && (

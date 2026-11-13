@@ -6,6 +6,7 @@
   "preview_urls": false,
   "vars": {
     "AYET_ENABLED": "false",
+    "AYET_DEDICATED_KEY_CONFIRMED": "false",
     "NO_FILL_POLICY": "allow_access",
     "SITE_ORIGIN": "",
   },

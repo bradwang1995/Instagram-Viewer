@@ -20,7 +20,7 @@ The CMP integration calls `updateMonetizationConsent` on initial resolution and 
 
 ## Separate access Worker
 
-Use a separate D1 database and Worker configuration based on `monetization-worker/wrangler.jsonc`. Add a `d1_databases` entry with binding `DB`, the owner-provided database name and ID, and `migrations_dir: "migrations"`. Set `SITE_ORIGIN`, `AYET_REWARD_CURRENCY`, and `NO_FILL_POLICY`. Preserve the disabled flag until the release checklist passes. Use the same no-fill policy on both sides.
+Use a separate D1 database and Worker configuration based on `monetization-worker/wrangler.jsonc`. Add a `d1_databases` entry with binding `DB`, the owner-provided database name and ID, and `migrations_dir: "migrations"`. Set `SITE_ORIGIN`, `AYET_REWARD_CURRENCY`, and `NO_FILL_POLICY`. Preserve the disabled flags until the release checklist passes. Set `AYET_DEDICATED_KEY_CONFIRMED=true` only with vendor confirmation. Set `VITE_AYET_ORIGIN_APPROVED=true` only after the SDK origin and imported-data isolation review. The default GitHub Pages host is excluded from commercial modes. Use the same no-fill policy on both sides.
 
 With Wrangler v4, run `wrangler d1 migrations apply DB --local --config monetization-worker/wrangler.jsonc` against the configured local D1, and `wrangler dev --config monetization-worker/wrangler.jsonc` for a Worker smoke test. Use dummy secrets in a gitignored `monetization-worker/.dev.vars.local` or Wrangler's local secret configuration. The checked-in tests run the real migration in Node SQLite and exercise the Worker request handler with fixtures, without a Cloudflare account.
 

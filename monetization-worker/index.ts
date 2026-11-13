@@ -18,6 +18,7 @@ type Bindings = {
   };
   SITE_ORIGIN?: string;
   AYET_ENABLED?: string;
+  AYET_DEDICATED_KEY_CONFIRMED?: string;
   AYET_REWARD_CURRENCY?: string;
   NO_FILL_POLICY?: string;
   AYET_PUBLISHER_API_KEY?: string;
@@ -87,14 +88,9 @@ export default {
       );
       return new Response(null, { status: 204, headers });
     }
-    const currency = Number(env.AYET_REWARD_CURRENCY);
     if (
-      !Number.isSafeInteger(currency) ||
-      currency <= 0 ||
-      env.AYET_ENABLED !== "true" ||
       !DB ||
       !ACCESS_LIMIT ||
-      !AYET_PUBLISHER_API_KEY ||
       !SESSION_SIGNING_SECRET ||
       SESSION_SIGNING_SECRET.length < 32
     ) {
@@ -111,19 +107,37 @@ export default {
       if (!success) return json({ error: "rate_limit" }, 429);
       const guest = await identify(token, SESSION_SIGNING_SECRET);
       const now = Date.now();
+      const currency = Number(env.AYET_REWARD_CURRENCY);
+      const rewardedAvailable =
+        env.AYET_ENABLED === "true" &&
+        env.AYET_DEDICATED_KEY_CONFIRMED === "true" &&
+        Boolean(AYET_PUBLISHER_API_KEY) &&
+        Number.isSafeInteger(currency) &&
+        currency > 0;
       const status = async () => {
+        const queryTime = Date.now();
         const entitlement = await DB.prepare(
           "SELECT 'free_rewarded' AS type, expires_at AS expiresAt FROM conversions WHERE guest = ? AND expires_at > ? " +
             "UNION ALL SELECT 'no_fill_temporary', expires_at FROM fallback WHERE guest = ? AND expires_at > ? " +
             "ORDER BY type, expiresAt DESC LIMIT 1",
         )
-          .bind(guest, now, guest, now)
+          .bind(guest, queryTime, guest, queryTime)
           .first<Entitlement>();
-        return json({ serverTime: Date.now(), entitlement });
+        const serverTime = Date.now();
+        return json({
+          serverTime,
+          rewardedAvailable,
+          entitlement:
+            entitlement && entitlement.expiresAt > serverTime
+              ? entitlement
+              : null,
+        });
       };
       if (request.method === "GET" && path === "/api/access/status")
         return await status();
       if (request.method !== "POST") return json({ error: "route" }, 404);
+      if (!rewardedAvailable || !AYET_PUBLISHER_API_KEY)
+        return json({ error: "disabled" }, 503);
       if (path === "/api/access/ayet/identity")
         return json({ externalIdentifier: guest });
       if (path === "/api/access/fallback" && env.NO_FILL_POLICY !== "retry") {
@@ -149,7 +163,7 @@ export default {
       const result = await DB.prepare(
         "INSERT INTO conversions (id, guest, expires_at) VALUES (?, ?, ?) ON CONFLICT(id) DO NOTHING",
       )
-        .bind(reward.conversionId, guest, now + DAY)
+        .bind(reward.conversionId, guest, Date.now() + DAY)
         .run();
       if (!result.meta.changes) {
         const previous = await DB.prepare(
